@@ -1,0 +1,12 @@
+.DS_Store
+*.log
+*.pid
+__pycache__/
+*.pyc
+.claude/
+webExporter/pdf_daemon_stderr.log
+webExporter/pdf_daemon_stdout.log
+webExporter/pdf_export_master.log
+webExporter/pdf_export_progress.txt
+webExporter/pdf_export_urls.txt
+safari_export_*.log
