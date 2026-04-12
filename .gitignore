@@ -1,4 +1,8 @@
 .DS_Store
+env.md
+*.env
+*_secret*
+*_private*
 *.log
 *.pid
 __pycache__/
