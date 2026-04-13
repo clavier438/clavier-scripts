@@ -35,4 +35,5 @@ check_and_start() {
 log "=== Watchdog 실행 ==="
 check_and_start "syncObsidian"
 check_and_start "syncScriptable"
+check_and_start "obsidianTagSync"
 log "=== Watchdog 완료 ==="

@@ -30,7 +30,7 @@ echo "[ 2/5 ] 패키지 설치..."
 # fswatch, rsync: sync 데몬 필수
 # webp: img2web (cwebp 명령어)
 # imagemagick, ghostscript: pdf2img
-BREW_PKGS=(fswatch rsync webp imagemagick ghostscript)
+BREW_PKGS=(fswatch rsync webp imagemagick ghostscript tag)
 for pkg in "${BREW_PKGS[@]}"; do
     if brew list "$pkg" &>/dev/null; then
         printf "  [skip] %s (이미 설치됨)\n" "$pkg"
