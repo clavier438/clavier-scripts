@@ -12,7 +12,7 @@ DIM='\033[2m'
 YELLOW='\033[1;33m'
 RESET='\033[0m'
 
-# ── 데몬 상태 체크 ────────────────────────────��─────────────
+# ── 데몬 상태 체크 ───────────────────────────────────────────
 check_daemon() {
     local label="$1"
     local short="$2"
@@ -53,14 +53,52 @@ check_daemon() {
     printf "  ${color}%-22s${RESET} %s\n" "$short" "$status"
 }
 
-# ── 출력 ───────────────���────────────────────────���───────────
+# ── 데몬 확인 + 자동 재시작 (PID 기반 데몬용) ───────────────
+ensure_daemon() {
+    local short="$1"
+    local pid_file="$2"
+    local daemon_cmd="$HOME/bin/daemons/$short"
+
+    local is_running=false
+    if [[ -f "$pid_file" ]]; then
+        local pid
+        pid=$(cat "$pid_file")
+        if kill -0 "$pid" 2>/dev/null; then
+            is_running=true
+        fi
+    fi
+
+    if $is_running; then
+        local pid
+        pid=$(cat "$pid_file")
+        printf "  ${GREEN}%-22s${RESET} running (PID $pid)\n" "$short"
+    else
+        printf "  ${RED}%-22s${RESET} dead → restarting...\n" "$short"
+        rm -f "$pid_file"
+        if [[ -x "$daemon_cmd" ]]; then
+            "$daemon_cmd" start > /dev/null 2>&1
+            sleep 0.5
+            if [[ -f "$pid_file" ]] && kill -0 "$(cat "$pid_file")" 2>/dev/null; then
+                local new_pid
+                new_pid=$(cat "$pid_file")
+                printf "  ${GREEN}%-22s${RESET} started  (PID $new_pid)\n" "$short"
+            else
+                printf "  ${RED}%-22s${RESET} start failed\n" "$short"
+            fi
+        else
+            printf "  ${RED}%-22s${RESET} daemon cmd not found: $daemon_cmd\n" "$short"
+        fi
+    fi
+}
+
+# ── 출력 ─────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}${CYAN}  ▌ 데몬 상태${RESET}"
 
 echo ""
 echo -e "  ${DIM}[ sync ]${RESET}"
-check_daemon "com.clavier.syncObsidian"   "syncObsidian"   "$HOME/.local/run/syncObsidian.pid"
-check_daemon "com.clavier.syncScriptable" "syncScriptable" "$HOME/.local/run/syncScriptable.pid"
+ensure_daemon "syncObsidian"   "$HOME/.local/run/syncObsidian.pid"
+ensure_daemon "syncScriptable" "$HOME/.local/run/syncScriptable.pid"
 
 echo ""
 echo -e "  ${DIM}[ watcher ]${RESET}"
