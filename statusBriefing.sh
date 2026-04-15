@@ -113,4 +113,28 @@ check_daemon "com.clavier.workerPdf" "workerPdf" "-"
 echo ""
 echo -e "  ${DIM}시작/중지: syncObsidian start|stop|status${RESET}"
 
+# ── 클라우드 / 원격 서버 상태 ────────────────────────────
+echo ""
+echo -e "${BOLD}${CYAN}  ▌ 연결 가능한 서버${RESET}"
+echo ""
+
+check_host() {
+    local label="$1"
+    local host="$2"
+    local port="${3:-22}"
+    local desc="$4"
+
+    # 2초 안에 TCP 연결 되는지 확인 (실제 SSH 인증 없이 포트만 체크)
+    if nc -z -w 2 "$host" "$port" 2>/dev/null; then
+        printf "  ${GREEN}%-20s${RESET} %-20s %s\n" "$label" "$host:$port" "$desc"
+    else
+        printf "  ${RED}%-20s${RESET} %-20s %s\n" "$label" "$host:$port" "(응답 없음) $desc"
+    fi
+}
+
+check_host "OCI (n8n 서버)"  "168.107.63.94"  22  "→ oci-connect"
+
+echo ""
+echo -e "  ${DIM}clouds/ 폴더에서 connect.sh 실행 또는 ~/bin의 oci-connect 사용${RESET}"
+
 "$SELF_DIR/scriptsList"
