@@ -78,27 +78,46 @@ for ext in sh py jsx; do
   done
 done
 
-# ── 서브디렉토리 섹션 ───────────────────────────────────────
-echo ""
-echo "${BOLD}  [ webExporter ]${RESET}"
-echo "  $(printf '%.0s─' {1..60})"
+# ── 서브폴더 자동 감지 (SvelteKit 방식) ────────────────────
+# 폴더를 추가하면 자동으로 섹션이 생긴다. 하드코딩 없음.
+SKIP_DIRS=("daemons" "memory-backup" "backup" ".git" ".claude" "PDF to JPEG.app" "PDF to JPEG.workflow" "webExporter" "Markdown2ID")
 
-for f in "$SCRIPTS_DIR/webExporter"/*.{sh,py}(N); do
-  [[ -f "$f" ]] || continue
-  name="$(basename "${f%.*}")"
-  desc="$(extract_desc "$f")"
-  print_entry "$name" "$desc"
-done
+is_skipped() {
+  local name="$1"
+  for s in "${SKIP_DIRS[@]}"; do [[ "$name" == "$s" ]] && return 0; done
+  return 1
+}
 
-echo ""
-echo "${BOLD}  [ Markdown2ID ]${RESET}"
-echo "  $(printf '%.0s─' {1..60})"
+for subdir in "$SCRIPTS_DIR"/*(N/); do
+  dir_name="$(basename "$subdir")"
+  is_skipped "$dir_name" && continue
 
-for f in "$SCRIPTS_DIR/Markdown2ID"/*.{sh,py,jsx}(N); do
-  [[ -f "$f" ]] || continue
-  name="$(basename "${f%.*}")"
-  desc="$(extract_desc "$f")"
-  print_entry "$name" "$desc"
+  # clouds/ 는 2단계 구조: clouds/{svc}/ 별로 섹션
+  if [[ "$dir_name" == "clouds" ]]; then
+    for svcdir in "$subdir"/*(N/); do
+      svc_name="$(basename "$svcdir")"
+      echo ""
+      echo "${BOLD}  [ clouds/$svc_name ]${RESET}"
+      echo "  $(printf '%.0s─' {1..60})"
+      for f in "$svcdir"/*.{sh,py}(N); do
+        [[ -f "$f" ]] || continue
+        name="$(basename "${f%.*}")"
+        desc="$(extract_desc "$f")"
+        print_entry "$name" "$desc"
+      done
+    done
+    continue
+  fi
+
+  echo ""
+  echo "${BOLD}  [ $dir_name ]${RESET}"
+  echo "  $(printf '%.0s─' {1..60})"
+  for f in "$subdir"/*.{sh,py,jsx}(N); do
+    [[ -f "$f" ]] || continue
+    name="$(basename "${f%.*}")"
+    desc="$(extract_desc "$f")"
+    print_entry "$name" "$desc"
+  done
 done
 
 # ── 앱 / 워크플로우 ─────────────────────────────────────────

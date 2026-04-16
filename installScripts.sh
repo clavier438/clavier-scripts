@@ -1,24 +1,33 @@
 #!/usr/bin/env bash
 # installScripts.sh — iCloud/0/scripts/ 의 스크립트를 ~/bin 에 복사
-# - 루트 스크립트 → ~/bin/
-# - daemons/ 스크립트 → ~/bin/daemons/
-# watcherScripts LaunchAgent 가 변경 감지 시 자동 실행 / 직접 실행도 가능
 #
+# 폴더 기반 자동 배포 (SvelteKit 방식):
+#   루트 스크립트     → ~/bin/
+#   daemons/*.sh      → ~/bin/daemons/
+#   clouds/{svc}/*.sh → ~/bin/clouds/{svc}/   (PATH도 자동 추가)
+#
+# 새 폴더를 만들면 자동으로 배포 대상에 포함됨.
+# 단, 아래 SKIP_DIRS에 있는 폴더는 배포하지 않음 (도구/데이터 폴더).
+#
+# watcherScripts LaunchAgent 가 변경 감지 시 자동 실행 / 직접 실행도 가능
 # 사용법: installScripts [bin_dir]
-#   bin_dir: 설치 루트 디렉터리 (기본값: ~/bin)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${1:-$HOME/bin}"
-DAEMONS_BIN_DIR="$BIN_DIR/daemons"
+
+# 배포하지 않을 폴더 (도구/데이터 폴더)
+SKIP_DIRS=("webExporter" "Markdown2ID" "memory-backup" "backup" ".git" ".claude" "PDF to JPEG.app" "PDF to JPEG.workflow")
 
 mkdir -p "$BIN_DIR"
-mkdir -p "$DAEMONS_BIN_DIR"
 
+# ── 스크립트 설치 함수 ────────────────────────────────────
 install_scripts() {
     local src_dir="$1"
     local dst_dir="$2"
     local count=0
     local updated=0
+
+    mkdir -p "$dst_dir"
 
     while IFS= read -r -d '' script; do
         local filename
@@ -28,8 +37,7 @@ install_scripts() {
 
         if [ -f "$target" ] && [ ! -L "$target" ]; then
             if cmp -s "$script" "$target"; then
-                echo "  [skip]   $name  (이미 최신)"
-                continue
+                continue  # 이미 최신 → 출력 생략
             fi
             cp "$script" "$target"
             chmod +x "$target"
@@ -49,24 +57,50 @@ install_scripts() {
     echo "  완료: 신규 ${count}개, 업데이트 ${updated}개"
 }
 
+# ── SKIP_DIRS 판단 함수 ───────────────────────────────────
+is_skipped() {
+    local dir_name="$1"
+    for skip in "${SKIP_DIRS[@]}"; do
+        [[ "$dir_name" == "$skip" ]] && return 0
+    done
+    return 1
+}
+
 echo "스크립트 설치 위치: $BIN_DIR"
 echo "원본 디렉터리:      $SCRIPT_DIR"
 echo ""
 
+# ── 루트 스크립트 배포 ────────────────────────────────────
 echo "[ scripts → ~/bin ]"
 install_scripts "$SCRIPT_DIR" "$BIN_DIR"
 
-echo ""
-echo "[ daemons → ~/bin/daemons ]"
-install_scripts "$SCRIPT_DIR/daemons" "$DAEMONS_BIN_DIR"
+# ── 서브폴더 자동 감지 + 배포 ────────────────────────────
+# SKIP_DIRS에 없는 모든 서브폴더를 ~/bin/{폴더명}/ 으로 배포
+while IFS= read -r -d '' subdir; do
+    dir_name="$(basename "$subdir")"
+    is_skipped "$dir_name" && continue
 
-# PATH에 bin_dir이 없으면 안내
+    # clouds/ 는 서비스별 2단계 구조: clouds/{svc}/*.sh → ~/bin/clouds/{svc}/
+    if [[ "$dir_name" == "clouds" ]]; then
+        while IFS= read -r -d '' svcdir; do
+            svc_name="$(basename "$svcdir")"
+            dst="$BIN_DIR/clouds/$svc_name"
+            echo ""
+            echo "[ clouds/$svc_name → ~/bin/clouds/$svc_name ]"
+            install_scripts "$svcdir" "$dst"
+        done < <(find "$subdir" -mindepth 1 -maxdepth 1 -type d -print0)
+        continue
+    fi
+
+    echo ""
+    echo "[ $dir_name → ~/bin/$dir_name ]"
+    install_scripts "$subdir" "$BIN_DIR/$dir_name"
+
+done < <(find "$SCRIPT_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
+
+# ── PATH 안내 ─────────────────────────────────────────────
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     echo ""
-    echo "⚠️  '$BIN_DIR' 가 PATH에 없습니다."
-    echo "   아래 줄을 ~/.zshrc 에 추가하세요:"
-    echo ""
+    echo "⚠️  '$BIN_DIR' 가 PATH에 없습니다. ~/.zshrc 에 추가하세요:"
     echo "   export PATH=\"\$HOME/bin:\$PATH\""
-    echo ""
-    echo "   추가 후: source ~/.zshrc"
 fi
