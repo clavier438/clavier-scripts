@@ -44,8 +44,13 @@
 - `installScripts.sh`가 iCloud → ~/bin 동기화
 
 ### 4. 네이밍 컨벤션
-- 모든 파일/스크립트명: **camelCase** 필수 (예: `statusBriefing.sh`, `connectSsh.sh`)
+- 모든 파일/스크립트명: **camelCase** 필수 (예: `statusBriefing.sh`, `ociIn.sh`)
 - 폴더명: 소문자 또는 camelCase (예: `clouds/`, `webExporter/`)
+
+### 5. ~/bin 자동 PATH 등록
+- `installScripts.sh`가 `clouds/{svc}/` 포함 모든 서브폴더를 `~/bin/` 하위에 배포
+- `.zshrc`가 `~/bin/` 하위 모든 폴더를 PATH에 자동 등록
+- 새 폴더 추가 → 배포 + 목록 표시 + PATH 등록이 자동으로 따라옴
 
 ---
 
@@ -87,9 +92,11 @@ scripts/memory-backup/     ← 메모리 백업 (scripts 안에 있으므로 위
 
 ### 클라우드 서버 (scripts/clouds/)
 
-| 서비스 | IP/주소 | 용도 | 연결 |
-|--------|---------|------|------|
-| OCI | 168.107.63.94 | n8n 자동화 + Cloudflare Tunnel | `oci-connect` |
+| 서비스 | IP/주소 | 용도 | 연결 | 스크립트 |
+|--------|---------|------|------|---------|
+| OCI | 168.107.63.94 | n8n 자동화 + Cloudflare Tunnel | `ociIn` | `clouds/oci/ociIn.sh` |
+
+**복원:** `git clone clavier0/OCI_hyuk439 && bash setup.sh` (Claude Code 2.1.110 포함)
 
 ### LaunchAgents (~/Library/LaunchAgents/)
 
@@ -131,7 +138,10 @@ statusBriefing    데몬 상태 + 연결 가능 서버 체크 + 스크립트 목
 
 | 날짜 | 변경 내용 |
 |------|-----------|
-| 2026-04-16 | clouds/ 폴더 신설 — 원격 서버 연결 체계화 (OCI connectSsh.sh) |
+| 2026-04-17 | installScripts: clouds/ 자동 배포 + ~/bin 하위 전체 PATH 자동 등록 |
+| 2026-04-17 | scriptsList: 서브폴더 하드코딩 제거, 자동 감지로 전환 |
+| 2026-04-17 | OCI_hyuk439 레포 백업 + setup.sh (원클릭 복원), Claude Code 2.1.110 설치 |
+| 2026-04-16 | clouds/ 폴더 신설 — 원격 서버 연결 체계화 (ociIn.sh) |
 | 2026-04-16 | memory-backup/ + watcherMemory — Claude 메모리 이벤트드리븐 GitHub 백업 |
 | 2026-04-14 | obsidianTagSync 데몬 추가 — Obsidian 태그 → macOS Finder 태그 |
 | 2026-04-14 | statusBriefing: 죽은 데몬 자동 재시작 기능 추가 |
