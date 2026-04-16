@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# connectSsh — OCI 서버(168.107.63.94) SSH 연결 (env.md에서 키 자동 복원)
+# ociIn — OCI 서버(168.107.63.94) SSH 연결 (env.md에서 키 자동 복원)
 #
 # 동작:
 #   1) env.md에서 base64로 보관 중인 private key를 /tmp에 임시 복원
