@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# daemons/syncMemory.sh
-# Claude 메모리 파일을 scripts/memory-backup/ 으로 복사하는 스크립트.
+# syncMemory.sh — Claude 메모리 → memory-backup/ 자동 동기화
+# @group watcher
+# @type launchagent
+# @label com.clavier.watcherMemory
 #
 # 동작 원리 (이벤트 드리븐):
 #   com.clavier.watcherMemory LaunchAgent가 ~/.claude/projects/-Users-clavier/memory/

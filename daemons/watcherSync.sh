@@ -1,6 +1,9 @@
 #!/bin/bash
 # watcherSync.sh — sync 데몬(syncObsidian, syncScriptable) 상태 감시 및 자동 재시작
 # LaunchAgent(com.clavier.watcherSync)가 1시간마다 실행
+# @group watcher
+# @type launchagent
+# @label com.clavier.watcherSync
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_FILE="$HOME/Library/Logs/watcherSync.log"

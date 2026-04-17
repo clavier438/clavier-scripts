@@ -1,6 +1,8 @@
 #!/bin/bash
 # obsidianTagSync.sh — Obsidian #태그 → macOS Finder 태그 실시간 동기화 데몬
-#
+# @group watcher
+# @type launchagent
+# @label com.clavier.obsidian-tag-sync
 # 동작:
 #   1. 시작 시 vault 전체 .md 파일 초기 스캔
 #   2. fswatch로 .md 파일 변경 감지 (이벤트 드리븐)

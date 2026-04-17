@@ -1,6 +1,10 @@
 #!/bin/bash
 # syncObsidian.sh — Obsidian → Google Drive 실시간 동기화 데몬
 # Usage: syncObsidian {start|stop|restart|status|sync|logs}
+# @group sync
+# @type pid
+# @pid ~/.local/run/syncObsidian.pid
+# @restart true
 
 SOURCE="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents"
 GDRIVE_ROOT=$(find "$HOME/Library/CloudStorage" -maxdepth 1 -name "GoogleDrive-*" -type d 2>/dev/null | head -1)

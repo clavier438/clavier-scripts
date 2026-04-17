@@ -1,6 +1,9 @@
 #!/bin/bash
 # gitSync.sh — scripts 폴더 변경사항을 자동으로 git commit + push
 # 트리거: LaunchAgent(com.clavier.watcherGitSync) 또는 직접 실행
+# @group watcher
+# @type launchagent
+# @label com.clavier.watcherGitSync
 #
 # 의존: ANTHROPIC_API_KEY (환경변수 또는 ~/.config/clavier/secrets)
 #       git remote origin (push 시)

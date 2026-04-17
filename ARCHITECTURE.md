@@ -118,6 +118,12 @@ scripts/memory-backup/     ← 메모리 백업 (scripts 안에 있으므로 위
 statusBriefing    데몬 상태 + 연결 가능 서버 체크 + 스크립트 목록
 ```
 
+**statusBriefing.sh 동적 작동 방식:**
+- **데몬 섹션**: `daemons/*.sh`의 `# @group`, `# @type`, `# @label`, `# @pid`, `# @restart` 메타 주석을 읽어 자동 그룹화
+- **서버 섹션**: `clouds/*/server.conf` (LABEL/HOST/PORT 변수)를 읽어 자동 목록화
+- **스크립트 목록**: `scriptsList.sh`가 서브폴더 자동 감지
+- 하드코딩 없음 — 파일 추가/삭제/이름변경 시 브리핑이 자동으로 반영됨
+
 ---
 
 ## 주요 경로
@@ -138,6 +144,9 @@ statusBriefing    데몬 상태 + 연결 가능 서버 체크 + 스크립트 목
 
 | 날짜 | 변경 내용 |
 |------|-----------|
+| 2026-04-15 | statusBriefing: 완전 동적 전환 — 데몬/서버 섹션 모두 파일 메타에서 자동 생성, 하드코딩 제거 |
+| 2026-04-15 | 데몬 스크립트 전체에 @group/@type/@label/@pid/@restart 메타 주석 추가 |
+| 2026-04-15 | clouds/oci/server.conf 신설 — statusBriefing 동적 서버 목록 드라이버 |
 | 2026-04-17 | installScripts: clouds/ 자동 배포 + ~/bin 하위 전체 PATH 자동 등록 |
 | 2026-04-17 | scriptsList: 서브폴더 하드코딩 제거, 자동 감지로 전환 |
 | 2026-04-17 | OCI_hyuk439 레포 백업 + setup.sh (원클릭 복원), Claude Code 2.1.110 설치 |
