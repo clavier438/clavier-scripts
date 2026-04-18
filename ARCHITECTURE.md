@@ -54,8 +54,22 @@
 
 ---
 
+## 보유 인프라 — 설계 기준
+
+모든 자동화는 아래 인프라 조합으로 구현. 새 기능 설계 시 이 목록에서 먼저 검토.
+
+| 인프라 | 역할 | 특징 |
+|--------|------|------|
+| **OCI 서버** (`168.107.63.94`) | 항상 켜진 처리 엔진 | 데몬, 웹훅 수신, 스케줄러 |
+| **Google Drive API** | 범용 저장소 | OAuth 발급 완료 (env.md 참고) |
+| **Cloudflare Workers** | 엣지 트리거/웹훅 라우팅 | 무료 10만req/일 |
+| **Scriptable (iOS)** | 폰에서 직접 실행 | iCloud 접근 + 외부 API 호출 |
+
+---
+
 ## 전체 흐름
 
+### Mac 자동화
 ```
 iCloud/0/scripts/          ← 소스 원본 (여기서만 수정)
     ↓  watcherScripts LaunchAgent (파일 변경 감지)
@@ -69,7 +83,36 @@ GitHub (clavier0/clavier-scripts, private)
 ~/.claude/.../memory/      ← Claude 메모리
     ↓  watcherMemory LaunchAgent (변경 감지, 이벤트드리븐)
     ↓  daemons/syncMemory.sh
-scripts/memory-backup/     ← 메모리 백업 (scripts 안에 있으므로 위 흐름으로 GitHub push)
+scripts/memory-backup/     ← 메모리 백업 → GitHub push
+```
+
+### Obsidian 싱크 (Mac 불필요)
+```
+iPhone Obsidian (iCloud)
+    ↓  Scriptable: obsidianGdriveSync.js (Google Drive API 직접 호출)
+Google Drive: obsidianSync/          ← Sana AI가 읽음
+```
+**결정 이유:** Sana AI가 Google Drive만 네이티브 지원. 제3자 서버 없이 본인 OAuth app으로 직접 연동.
+Mac 데몬(syncObsidian)은 Mac 켜진 경우 보조 역할로 유지.
+
+### Airtable ↔ Google Drive ↔ Sana (Mac/폰 불필요)
+```
+Airtable (변경 발생)
+    ↓  웹훅 → OCI:8080 (이벤트 드리븐)
+    ↓  airtableGdriveSync.py
+Google Drive: airtableSync/{base}/{table}.csv   ← Sana AI가 읽음
+    +
+GitHub: clavier0/airtable-data                  ← 버전 관리 백업 (자동 커밋)
+```
+**결정 이유:** Sana AI가 항상 최신 Airtable 데이터를 볼 수 있어야 함.
+OCI + Google Drive만으로 24/7 운영. Mac/폰 꺼져도 무관.
+역방향(CSV→Airtable)은 안전 이슈로 수동 트리거만: `GET /sync-to-airtable/{base_id}`
+
+### Scripts → Google Drive (Scriptable)
+```
+iCloud/0/scripts/
+    ↓  Scriptable: scriptsGdriveSync.js (env.md 제외)
+Google Drive: scriptsSync/
 ```
 
 ---
@@ -92,11 +135,16 @@ scripts/memory-backup/     ← 메모리 백업 (scripts 안에 있으므로 위
 
 ### 클라우드 서버 (scripts/clouds/)
 
-| 서비스 | IP/주소 | 용도 | 연결 | 스크립트 |
-|--------|---------|------|------|---------|
-| OCI | 168.107.63.94 | n8n 자동화 + Cloudflare Tunnel | `ociIn` | `clouds/oci/ociIn.sh` |
+| 서비스 | IP/주소 | 용도 | 연결 |
+|--------|---------|------|------|
+| OCI | 168.107.63.94 | Airtable↔GDrive 싱크 서버, Claude Code | `ociIn` |
 
-**복원:** `git clone clavier0/OCI_hyuk439 && bash setup.sh` (Claude Code 2.1.110 포함)
+**OCI 실행 중인 서비스:**
+- `airtable-sync` (systemd): Airtable 웹훅 수신 + CSV → GDrive + GitHub 자동 커밋
+- 웹훅 엔드포인트: `http://168.107.63.94:8080/webhook/{base_id}`
+- 수동 트리거: `http://168.107.63.94:8080/sync-to-airtable/{base_id|all}`
+
+**OCI git 관리:** `~/oci-scripts/` → `clavier0/oci-scripts` (GitHub private)
 
 ### LaunchAgents (~/Library/LaunchAgents/)
 
@@ -137,6 +185,16 @@ statusBriefing    데몬 상태 + 연결 가능 서버 체크 + 스크립트 목
 | 메모리 백업 | `iCloud/0/scripts/memory-backup/` |
 | LaunchAgent plist | `~/Library/LaunchAgents/com.clavier.*` |
 | 로그 | `~/Library/Logs/` |
+| OCI 스크립트 | `ubuntu@168.107.63.94:~/oci-scripts/` |
+| Airtable 백업 | `ubuntu@168.107.63.94:~/airtable-data/` → GitHub |
+
+## GitHub Repos
+
+| Repo | 내용 | 관리 위치 |
+|------|------|-----------|
+| `clavier0/clavier-scripts` | Mac 자동화 전체 | Mac `iCloud/0/scripts/` |
+| `clavier0/oci-scripts` | OCI 서버 스크립트 | OCI `~/oci-scripts/` |
+| `clavier0/airtable-data` | Airtable 전체 CSV 백업 (자동) | OCI `~/airtable-data/` |
 
 ---
 
@@ -144,6 +202,13 @@ statusBriefing    데몬 상태 + 연결 가능 서버 체크 + 스크립트 목
 
 | 날짜 | 변경 내용 |
 |------|-----------|
+| 2026-04-18 | syncObsidian: 전체 rsync → 변경 파일 단건 처리 (Sana AI 동기화 시차 개선) |
+| 2026-04-18 | obsidianGdriveSync.js + scriptsGdriveSync.js: Scriptable에서 Google Drive API 직접 호출 (맥 불필요) |
+| 2026-04-18 | Google OAuth 개인 앱 발급 — 범용 Google API credentials (env.md에 저장) |
+| 2026-04-18 | OCI에 airtableGdriveSync.py 배포 — Airtable↔GDrive CSV 싱크, 웹훅 이벤트드리븐 |
+| 2026-04-18 | airtable-data GitHub repo — Airtable 전체 CSV 자동 커밋/버전관리 백업 |
+| 2026-04-18 | oci-scripts GitHub repo — OCI 서버 코드 git 관리 시작 |
+| 2026-04-18 | n8n 종료 — 직접 Python 서버로 대체 (메모리 절약 + 코드 완전 제어) |
 | 2026-04-15 | statusBriefing: 완전 동적 전환 — 데몬/서버 섹션 모두 파일 메타에서 자동 생성, 하드코딩 제거 |
 | 2026-04-15 | 데몬 스크립트 전체에 @group/@type/@label/@pid/@restart 메타 주석 추가 |
 | 2026-04-15 | clouds/oci/server.conf 신설 — statusBriefing 동적 서버 목록 드라이버 |

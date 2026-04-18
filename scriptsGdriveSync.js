@@ -12,7 +12,7 @@ const EXCLUDE_FILES = ["env.md"];
 const INCLUDE_EXTENSIONS = [".sh", ".js", ".md", ".json", ".plist", ".conf", ".txt"];
 
 const fm = FileManager.iCloud();
-const scriptsDir = fm.joinPath(fm.documentsDirectory(), "../../0/scripts");
+const scriptsDir = fm.joinPath(fm.documentsDirectory(), "../../com~apple~CloudDocs/0/scripts");
 const lf = FileManager.local();
 const stateDir = lf.joinPath(lf.documentsDirectory(), "scriptsSync");
 const statePath = lf.joinPath(stateDir, "state.json");

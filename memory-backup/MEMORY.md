@@ -9,3 +9,4 @@
 - [피드백: env.md에서 API 키/토큰 먼저 확인](feedback_env_check.md) — API 키 등 env 값이 필요하면 env.md 먼저 확인, 없을 때만 물어볼 것
 - [피드백: 프로젝트 컨텍스트는 PROGRESS.md로 repo에 보관](feedback_progress_md.md) — 개발 중인 repo에 PROGRESS.md 두고 커밋, 세션 시작 시 먼저 읽기
 - [Google Drive API 자격증명](reference_google_drive_api.md) — 범용 재사용 가능한 OAuth credentials, env.md에 상세 정보
+- [보유 인프라 현황](project_infrastructure.md) — OCI/Google Cloud/Cloudflare Workers/Scriptable, 제약 시 먼저 제안할 것

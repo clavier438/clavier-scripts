@@ -4,9 +4,13 @@ description: git commit은 scripts 폴더 작업에 한정, 다른 폴더는 해
 type: feedback
 originSessionId: a05b5723-8989-45df-93b1-11047ec8bb16
 ---
-scripts 폴더(`iCloud/0/scripts/`) 파일을 수정했을 때만 git commit을 남길 것. 다른 폴더 작업에는 적용하지 않는다.
+git 관리 대상 repo 두 곳 — 둘 다 동일한 원칙 적용:
+- `clavier-scripts`: Mac `iCloud/0/scripts/` 작업 시 → repo: `clavier0/clavier-scripts`
+- `oci-scripts`: OCI 서버 `~/oci-scripts/` 작업 시 → repo: `clavier0/oci-scripts`
 
-**Why:** 깃 관리 대상이 scripts 폴더 하나뿐임. repo: `clavier0/clavier-scripts`
+각 폴더 파일을 수정했을 때 반드시 git commit. 다른 폴더는 해당 없음.
+
+**Why:** scripts/oci 두 곳 모두 자동화 인프라의 핵심. 동일 원칙으로 관리.
 **How to apply:** scripts 폴더 파일 수정 → 커밋 필수. 그 외 폴더(~/bin, LaunchAgents 등) → 커밋 불필요.
 커밋 메시지에는 **목적(왜)** 과 **수단(어떻게)** 을 반드시 함께 써라.
 - 목적: 어떤 문제/필요 때문에 이 변경을 했나
