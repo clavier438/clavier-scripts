@@ -2,7 +2,7 @@
 # statusBriefing.sh — 터미널 세션 시작 시 데몬 상태 + 스크립트 목록 브리핑
 # ~/.zshrc 에서 자동 호출됨 / 직접 실행: statusBriefing
 
-SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SELF_DIR="${0:A:h}"
 
 BOLD='\033[1m'
 CYAN='\033[0;36m'
@@ -91,7 +91,7 @@ echo -e "${BOLD}${CYAN}  ▌ 데몬 상태${RESET}"
 # daemons/*.sh의 @group 주석을 읽어 동적으로 그룹화 + 상태 표시
 # 하드코딩 없음 — 데몬 추가/삭제/이름변경 시 자동 반영
 declare -A _group_files
-for _f in "$SELF_DIR/daemons"/*.sh; do
+for _f in "$SELF_DIR/daemons"/*; do
     [[ -f "$_f" ]] || continue
     _g="$(parse_meta "$_f" "group")"
     [[ -z "$_g" ]] && _g="기타"
