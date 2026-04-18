@@ -58,13 +58,25 @@ start() {
 
     (
         trap 'exit 0' TERM INT
-        "$FSWATCH" -o -r "$SOURCE" \
+        "$FSWATCH" -r "$SOURCE" \
             --exclude='\.icloud$' \
             --exclude='\.DS_Store$' \
             --exclude='\.sync\.pid$' \
             --exclude='\.sync\.log$' \
-        | while read -r _; do
-            do_sync
+        | while IFS= read -r changed_file; do
+            local ts rel dest_file
+            [[ "$changed_file" == "$SOURCE" || "$changed_file" == "$SOURCE/" ]] && continue
+            ts=$(date '+%Y-%m-%d %H:%M:%S')
+            rel="${changed_file#${SOURCE}/}"
+            dest_file="$DEST/$rel"
+            if [ -f "$changed_file" ]; then
+                mkdir -p "$(dirname "$dest_file")"
+                /opt/homebrew/bin/rsync -a --ignore-errors "$changed_file" "$dest_file" >> "$LOG_FILE" 2>&1
+                echo "[$ts] synced: $rel" >> "$LOG_FILE"
+            else
+                rm -f "$dest_file"
+                echo "[$ts] deleted: $rel" >> "$LOG_FILE"
+            fi
         done
     ) &
 
