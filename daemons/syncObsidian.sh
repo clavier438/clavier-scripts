@@ -73,6 +73,11 @@ start() {
                 mkdir -p "$(dirname "$dest_file")"
                 /opt/homebrew/bin/rsync -a --ignore-errors "$changed_file" "$dest_file" >> "$LOG_FILE" 2>&1
                 echo "[$ts] synced: $rel" >> "$LOG_FILE"
+                # #myAlgorithm 태그 파일이면 Airtable 동기화
+                if [[ "$changed_file" == *.md ]] && grep -q '#myAlgorithm' "$changed_file" 2>/dev/null; then
+                    echo "[$ts] myAlgorithm 감지: $rel" >> "$LOG_FILE"
+                    "$HOME/bin/myAlgorithmSync.sh" "$changed_file" >> "$LOG_FILE" 2>&1 &
+                fi
             else
                 rm -f "$dest_file"
                 echo "[$ts] deleted: $rel" >> "$LOG_FILE"
