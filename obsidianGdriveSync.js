@@ -8,7 +8,15 @@ const REFRESH_TOKEN = "1//0ePZih0kniL7eCgYIARAAGA4SNwF-L9IrMiGmojhKUrX65FNDGV4SO
 const GDRIVE_FOLDER_NAME = "obsidianSync";
 
 const fm = FileManager.iCloud();
-const vaultDir = fm.joinPath(fm.documentsDirectory(), "");
+
+// Obsidian vault: /Mobile Documents/iCloud~md~obsidian~obsidian/Documents/{vault}/
+// Scriptable docs: /Mobile Documents/iCloud~dk~simonbs~scriptable/Documents
+const _mobileDocs = fm.documentsDirectory().replace(/\/iCloud~dk~simonbs~scriptable\/Documents$/, "");
+const _obsidianBase = _mobileDocs + "/iCloud~md~obsidian~obsidian/Documents";
+const _vaultItems = fm.listContents(_obsidianBase).filter(n => !n.startsWith("."));
+if (_vaultItems.length === 0) throw new Error("Obsidian vault를 찾을 수 없음: " + _obsidianBase);
+const vaultDir = _obsidianBase + "/" + _vaultItems[0];
+
 const stateDir = fm.joinPath(FileManager.local().documentsDirectory(), "obsidianSync");
 const statePath = FileManager.local().joinPath(stateDir, "state.json");
 
