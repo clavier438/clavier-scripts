@@ -1,32 +1,26 @@
 #!/usr/bin/env python3
 """
-범용 Airtable 업로드 스크립트 v2 (버그 3건 수정)
-==================================================
-config.json + CSV 파일들만 있으면 어떤 데이터든 에어테이블에 넣음.
+범용 Airtable 업로더 v3 (schema.json 프로토콜 지원)
+====================================================
+PROTOCOL.json 기반 schema.json + CSV 파일들만 있으면 어떤 데이터든 에어테이블에 넣음.
 테이블 생성, 필드타입, Linked Record까지 전부 자동.
 
-이 파일은 ~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/ 에 상주.
-프로젝트 폴더에서 실행하면 그 폴더의 config.json과 CSV를 읽음.
+field type 코드:
+  TXT  — singleLineText (기본값, 생략 가능)
+  SEL  — singleSelect
+  LNG  — multilineText
+  LNK  — multipleRecordLinks ({ "type": "LNK", "target": "테이블명" })
 
 Usage:
-  cd /path/to/project_folder
-  python ~/Library/Mobile\ Documents/com~apple~CloudDocs/0/scripts/airtable_generic.py
-
-Bugfix v2:
-  - Linked Record 옵션: linkedTableId만 사용 (prefersSingleRecordLink 제거)
-  - Linked Record 값: 문자열 배열 ["recXXX"] (dict 아님)
-  - 422 에러 시 옵션 최소화 자동 재시도
+  cd /path/to/job_folder
+  python ~/Library/Mobile\ Documents/com~apple~CloudDocs/0/scripts/airtableGeneric.py
 """
 
 import os, sys, json, time, csv, re, pathlib
 import requests
 
-# ============================================================
-# PAT 경로 (고정)
-# ============================================================
-ENV_PATH = os.path.expanduser(
-    "~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/env.md"
-)
+SELF_DIR = pathlib.Path(__file__).resolve().parent
+ENV_PATH = SELF_DIR / "env.md"
 META = "https://api.airtable.com/v0/meta"
 API  = "https://api.airtable.com/v0"
 COLORS = [
@@ -40,14 +34,16 @@ HEADERS = {}
 # UTILS
 # ============================================================
 def load_pat():
-    p = pathlib.Path(ENV_PATH)
-    if not p.exists():
-        print(f"ERROR: {ENV_PATH} 없음"); sys.exit(1)
-    text = p.read_text(encoding="utf-8")
-    m = re.search(r'(pat[A-Za-z0-9_\-\.]{30,})', text)
-    if m:
-        t = m.group(1); print(f"  PAT: {t[:8]}...{t[-4:]}"); return t
-    print("ERROR: PAT 못 찾음"); sys.exit(1)
+    # 1순위: 환경변수 (OCI/CI 환경)
+    pat = os.environ.get("AIRTABLE_PAT")
+    if pat:
+        print(f"  PAT: (env) {pat[:8]}...{pat[-4:]}"); return pat
+    # 2순위: 스크립트 옆의 env.md (Mac 로컬)
+    if ENV_PATH.exists():
+        m = re.search(r'(pat[A-Za-z0-9_\-\.]{30,})', ENV_PATH.read_text(encoding="utf-8"))
+        if m:
+            t = m.group(1); print(f"  PAT: (env.md) {t[:8]}...{t[-4:]}"); return t
+    print("ERROR: PAT 없음 — AIRTABLE_PAT 환경변수 또는 env.md 필요"); sys.exit(1)
 
 def call(method, url, data=None):
     for attempt in range(3):
@@ -57,7 +53,6 @@ def call(method, url, data=None):
         if r.status_code >= 400:
             err = r.text[:300]
             print(f"  ERR {r.status_code}: {err}")
-            # 422 에러 + options 관련 → 옵션 최소화 재시도
             if r.status_code == 422 and data and data.get("options"):
                 ltd = data["options"].get("linkedTableId")
                 if ltd:
@@ -82,6 +77,53 @@ def choices(vals):
     return [{"name":v,"color":COLORS[i%len(COLORS)]} for i,v in enumerate(vals)]
 
 # ============================================================
+# SCHEMA PARSER  (TXT / SEL / LNG / LNK)
+# ============================================================
+def parse_fields(tbl_cfg):
+    """
+    schema.json fields 객체를 파싱해
+    (selects, longs, links) 세트/딕트로 반환.
+    """
+    selects = set()
+    longs   = set()
+    links   = {}   # col_name → target_table
+
+    for col, spec in tbl_cfg.get("fields", {}).items():
+        if isinstance(spec, dict):
+            if spec.get("type") == "LNK":
+                links[col] = spec["target"]
+        elif spec == "SEL":
+            selects.add(col)
+        elif spec == "LNG":
+            longs.add(col)
+        # TXT 또는 생략 → singleLineText, 별도 처리 불필요
+
+    return selects, longs, links
+
+def validate_schema(cfg):
+    errors = []
+    if "base" not in cfg:
+        errors.append("base 필드 없음")
+    if "tables" not in cfg or not cfg["tables"]:
+        errors.append("tables 배열 없음")
+    else:
+        table_names = {t["name"] for t in cfg["tables"]}
+        for tbl in cfg["tables"]:
+            if "name" not in tbl:        errors.append("tables[].name 없음")
+            if "csv" not in tbl:         errors.append(f"{tbl.get('name','?')}: csv 없음")
+            if "primary_key" not in tbl: errors.append(f"{tbl.get('name','?')}: primary_key 없음")
+            for col, spec in tbl.get("fields", {}).items():
+                if isinstance(spec, dict) and spec.get("type") == "LNK":
+                    if "target" not in spec:
+                        errors.append(f"{tbl['name']}.{col}: LNK target 없음")
+                    elif spec["target"] not in table_names:
+                        errors.append(f"{tbl['name']}.{col}: LNK target '{spec['target']}' 이 tables에 없음")
+    if errors:
+        print("ERROR: schema.json 유효성 오류")
+        for e in errors: print(f"  - {e}")
+        sys.exit(1)
+
+# ============================================================
 # CORE
 # ============================================================
 def find_base(name):
@@ -91,9 +133,8 @@ def find_base(name):
     print(f"  ERROR: '{name}' 없음"); sys.exit(1)
 
 def create_table(base_id, tbl_cfg, rows):
-    selects = set(tbl_cfg.get("singleSelect", []))
-    longs = set(tbl_cfg.get("multilineText", []))
-    link_cols = set(tbl_cfg.get("links", {}).keys())
+    selects, longs, links = parse_fields(tbl_cfg)
+    link_cols = set(links.keys())
 
     fields = []
     for col in rows[0].keys():
@@ -126,18 +167,14 @@ def upload_records(base_id, table_id, rows, exclude, name):
     return ids
 
 def resolve(csv_val, id_map):
-    """콤마 구분 텍스트 → record ID 문자열 배열 (v2: dict 아님!)"""
     if not csv_val or csv_val.strip() in ("","없음","-"): return []
     ids = []
     for part in [p.strip() for p in csv_val.split(",")]:
-        # 정확 매칭
         if part in id_map:
             ids.append(id_map[part]); continue
-        # 괄호 제거 후 매칭
         clean = re.sub(r'\s*\(.*?\)','',part).strip()
         if clean in id_map:
             ids.append(id_map[clean]); continue
-        # 부분 매칭
         for name, rid in id_map.items():
             if part in name or name in part:
                 ids.append(rid); break
@@ -148,14 +185,16 @@ def resolve(csv_val, id_map):
 # ============================================================
 def main():
     print("="*60)
-    print("Airtable 범용 업로더 v2")
+    print("Airtable 범용 업로더 v3")
     print("="*60)
 
-    cfg_path = pathlib.Path("config.json")
-    if not cfg_path.exists():
-        print("ERROR: config.json 없음"); sys.exit(1)
-    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
-    print(f"  Config: {len(cfg['tables'])}개 테이블")
+    schema_path = pathlib.Path("schema.json")
+    if not schema_path.exists():
+        print("ERROR: schema.json 없음"); sys.exit(1)
+
+    cfg = json.loads(schema_path.read_text(encoding="utf-8"))
+    validate_schema(cfg)
+    print(f"  Job: {cfg.get('job','(unnamed)')} / Base: {cfg['base']} / Tables: {len(cfg['tables'])}")
 
     pat = load_pat()
     HEADERS["Authorization"] = f"Bearer {pat}"
@@ -171,11 +210,12 @@ def main():
         rows = read_csv(tbl["csv"])
         print(f"  CSV: {len(rows)} rows × {len(rows[0])} cols")
 
-        link_cols = set(tbl.get("links",{}).keys())
+        _, _, links = parse_fields(tbl)
+        link_cols = set(links.keys())
         tid = create_table(base_id, tbl, rows)
         rec_ids = upload_records(base_id, tid, rows, link_cols, tbl["name"])
 
-        pk = tbl["primary"]
+        pk = tbl["primary_key"]
         pk_map = {}
         for i, row in enumerate(rows):
             if i < len(rec_ids):
@@ -186,17 +226,16 @@ def main():
             "cfg": tbl, "pk_map": pk_map
         }
 
-    # --- Phase 2: Linked Record 생성 (v2: linkedTableId만 사용) ---
+    # --- Phase 2: Linked Record 필드 생성 ---
     print(f"\n--- Linked Records ---")
     created_links = {}
 
     for tbl in cfg["tables"]:
-        links = tbl.get("links", {})
+        _, _, links = parse_fields(tbl)
         if not links: continue
         src = table_data[tbl["name"]]
 
-        for link_col, link_cfg in links.items():
-            target_name = link_cfg["target_table"]
+        for link_col, target_name in links.items():
             tgt = table_data[target_name]
 
             reverse_key = (target_name, tbl["name"])
@@ -208,7 +247,7 @@ def main():
             res = call("post", f"{META}/bases/{base_id}/tables/{src['id']}/fields", {
                 "name": link_col,
                 "type": "multipleRecordLinks",
-                "options": {"linkedTableId": tgt["id"]}  # v2: 이것만!
+                "options": {"linkedTableId": tgt["id"]}
             })
 
             fid = res["id"]
@@ -219,8 +258,9 @@ def main():
                 inv_name = None
                 for t2 in cfg["tables"]:
                     if t2["name"] == target_name:
-                        for lc, lcfg in t2.get("links",{}).items():
-                            if lcfg["target_table"] == tbl["name"]:
+                        _, _, t2_links = parse_fields(t2)
+                        for lc, lc_target in t2_links.items():
+                            if lc_target == tbl["name"]:
                                 inv_name = lc; break
                 if inv_name:
                     print(f"  역방향 필드 rename → '{inv_name}'")
@@ -229,16 +269,16 @@ def main():
                          {"name": inv_name})
                     created_links[(target_name, tbl["name"])] = inv_fid
 
-    # --- Phase 3: 링크 데이터 연결 (v2: 문자열 배열) ---
+    # --- Phase 3: 링크 데이터 연결 ---
     print(f"\n--- 데이터 연결 ---")
 
     for tbl in cfg["tables"]:
-        links = tbl.get("links", {})
+        _, _, links = parse_fields(tbl)
         if not links: continue
         src = table_data[tbl["name"]]
 
-        for link_col, link_cfg in links.items():
-            tgt = table_data[link_cfg["target_table"]]
+        for link_col, target_name in links.items():
+            tgt = table_data[target_name]
 
             updates = []
             for i, row in enumerate(src["rows"]):
@@ -247,7 +287,7 @@ def main():
                 if resolved:
                     updates.append({
                         "id": src["rec_ids"][i],
-                        "fields": {link_col: resolved}  # v2: ["recXXX"] 문자열 배열
+                        "fields": {link_col: resolved}
                     })
 
             print(f"  {tbl['name']}.{link_col}: {len(updates)}건 연결")
@@ -263,7 +303,6 @@ def main():
     print("="*60)
     for name, d in table_data.items():
         print(f"  {name}: {len(d['rec_ids'])} records ({d['id']})")
-    print(f"\n  수동 작업: 없음")
 
 if __name__ == "__main__":
     main()

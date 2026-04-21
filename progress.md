@@ -1,11 +1,26 @@
 # 작업 현황 — 전체 프로젝트
 
-> 마지막 업데이트: 2026-04-16  
+> 마지막 업데이트: 2026-04-21  
 > 세션 재개 시 이 파일 먼저 읽을 것. 각 프로젝트 상세는 하위 PROGRESS.md 참조.
 
 ---
 
 ## 진행 중인 작업
+
+### 🔄 airtable-jobs — GDrive→Airtable 역방향 업로드 파이프라인
+
+| 단계 | 내용 | 상태 |
+|------|------|------|
+| PROTOCOL.json | Google Drive airtable-jobs/ 루트에 타입 코드 정의 배치 | ✅ |
+| airtableGeneric.py v3 | 새 schema.json 포맷(TXT/SEL/LNG/LNK) 파싱, SELF_DIR 기반 상대경로, AIRTABLE_PAT env var 지원 | ✅ |
+| airtable_generic_readme.md | v3 포맷 + Sana 규격 문서 갱신 | ✅ |
+| ARCHITECTURE.md | GDrive→Airtable 역방향 흐름 추가 | ✅ |
+| OCI 서버 엔드포인트 | POST /airtable-upload — GDrive 다운로드 + 실행 + 결과 반환 | ⏳ 다음 |
+| 단일 정보원 | airtable-jobs 전체 실행 이력/결과 집계 레지스트리 | ⏳ 계획됨 |
+
+**다음 세션 시작점**: OCI에 `/airtable-upload` HTTP 엔드포인트 추가 (oci-scripts repo)
+
+---
 
 ### 🔄 webExporter — Playwright 웹 캡쳐 도구
 - **repo**: `clavier0/web-exporter` (submodule: `webExporter/`)
