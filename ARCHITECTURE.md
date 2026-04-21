@@ -110,14 +110,24 @@ GitHub: clavier0/airtable-data                  ← 버전 관리 백업 (자동
 **Google Drive → Airtable (수동 트리거, airtable-jobs 워크플로우)**
 ```
 Sana: 콘텐츠 기획 → CSV + schema.json 생성
-    ↓  Google Drive: airtable-jobs/{job-name}/
-    ↓  수동 트리거 (curl POST → OCI:8080/airtable-upload)
-    ↓  OCI: Google Drive airtable/jobs/{job}/ 다운로드 → airtableGeneric.py 실행
+    ↓  Google Drive: airtable/jobs/{job-name}/
+    ↓  수동 트리거 (curl POST → OCI:8081/airtable-upload)
+    ↓  OCI: airtableUpload.py — GDrive 다운로드 → Airtable API 업로드
 Airtable: 테이블 생성 + 데이터 업로드 완료
 ```
 - `airtable/jobs/PROTOCOL.json` — 타입 코드 정의 (불변, Sana/OCI 공통 참조)
 - `schema.json` 타입 코드: `TXT` / `SEL` / `LNG` / `LNK` (언어 독립적 고정 코드)
+- `schema.json`에 `base_id` 직접 지정 가능 — 이름 조회 우회, 기존 베이스에 덮어쓰기 방지
 - `airtableGeneric.py` v3: `__file__` 기준 상대경로 + `AIRTABLE_PAT` env var 우선 지원
+- `airtableUpload.py` (OCI): `SELF_DIR/.env` 로드, `_resolve_path()` 중첩 GDrive 경로 탐색
+
+**OCI 브리핑 시스템**
+```
+Mac: ociStatus (~/bin/)
+    ↓  SSH → OCI: bash ~/oci-scripts/ociBriefing.sh
+    ↓  curl localhost:8081/status → JSON 파싱
+출력: 서비스 상태 / Airtable 서버 / 업로드 잡 / 최근 싱크 / Git / 시스템
+```
 
 **결정 이유:** Sana AI가 항상 최신 Airtable 데이터를 볼 수 있어야 함.
 OCI + Google Drive만으로 24/7 운영. Mac/폰 꺼져도 무관.
@@ -154,9 +164,12 @@ Google Drive: scriptsSync/
 | OCI | 168.107.63.94 | Airtable↔GDrive 싱크 서버, Claude Code | `ociIn` |
 
 **OCI 실행 중인 서비스:**
-- `airtable-sync` (systemd): Airtable 웹훅 수신 + CSV → GDrive + GitHub 자동 커밋
-- 웹훅 엔드포인트: `http://168.107.63.94:8080/webhook/{base_id}`
-- 수동 트리거: `http://168.107.63.94:8080/sync-to-airtable/{base_id|all}`
+- `airtable-sync` (systemd): Airtable 웹훅 수신 + CSV → GDrive + GitHub 자동 커밋 (포트 8081)
+- 웹훅 엔드포인트: `http://168.107.63.94:8081/webhook/{base_id}`
+- 수동 트리거: `http://168.107.63.94:8081/sync-to-airtable/{base_id|all}`
+- 업로드 트리거: `POST http://168.107.63.94:8081/airtable-upload` (Bearer 인증)
+- 서버 상태: `GET http://168.107.63.94:8081/status` (tunnel, webhooks, uptime)
+- ~~dday-web.service~~ / ~~dday-tunnel.service~~ — 2026-04-21 제거
 
 **OCI git 관리:** `~/oci-scripts/` → `clavier0/oci-scripts` (GitHub private)
 
@@ -258,6 +271,8 @@ iCloud/0/code/
 
 | 날짜 | 변경 내용 |
 |------|-----------|
+| 2026-04-21 | OCI 브리핑 시스템 — /status 엔드포인트, ociBriefing.sh, ociStatus Mac 명령, dday 서비스 제거, 포트 8081 |
+| 2026-04-21 | airtableUpload.py 신설 — OCI POST /airtable-upload, GDrive 중첩 경로 탐색, base_id 직접 지정 지원 |
 | 2026-04-21 | GDrive 폴더 통합 — airtable/sync + airtable/jobs, .env path traversal 지원, 하드코딩 전면 제거 |
 | 2026-04-21 | airtable-jobs 워크플로우 신설 — GDrive→Airtable 역방향, PROTOCOL.json 타입 코드 고정, airtableGeneric.py v3 |
 | 2026-04-21 | iCloud/0/ 폴더 구조 정리 — code/projects/, life/, sys/ 신설. scripts는 경로 수정 후 이동 예정 |
