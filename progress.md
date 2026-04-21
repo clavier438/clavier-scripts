@@ -15,7 +15,7 @@
 | airtableGeneric.py v3 | 새 schema.json 포맷(TXT/SEL/LNG/LNK) 파싱, SELF_DIR 기반 상대경로, AIRTABLE_PAT env var 지원 | ✅ |
 | airtable_generic_readme.md | v3 포맷 + Sana 규격 문서 갱신 | ✅ |
 | ARCHITECTURE.md | GDrive→Airtable 역방향 흐름 추가 | ✅ |
-| OCI 서버 엔드포인트 | POST /airtable-upload — GDrive 다운로드 + 실행 + 결과 반환 | ⏳ 다음 |
+| OCI 서버 엔드포인트 | POST /airtable-upload — GDrive 다운로드 + 실행 + 결과 반환 | ✅ |
 | 단일 정보원 | airtable-jobs 전체 실행 이력/결과 집계 레지스트리 | ⏳ 계획됨 |
 
 **다음 세션 시작점**: OCI에 `/airtable-upload` HTTP 엔드포인트 추가 (oci-scripts repo)
