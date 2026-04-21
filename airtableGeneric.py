@@ -53,12 +53,19 @@ def call(method, url, data=None):
         if r.status_code >= 400:
             err = r.text[:300]
             print(f"  ERR {r.status_code}: {err}")
-            if r.status_code == 422 and data and data.get("options"):
-                ltd = data["options"].get("linkedTableId")
-                if ltd:
-                    print("  → linkedTableId만 남기고 재시도...")
-                    data["options"] = {"linkedTableId": ltd}
-                    continue
+            if r.status_code == 422:
+                try:
+                    etype = r.json().get("error", {}).get("type", "")
+                except Exception:
+                    etype = ""
+                if etype == "DUPLICATE_OR_EMPTY_FIELD_NAME":
+                    return {}
+                if data and data.get("options"):
+                    ltd = data["options"].get("linkedTableId")
+                    if ltd:
+                        print("  → linkedTableId만 남기고 재시도...")
+                        data["options"] = {"linkedTableId": ltd}
+                        continue
             if attempt < 2: time.sleep(2); continue
             r.raise_for_status()
         time.sleep(0.22)
@@ -126,11 +133,21 @@ def validate_schema(cfg):
 # ============================================================
 # CORE
 # ============================================================
-def find_base(name):
-    for b in call("get", f"{META}/bases").get("bases",[]):
-        if b["name"].lower() == name.lower():
-            print(f"  Base: {b['name']} → {b['id']}"); return b["id"]
-    print(f"  ERROR: '{name}' 없음"); sys.exit(1)
+def create_base(name):
+    bases = call("get", f"{META}/bases").get("bases", [])
+    ws_id = None
+    if bases:
+        detail = call("get", f"{META}/bases/{bases[0]['id']}")
+        ws_id = detail.get("workspaceId")
+    body = {"name": name, "tables": [{"name": "_init", "fields": [{"name": "Name", "type": "singleLineText"}]}]}
+    if ws_id:
+        body["workspaceId"] = ws_id
+    res = call("post", f"{META}/bases", body)
+    bid = res.get("id")
+    if not bid:
+        print(f"ERROR: base 생성 실패: {res}"); sys.exit(1)
+    print(f"  Base 생성: {name} → {bid}")
+    return bid
 
 def create_table(base_id, tbl_cfg, rows):
     selects, longs, links = parse_fields(tbl_cfg)
@@ -190,7 +207,11 @@ def main():
 
     schema_path = pathlib.Path("schema.json")
     if not schema_path.exists():
-        print("ERROR: schema.json 없음"); sys.exit(1)
+        candidates = sorted(pathlib.Path(".").glob("[Ss][Cc][Hh][Ee][Mm][Aa]*.json"))
+        if not candidates:
+            print("ERROR: schema.json 없음"); sys.exit(1)
+        schema_path = candidates[0]
+        print(f"  schema 파일: {schema_path.name}")
 
     cfg = json.loads(schema_path.read_text(encoding="utf-8"))
     validate_schema(cfg)
@@ -200,7 +221,7 @@ def main():
     HEADERS["Authorization"] = f"Bearer {pat}"
     HEADERS["Content-Type"] = "application/json"
 
-    base_id = find_base(cfg["base"])
+    base_id = create_base(cfg["base"])
 
     # --- Phase 1: 테이블 생성 + 데이터 업로드 ---
     table_data = {}
