@@ -174,11 +174,53 @@ statusBriefing    데몬 상태 + 연결 가능 서버 체크 + 스크립트 목
 
 ---
 
+## iCloud/0/ 폴더 구조
+
+```
+iCloud/0/
+├── code/                  ← 코드 (git 관리 대상)
+│   ├── scripts/           ← Mac 자동화 (이 repo) — 미이동 (경로 참조 수정 후 예정)
+│   └── projects/          ← 프로젝트성 코드 (배포/서비스)
+│       ├── airtable-framer-sync/     Airtable → Framer CMS 동기화 스크립트
+│       └── base-template-server-api/ Cloudflare Worker REST API (Airtable 프록시)
+├── scripts/               ← 현재 위치 (code/scripts/로 이동 예정)
+├── books/                 ← PDF/도서 (pdf_batch_resume.sh 경로 수정 후 이동 예정)
+├── life/                  ← 개인 파일 (documents, study, asset, mp3, numbers)
+└── sys/                   ← 시스템 (work, works, data, backup, launchagents, passward)
+```
+
+### 미완료: scripts → code/scripts 이동 (+ 상대경로 전환)
+
+**왜 옮기나**: 모든 코드를 `code/` 아래 한 곳에 모아 구조를 단순하게 유지.
+`scripts`와 `projects`를 형제 폴더로 두면 "코드 = code/ 안에 다 있다"는 원칙이 성립됨.
+
+**왜 상대경로로 바꾸나**: 현재 7개 파일이 `0/scripts` 절대경로를 하드코딩 중.
+폴더를 옮기면 경로가 즉시 깨짐. 상대경로(`$SELF_DIR`, `$(dirname "$0")` 기반)로 바꾸면
+폴더를 어디로 옮기든 스크립트가 자기 위치를 기준으로 동작 → 이동/복원/포맷 후 복구에 안전.
+
+**이것이 설계 철학 "2. 하드코딩 금지"의 완성**: 현재 키/토큰은 env.md로 분리됐지만
+경로 하드코딩은 아직 남아있는 상태. 이 작업이 완료되면 스크립트 전체가 경로에 독립적.
+
+**수정 필요 파일 7개**:
+- LaunchAgents plist 3개: `watcherGitSync`, `watcherScripts`, `workerPdf`
+  → plist는 상대경로 불가 → 래퍼 스크립트(`$HOME` 기반)로 간접 참조
+- 스크립트 4개: `syncMemory.sh`, `scriptsGdriveSync.js`, `ociIn.sh`, `scriptsList.sh`
+  → `SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` 패턴으로 전환
+- `books` 폴더: `pdf_batch_resume.sh`(절대경로), `runSafariTabsExport.sh`($HOME 기반) 수정 후 이동
+
+**완료 후 기대 상태**:
+```
+iCloud/0/code/
+├── scripts/    ← 기존 scripts (상대경로 전환 완료)
+└── projects/   ← airtable-framer-sync, base-template-server-api
+```
+
 ## 주요 경로
 
 | 항목 | 경로 |
 |------|------|
 | 스크립트 소스 | `~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/` |
+| 프로젝트 코드 | `~/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/` |
 | 실행 바이너리 | `~/bin/` |
 | 환경변수/토큰 | `iCloud/0/scripts/env.md` (gitignore됨) |
 | Claude 메모리 | `~/.claude/projects/-Users-clavier/memory/` |
@@ -202,6 +244,10 @@ statusBriefing    데몬 상태 + 연결 가능 서버 체크 + 스크립트 목
 
 | 날짜 | 변경 내용 |
 |------|-----------|
+| 2026-04-21 | iCloud/0/ 폴더 구조 정리 — code/projects/, life/, sys/ 신설. scripts는 경로 수정 후 이동 예정 |
+| 2026-04-21 | code/projects/ 신설 — airtable-framer-sync, base-template-server-api 이동 |
+| 2026-04-21 | Airtable 4.0.0_branch → Framer CMS 동기화 완료 (5개 컬렉션, 205개 레코드) |
+| 2026-04-21 | Cloudflare Worker base-template-server-api 배포 — Airtable REST API 프록시 |
 | 2026-04-18 | syncObsidian: 전체 rsync → 변경 파일 단건 처리 (Sana AI 동기화 시차 개선) |
 | 2026-04-18 | obsidianGdriveSync.js + scriptsGdriveSync.js: Scriptable에서 Google Drive API 직접 호출 (맥 불필요) |
 | 2026-04-18 | Google OAuth 개인 앱 발급 — 범용 Google API credentials (env.md에 저장) |
