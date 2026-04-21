@@ -93,7 +93,6 @@ iPhone Obsidian (iCloud)
 Google Drive: obsidianSync/          ← Sana AI가 읽음
 ```
 **결정 이유:** Sana AI가 Google Drive만 네이티브 지원. 제3자 서버 없이 본인 OAuth app으로 직접 연동.
-Mac 데몬(syncObsidian)은 Mac 켜진 경우 보조 역할로 유지.
 
 ### Airtable ↔ Google Drive ↔ Sana (Mac/폰 불필요)
 
@@ -166,15 +165,8 @@ Google Drive: scriptsSync/
 
 | 데몬 | 역할 | 관리 |
 |------|------|------|
-| `syncObsidian` | Obsidian iCloud → Google Drive rsync | `syncObsidian start\|stop\|status` |
-| `syncScriptable` | Scriptable iCloud → Google Drive rsync | `syncScriptable start\|stop\|status` |
 | `syncMemory` | Claude 메모리 → memory-backup/ rsync | watcherMemory가 자동 실행 |
-| `watcherSync` | syncObsidian/syncScriptable 5분마다 감시/재시작 | LaunchAgent |
 | `gitSync` | scripts 변경 → git commit + push | watcherGitSync가 자동 실행 |
-| `obsidianTagSync` | Obsidian 태그 → macOS Finder 태그 동기화 | LaunchAgent |
-| `workerPdf` | PDF 처리 워커 | LaunchAgent |
-
-**자주 죽는 데몬:** syncObsidian, syncScriptable → statusBriefing이 터미널 시작 시 자동 재시작
 
 ### 클라우드 서버 (scripts/clouds/)
 
@@ -199,12 +191,8 @@ Google Drive: scriptsSync/
 | `com.clavier.watcherScripts` | scripts 폴더 WatchPaths | installScripts |
 | `com.clavier.watcherGitSync` | scripts 폴더 WatchPaths + 5분 주기 | gitSync |
 | `com.clavier.watcherMemory` | memory 폴더 WatchPaths | syncMemory |
-| `com.clavier.watcherSync` | 5분 주기 | watcherSync (데몬 감시) |
 | `com.clavier.watcherScreenshots` | Screenshots 폴더 WatchPaths | 스크린샷 처리 |
 | `com.clavier.workerPdf` | WatchPaths | pdfToImg 처리 |
-| `com.clavier.syncObsidian` | - | syncObsidian |
-| `com.clavier.syncScriptable` | - | syncScriptable |
-| `com.clavier.obsidian-tag-sync` | - | obsidianTagSync |
 
 ### 터미널 시작 시 자동 실행 (~/.zshrc)
 
