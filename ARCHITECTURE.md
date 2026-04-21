@@ -129,6 +129,25 @@ Mac: ociStatus (~/bin/)
 출력: 서비스 상태 / Airtable 서버 / 업로드 잡 / 최근 싱크 / Git / 시스템
 ```
 
+**Airtable 업로드 트리거 (Mac bin 명령)**
+```
+airtableUpload <job-name> [--wait]
+    ↓  SSH → OCI: curl localhost:8081/airtable-upload
+    ↓  OCI: airtableUpload.py — GDrive 다운로드 → Airtable API
+완료 확인: airtableUpload <job> --wait  (2분 폴링)
+```
+- 포트 공개 불필요 — SSH 통해 내부 localhost 호출
+- GDrive job 폴더 구조: `airtable/jobs/{job}/schema.json` + `*.csv`
+- schema.json 필드: `schema_version` (DB 구조 세대), `version` (콘텐츠 버전)
+- `base_id` 없으면 이름으로 조회 → 없으면 자동 생성
+
+**포트 현황 (OCI 168.107.63.94)**
+
+| 포트 | 용도 | 접근 방식 |
+|------|------|-----------|
+| 8081 | airtable-sync HTTP 서버 | SSH 통해 내부 호출 (외부 미노출) |
+| 22 | SSH | 공개 (OCI Security List 허용) |
+
 **결정 이유:** Sana AI가 항상 최신 Airtable 데이터를 볼 수 있어야 함.
 OCI + Google Drive만으로 24/7 운영. Mac/폰 꺼져도 무관.
 
@@ -271,6 +290,8 @@ iCloud/0/code/
 
 | 날짜 | 변경 내용 |
 |------|-----------|
+| 2026-04-21 | airtableUpload Mac bin 명령 — SSH→OCI localhost 호출, 포트 공개 없이 트리거, 베이스 자동 생성 |
+| 2026-04-21 | schema.json 버전 체계 — schema_version(DB구조), version(콘텐츠) 분리, GDrive job 폴더는 schema.json 고정명 |
 | 2026-04-21 | OCI 브리핑 시스템 — /status 엔드포인트, ociBriefing.sh, ociStatus Mac 명령, dday 서비스 제거, 포트 8081 |
 | 2026-04-21 | airtableUpload.py 신설 — OCI POST /airtable-upload, GDrive 중첩 경로 탐색, base_id 직접 지정 지원 |
 | 2026-04-21 | GDrive 폴더 통합 — airtable/sync + airtable/jobs, .env path traversal 지원, 하드코딩 전면 제거 |
