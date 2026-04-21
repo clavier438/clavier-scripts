@@ -102,7 +102,7 @@ Mac 데몬(syncObsidian)은 Mac 켜진 경우 보조 역할로 유지.
 Airtable (변경 발생)
     ↓  웹훅 → OCI:8080
     ↓  airtableGdriveSync.py
-Google Drive: airtableSync/{base}/{table}.csv   ← Sana AI가 읽음
+Google Drive: airtable/sync/{base}/{table}.csv   ← Sana AI가 읽음
     +
 GitHub: clavier0/airtable-data                  ← 버전 관리 백업 (자동 커밋)
 ```
@@ -112,10 +112,10 @@ GitHub: clavier0/airtable-data                  ← 버전 관리 백업 (자동
 Sana: 콘텐츠 기획 → CSV + schema.json 생성
     ↓  Google Drive: airtable-jobs/{job-name}/
     ↓  수동 트리거 (curl POST → OCI:8080/airtable-upload)
-    ↓  OCI: Google Drive에서 파일 다운로드 → airtableGeneric.py 실행
+    ↓  OCI: Google Drive airtable/jobs/{job}/ 다운로드 → airtableGeneric.py 실행
 Airtable: 테이블 생성 + 데이터 업로드 완료
 ```
-- `airtable-jobs/PROTOCOL.json` — 타입 코드 정의 (불변, Sana/OCI 공통 참조)
+- `airtable/jobs/PROTOCOL.json` — 타입 코드 정의 (불변, Sana/OCI 공통 참조)
 - `schema.json` 타입 코드: `TXT` / `SEL` / `LNG` / `LNK` (언어 독립적 고정 코드)
 - `airtableGeneric.py` v3: `__file__` 기준 상대경로 + `AIRTABLE_PAT` env var 우선 지원
 
@@ -258,6 +258,7 @@ iCloud/0/code/
 
 | 날짜 | 변경 내용 |
 |------|-----------|
+| 2026-04-21 | GDrive 폴더 통합 — airtable/sync + airtable/jobs, .env path traversal 지원, 하드코딩 전면 제거 |
 | 2026-04-21 | airtable-jobs 워크플로우 신설 — GDrive→Airtable 역방향, PROTOCOL.json 타입 코드 고정, airtableGeneric.py v3 |
 | 2026-04-21 | iCloud/0/ 폴더 구조 정리 — code/projects/, life/, sys/ 신설. scripts는 경로 수정 후 이동 예정 |
 | 2026-04-21 | code/projects/ 신설 — airtable-framer-sync, base-template-server-api 이동 |
