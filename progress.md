@@ -1,6 +1,6 @@
 # 작업 현황 — 전체 프로젝트
 
-> 마지막 업데이트: 2026-04-21 (3차)  
+> 마지막 업데이트: 2026-04-22  
 > 세션 재개 시 이 파일 먼저 읽을 것. 각 프로젝트 상세는 하위 PROGRESS.md 참조.
 
 ---
@@ -25,6 +25,22 @@
 ---
 
 ## 완료된 작업 (최근)
+
+### ✅ 2026-04-22 — 아키텍처 대정리
+
+| 항목 | 내용 | 상태 |
+|------|------|------|
+| Mac→Airtable 직접 업로드 | `airtableUpload.sh` + `airtableGeneric.py` — OCI 없이 Mac에서 직접 실행 | ✅ |
+| iCloud→GDrive 싱크 데몬 전체 제거 | syncObsidian, syncScriptable, obsidianTagSync, watcherSync 데몬 + LaunchAgent plist 삭제 | ✅ |
+| OCI dead code 제거 | myAlgorithm 싱크 + airtable-upload 엔드포인트 + `airtableUpload.py` 삭제 | ✅ |
+| OCI `.env` 정리 | MY_ALGO_*, GDRIVE_JOBS_FOLDER, GDRIVE_OBSIDIAN_FOLDER, POLL_INTERVAL 제거 | ✅ |
+| GDrive 정리 | obsidianSync, scriptableSync, scriptsSync, airtable/jobs 폴더 삭제 | ✅ |
+| iCloud 폴더 정리 | GDrive stay/계약 + stayStudy → iCloud 0/stay/ 이동 | ✅ |
+
+**현재 OCI 역할:** Airtable→GDrive 싱크(웹훅 드리븐)만. 업로드 방향 완전 제거.
+**다음 세션 시작점:** `dynamicFilter` Framer 코드 컴포넌트 작업 (code/projects/PROGRESS.md 참조)
+
+---
 
 ### ✅ airtable-jobs — GDrive→Airtable 역방향 업로드 파이프라인
 
