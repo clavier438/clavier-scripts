@@ -104,6 +104,90 @@ def unique_msel(rows, col):
 def choices(vals):
     return [{"name":v,"color":COLORS[i%len(COLORS)]} for i,v in enumerate(vals)]
 
+def normalize_raw_schema(cfg):
+    """Raw Metadata API 포맷(tables[].fields = array) → 내부 포맷 변환.
+    Raw 포맷: Airtable API가 준 그대로 — {id, name, type, options?} 배열.
+    내부 포맷: {fieldName: spec} 딕셔너리 (기존 v4/v5 방식).
+    choices, precision 등 정보가 완전히 보존됨.
+    """
+    if not cfg.get("tables"):
+        return cfg
+    if not isinstance(cfg["tables"][0].get("fields"), list):
+        return cfg  # 이미 내부 포맷
+
+    table_id_to_name = {t["id"]: t["name"] for t in cfg["tables"]}
+    field_id_to_name = {}
+    for t in cfg["tables"]:
+        for f in t.get("fields", []):
+            field_id_to_name[f["id"]] = f["name"]
+
+    SKIP_EXPORT = {"aiText"}
+
+    tables = []
+    for t in cfg["tables"]:
+        fields = {"_record_id": "TXT"}
+        for f in t.get("fields", []):
+            name = f["name"]
+            ftype = f["type"]
+            opts = f.get("options", {})
+
+            if ftype in SKIP_EXPORT:
+                continue
+            if ftype == "singleLineText":
+                fields[name] = "TXT"
+            elif ftype in ("multilineText", "richText"):
+                fields[name] = "LNG"
+            elif ftype == "singleSelect":
+                raw_choices = [{"name": c["name"], "color": c.get("color", COLORS[i % len(COLORS)])}
+                               for i, c in enumerate(opts.get("choices", [])) if c.get("name")]
+                fields[name] = {"type": "SEL", "choices": raw_choices}
+            elif ftype == "multipleSelects":
+                raw_choices = [{"name": c["name"], "color": c.get("color", COLORS[i % len(COLORS)])}
+                               for i, c in enumerate(opts.get("choices", [])) if c.get("name")]
+                fields[name] = {"type": "MSEL", "choices": raw_choices}
+            elif ftype == "multipleAttachments":
+                fields[name] = "ATT"
+            elif ftype == "multipleRecordLinks":
+                linked = table_id_to_name.get(opts.get("linkedTableId", ""))
+                if linked:
+                    fields[name] = {"type": "LNK", "target": linked}
+            elif ftype == "formula":
+                formula = opts.get("formula", "")
+                if formula:
+                    fields[name] = {"type": "FML", "formula": formula}
+            elif ftype == "lookup":
+                lnk = field_id_to_name.get(opts.get("recordLinkFieldId"))
+                tgt = field_id_to_name.get(opts.get("fieldIdInLinkedTable"))
+                if lnk and tgt:
+                    fields[name] = {"type": "LKP", "link": lnk, "target": tgt}
+            elif ftype == "rollup":
+                lnk = field_id_to_name.get(opts.get("recordLinkFieldId"))
+                tgt = field_id_to_name.get(opts.get("fieldIdInLinkedTable"))
+                if lnk and tgt:
+                    fields[name] = {"type": "RLP", "link": lnk, "target": tgt,
+                                    "fn": opts.get("summarizeFunction", "SUM")}
+            else:
+                # number, currency, date, dateTime, checkbox, email, url 등
+                if opts:
+                    fields[name] = {"type": ftype, "options": opts}
+                else:
+                    fields[name] = {"type": ftype}
+
+        tables.append({
+            "name": t["name"],
+            "csv": t["name"] + ".csv",
+            "primary_key": "_record_id",
+            "fields": fields,
+        })
+
+    return {
+        "version": "raw-v1",
+        "base": cfg.get("base", ""),
+        "workspaceId": cfg.get("workspaceId", ""),
+        "tables": tables,
+    }
+
+
 def parse_att(val):
     """CSV 첨부파일 값 → Airtable API 형식 [{"url": "..."}]"""
     if not val or not val.strip():
@@ -145,13 +229,15 @@ def get_all_field_ids(base_id):
 # SCHEMA PARSER
 # ============================================================
 def parse_fields(tbl_cfg):
-    """Returns: selects, mselects, longs, atts, links, computed"""
-    selects  = set()
-    mselects = set()
+    """Returns: selects, mselects, longs, atts, links, computed
+    selects/mselects: {col: choices_list} — choices가 있으면 보존, 없으면 []
+    """
+    selects  = {}  # col → choices list
+    mselects = {}
     longs    = set()
     atts     = set()
     links    = {}
-    computed = {}  # FML / LKP / RLP
+    computed = {}
 
     for col, spec in tbl_cfg.get("fields", {}).items():
         if isinstance(spec, dict):
@@ -160,8 +246,17 @@ def parse_fields(tbl_cfg):
                 links[col] = spec["target"]
             elif ftype in ("FML", "LKP", "RLP"):
                 computed[col] = spec
-        elif spec == "SEL":  selects.add(col)
-        elif spec == "MSEL": mselects.add(col)
+            elif ftype == "SEL":
+                selects[col] = spec.get("choices", [])
+            elif ftype == "MSEL":
+                mselects[col] = spec.get("choices", [])
+            elif ftype == "LNG":
+                longs.add(col)
+            elif ftype == "ATT":
+                atts.add(col)
+            # number, date 등 기타 타입은 build_table_fields에서 처리
+        elif spec == "SEL":  selects[col] = []
+        elif spec == "MSEL": mselects[col] = []
         elif spec == "LNG":  longs.add(col)
         elif spec == "ATT":  atts.add(col)
 
@@ -203,25 +298,63 @@ def validate_schema(cfg):
 # ============================================================
 # CORE
 # ============================================================
+def _field_options_for_create(ftype, opts):
+    """Airtable 필드 생성 API용 clean options — ID 등 불필요한 키 제거."""
+    if ftype in ("number", "currency", "percent", "rating", "duration"):
+        clean = {}
+        if "precision" in opts: clean["precision"] = opts["precision"]
+        if "symbol" in opts: clean["symbol"] = opts["symbol"]
+        return clean or None
+    if ftype == "date":
+        return {"dateFormat": opts["dateFormat"]} if "dateFormat" in opts else None
+    if ftype == "dateTime":
+        clean = {}
+        for k in ("dateFormat", "timeFormat", "timeZone"):
+            if k in opts: clean[k] = opts[k]
+        return clean or None
+    if ftype == "checkbox":
+        clean = {}
+        for k in ("icon", "color"):
+            if k in opts: clean[k] = opts[k]
+        return clean or None
+    return None
+
+
 def build_table_fields(tbl_cfg, rows):
     selects, mselects, longs, atts, links, computed = parse_fields(tbl_cfg)
     skip_cols = set(links.keys()) | set(computed.keys())
+    fields_spec = tbl_cfg.get("fields", {})
     fields = []
     for col in rows[0].keys():
         if col in skip_cols:
             continue
         if col in selects:
-            fields.append({"name":col, "type":"singleSelect",
-                          "options":{"choices":choices(unique(rows,col))}})
+            schema_choices = selects[col]
+            field_choices = schema_choices if schema_choices else choices(unique(rows, col))
+            fields.append({"name": col, "type": "singleSelect",
+                           "options": {"choices": field_choices}})
         elif col in mselects:
-            fields.append({"name":col, "type":"multipleSelects",
-                          "options":{"choices":choices(unique_msel(rows,col))}})
+            schema_choices = mselects[col]
+            field_choices = schema_choices if schema_choices else choices(unique_msel(rows, col))
+            fields.append({"name": col, "type": "multipleSelects",
+                           "options": {"choices": field_choices}})
         elif col in longs:
-            fields.append({"name":col, "type":"multilineText"})
+            fields.append({"name": col, "type": "multilineText"})
         elif col in atts:
-            fields.append({"name":col, "type":"multipleAttachments"})
+            fields.append({"name": col, "type": "multipleAttachments"})
         else:
-            fields.append({"name":col, "type":"singleLineText"})
+            spec = fields_spec.get(col)
+            if isinstance(spec, dict) and spec.get("type") not in (
+                    "LNK", "FML", "LKP", "RLP", "SEL", "MSEL", "LNG", "ATT"):
+                ftype = spec["type"]
+                opts = spec.get("options", {})
+                field_def = {"name": col, "type": ftype}
+                clean_opts = _field_options_for_create(ftype, opts)
+                if clean_opts:
+                    field_def["options"] = clean_opts
+                fields.append(field_def)
+            else:
+                fields.append({"name": col, "type": "singleLineText"})
     return fields
 
 def create_base(cfg, first_tbl_cfg, first_rows):
@@ -347,6 +480,7 @@ v5 schema.json FML/LKP/RLP 예시:
         print(f"  schema 파일: {schema_path.name}")
 
     cfg = json.loads(schema_path.read_text(encoding="utf-8"))
+    cfg = normalize_raw_schema(cfg)  # raw Metadata API 포맷이면 내부 포맷으로 변환
 
     cfg["base"] = args.base if args.base else pathlib.Path.cwd().name
     if args.workspace:
