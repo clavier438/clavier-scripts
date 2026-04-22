@@ -12,3 +12,4 @@
 - [피드백: 프로젝트 컨텍스트는 PROGRESS.md로 repo에 보관](feedback_progress_md.md) — 개발 중인 repo에 PROGRESS.md 두고 커밋, 세션 시작 시 먼저 읽기
 - [피드백: 데이터 소스 직접 읽기](feedback_data_source.md) — CSV/JSON 파일이 있으면 하드코딩 말고 파일 파싱해서 사용할 것
 - [사용자 프로필](user_profile.md) — 역할, 목표, 작업 스타일 (응대 방식 조정용)
+- [프로젝트 레지스트리](reference_projects.md) — 프로젝트명 → GitHub repo 매핑. 작업 시작 시 PROGRESS.md 먼저 읽을 것
