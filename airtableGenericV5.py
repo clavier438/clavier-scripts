@@ -61,7 +61,8 @@ def call(method, url, data=None):
                     etype = r.json().get("error", {}).get("type", "")
                 except Exception:
                     etype = ""
-                if etype == "DUPLICATE_OR_EMPTY_FIELD_NAME":
+                if etype in ("DUPLICATE_OR_EMPTY_FIELD_NAME",
+                             "UNSUPPORTED_FIELD_TYPE_FOR_CREATE"):
                     return {}
                 if data and data.get("options"):
                     ltd = data["options"].get("linkedTableId")
@@ -155,7 +156,7 @@ def normalize_raw_schema(cfg):
                 formula = opts.get("formula", "")
                 if formula:
                     fields[name] = {"type": "FML", "formula": formula}
-            elif ftype == "lookup":
+            elif ftype in ("lookup", "multipleLookupValues"):
                 lnk = field_id_to_name.get(opts.get("recordLinkFieldId"))
                 tgt = field_id_to_name.get(opts.get("fieldIdInLinkedTable"))
                 if lnk and tgt:
@@ -389,7 +390,8 @@ def create_table(base_id, tbl_cfg, rows):
     print(f"  Created: {tbl_cfg['name']} → {tid}")
     return tid
 
-def upload_records(base_id, table_id, rows, exclude, atts, mselects, name):
+def upload_records(base_id, table_id, rows, exclude, atts, mselects, name, field_types=None):
+    field_types = field_types or {}
     ids = []
     clean = []
     for r in rows:
@@ -405,8 +407,11 @@ def upload_records(base_id, table_id, rows, exclude, atts, mselects, name):
                 msel_val = parse_msel(v)
                 if msel_val:
                     fdata[k] = msel_val
-            elif v.strip():
-                fdata[k] = v
+            else:
+                ftype = field_types.get(k, "singleLineText")
+                coerced = coerce(v, ftype)
+                if coerced is not None:
+                    fdata[k] = coerced
         clean.append(fdata)
     for i in range(0, len(clean), 10):
         res = call("post", f"{API}/{base_id}/{table_id}",
@@ -416,6 +421,41 @@ def upload_records(base_id, table_id, rows, exclude, atts, mselects, name):
         print(f"    {name}: {len(ids)}/{len(clean)}")
         time.sleep(0.3)
     return ids
+
+def get_field_types(tbl_cfg):
+    """schema 필드 spec → {field_name: airtable_type} 매핑."""
+    types = {}
+    for col, spec in tbl_cfg.get("fields", {}).items():
+        if isinstance(spec, dict):
+            ftype = spec.get("type", "singleLineText")
+            if ftype in ("SEL", "LNK", "FML", "LKP", "RLP"): ftype = "singleLineText"
+            elif ftype == "MSEL": ftype = "multipleSelects"
+            elif ftype == "LNG": ftype = "multilineText"
+            elif ftype == "ATT": ftype = "multipleAttachments"
+            types[col] = ftype
+        elif spec == "SEL":  types[col] = "singleSelect"
+        elif spec == "MSEL": types[col] = "multipleSelects"
+        elif spec == "LNG":  types[col] = "multilineText"
+        elif spec == "ATT":  types[col] = "multipleAttachments"
+        else:                types[col] = "singleLineText"
+    return types
+
+
+def coerce(val, ftype):
+    """CSV 문자열 → Airtable API 타입으로 변환."""
+    if not val or not val.strip():
+        return None
+    v = val.strip()
+    if ftype in ("number", "currency", "percent", "rating", "duration"):
+        try:
+            n = float(v.replace(",", ""))
+            return int(n) if n == int(n) else n
+        except (ValueError, OverflowError):
+            return None
+    if ftype == "checkbox":
+        return v.lower() in ("true", "1", "yes", "✓")
+    return v
+
 
 def resolve(csv_val, id_map):
     if not csv_val or csv_val.strip() in ("","없음","-"): return []
@@ -522,8 +562,9 @@ v5 schema.json FML/LKP/RLP 예시:
 
         selects, mselects, longs, atts, links, computed = parse_fields(tbl)
         skip_cols = set(links.keys()) | set(computed.keys())
+        field_types = get_field_types(tbl)
         tid = first_tid if (i == 0 and first_tid) else create_table(base_id, tbl, rows)
-        rec_ids = upload_records(base_id, tid, rows, skip_cols, atts, mselects, tbl["name"])
+        rec_ids = upload_records(base_id, tid, rows, skip_cols, atts, mselects, tbl["name"], field_types)
 
         pk = tbl["primary_key"]
         pk_map = {}
