@@ -177,28 +177,9 @@ def validate_schema(cfg):
 # ============================================================
 # CORE
 # ============================================================
-def create_base(cfg):
-    ws_id = cfg.get("workspaceId")
-    if not ws_id:
-        bases = call("get", f"{META}/bases").get("bases", [])
-        if bases:
-            detail = call("get", f"{META}/bases/{bases[0]['id']}")
-            ws_id = detail.get("workspaceId")
-    name = cfg["base"]
-    body = {"name": name, "tables": [{"name": "_init", "fields": [{"name": "Name", "type": "singleLineText"}]}]}
-    if ws_id:
-        body["workspaceId"] = ws_id
-    res = call("post", f"{META}/bases", body)
-    bid = res.get("id")
-    if not bid:
-        print(f"ERROR: base 생성 실패: {res}"); sys.exit(1)
-    print(f"  Base 생성: {name} → {bid}" + (f" (ws: {ws_id})" if ws_id else ""))
-    return bid
-
-def create_table(base_id, tbl_cfg, rows):
+def build_table_fields(tbl_cfg, rows):
     selects, mselects, longs, atts, links = parse_fields(tbl_cfg)
     link_cols = set(links.keys())
-
     fields = []
     for col in rows[0].keys():
         if col in link_cols:
@@ -215,7 +196,34 @@ def create_table(base_id, tbl_cfg, rows):
             fields.append({"name":col, "type":"multipleAttachments"})
         else:
             fields.append({"name":col, "type":"singleLineText"})
+    return fields
 
+def create_base(cfg, first_tbl_cfg, first_rows):
+    ws_id = cfg.get("workspaceId")
+    if not ws_id:
+        bases = call("get", f"{META}/bases").get("bases", [])
+        if bases:
+            detail = call("get", f"{META}/bases/{bases[0]['id']}")
+            ws_id = detail.get("workspaceId")
+    fields = build_table_fields(first_tbl_cfg, first_rows)
+    body = {
+        "name": cfg["base"],
+        "tables": [{"name": first_tbl_cfg["name"], "fields": fields}]
+    }
+    if ws_id:
+        body["workspaceId"] = ws_id
+    res = call("post", f"{META}/bases", body)
+    bid = res.get("id")
+    if not bid:
+        print(f"ERROR: base 생성 실패: {res}"); sys.exit(1)
+    first_tid = next((t["id"] for t in res.get("tables", []) if t.get("name") == first_tbl_cfg["name"]), None)
+    print(f"  Base 생성: {cfg['base']} → {bid}" + (f" (ws: {ws_id})" if ws_id else ""))
+    if first_tid:
+        print(f"  Created (inline): {first_tbl_cfg['name']} → {first_tid}")
+    return bid, first_tid
+
+def create_table(base_id, tbl_cfg, rows):
+    fields = build_table_fields(tbl_cfg, rows)
     res = call("post", f"{META}/bases/{base_id}/tables",
                {"name": tbl_cfg["name"], "fields": fields})
     tid = res["id"]
@@ -289,19 +297,21 @@ def main():
     HEADERS["Authorization"] = f"Bearer {pat}"
     HEADERS["Content-Type"] = "application/json"
 
-    base_id = create_base(cfg)
+    first_tbl = cfg["tables"][0]
+    first_rows = read_csv(first_tbl["csv"])
+    base_id, first_tid = create_base(cfg, first_tbl, first_rows)
 
     # --- Phase 1: 테이블 생성 + 데이터 업로드 ---
     table_data = {}
 
-    for tbl in cfg["tables"]:
+    for i, tbl in enumerate(cfg["tables"]):
         print(f"\n--- {tbl['name']} ---")
-        rows = read_csv(tbl["csv"])
+        rows = first_rows if i == 0 else read_csv(tbl["csv"])
         print(f"  CSV: {len(rows)} rows × {len(rows[0])} cols")
 
         selects, mselects, longs, atts, links = parse_fields(tbl)
         link_cols = set(links.keys())
-        tid = create_table(base_id, tbl, rows)
+        tid = first_tid if (i == 0 and first_tid) else create_table(base_id, tbl, rows)
         rec_ids = upload_records(base_id, tid, rows, link_cols, atts, mselects, tbl["name"])
 
         pk = tbl["primary_key"]
