@@ -62,7 +62,8 @@ def call(method, url, data=None):
                 except Exception:
                     etype = ""
                 if etype in ("DUPLICATE_OR_EMPTY_FIELD_NAME",
-                             "UNSUPPORTED_FIELD_TYPE_FOR_CREATE"):
+                             "UNSUPPORTED_FIELD_TYPE_FOR_CREATE",
+                             "INVALID_FIELD_TYPE_OPTIONS_FOR_CREATE"):
                     return {}
                 if data and data.get("options"):
                     ltd = data["options"].get("linkedTableId")
@@ -314,10 +315,10 @@ def _field_options_for_create(ftype, opts):
             if k in opts: clean[k] = opts[k]
         return clean or None
     if ftype == "checkbox":
-        clean = {}
-        for k in ("icon", "color"):
-            if k in opts: clean[k] = opts[k]
-        return clean or None
+        return {
+            "icon": opts.get("icon", "check"),
+            "color": opts.get("color", "greenBright")
+        }
     return None
 
 
@@ -326,7 +327,8 @@ def build_table_fields(tbl_cfg, rows):
     skip_cols = set(links.keys()) | set(computed.keys())
     fields_spec = tbl_cfg.get("fields", {})
     fields = []
-    for col in rows[0].keys():
+    col_source = rows[0].keys() if rows else fields_spec.keys()
+    for col in col_source:
         if col in skip_cols:
             continue
         if col in selects:
@@ -408,7 +410,9 @@ def upload_records(base_id, table_id, rows, exclude, atts, mselects, name, field
                 if msel_val:
                     fdata[k] = msel_val
             else:
-                ftype = field_types.get(k, "singleLineText")
+                if k not in field_types:
+                    continue  # 스키마에 없는 컬럼 무시
+                ftype = field_types[k]
                 coerced = coerce(v, ftype)
                 if coerced is not None:
                     fdata[k] = coerced
@@ -558,7 +562,8 @@ v5 schema.json FML/LKP/RLP 예시:
     for i, tbl in enumerate(cfg["tables"]):
         print(f"\n--- {tbl['name']} ---")
         rows = first_rows if i == 0 else read_csv(tbl["csv"])
-        print(f"  CSV: {len(rows)} rows × {len(rows[0])} cols")
+        col_count = len(rows[0]) if rows else 0
+        print(f"  CSV: {len(rows)} rows × {col_count} cols")
 
         selects, mselects, longs, atts, links, computed = parse_fields(tbl)
         skip_cols = set(links.keys()) | set(computed.keys())
