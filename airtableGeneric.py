@@ -15,10 +15,10 @@ field type 코드 (OCI가 자동 생성 — 직접 작성 불필요):
 
 Usage:
   cd /path/to/job_folder
-  python ~/Library/Mobile\ Documents/com~apple~CloudDocs/0/scripts/airtableGeneric.py
+  python ~/Library/Mobile\\ Documents/com~apple~CloudDocs/0/scripts/airtableGeneric.py
 """
 
-import os, sys, json, time, csv, re, pathlib
+import os, sys, json, time, csv, re, pathlib, argparse
 import requests
 
 SELF_DIR = pathlib.Path(__file__).resolve().parent
@@ -276,6 +276,29 @@ def resolve(csv_val, id_map):
 # MAIN
 # ============================================================
 def main():
+    parser = argparse.ArgumentParser(
+        prog="airtableGeneric.py",
+        description="schema.json + CSV 폴더로 Airtable base를 생성하는 범용 업로더",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+예시:
+  # schema.json 설정 그대로 사용
+  cd ~/Downloads/sisoso_1.0.1 && python airtableGeneric.py
+
+  # base 이름만 바꿔서 생성
+  cd ~/Downloads/sisoso_1.0.1 && python airtableGeneric.py --base "새프로젝트"
+
+  # base 이름 + 워크스페이스 둘 다 지정
+  cd ~/Downloads/sisoso_1.0.1 && python airtableGeneric.py --base "새프로젝트" --workspace wspXXX
+
+  # airtableUpload.sh 래퍼 사용 시
+  airtableUpload ~/Downloads/sisoso_1.0.1 --base "새프로젝트" --workspace wspXXX
+        """,
+    )
+    parser.add_argument("--base", metavar="NAME", help="base 이름 (schema.json의 base 필드 오버라이드)")
+    parser.add_argument("--workspace", metavar="WS_ID", help="워크스페이스 ID (schema.json의 workspaceId 필드 오버라이드)")
+    args = parser.parse_args()
+
     print("="*60)
     print("Airtable 범용 업로더 v4")
     print("="*60)
@@ -289,6 +312,13 @@ def main():
         print(f"  schema 파일: {schema_path.name}")
 
     cfg = json.loads(schema_path.read_text(encoding="utf-8"))
+
+    # CLI 인수로 오버라이드
+    if args.base:
+        cfg["base"] = args.base
+    if args.workspace:
+        cfg["workspaceId"] = args.workspace
+
     validate_schema(cfg)
     ws_label = f" / ws: {cfg['workspaceId']}" if cfg.get("workspaceId") else ""
     print(f"  Job: {cfg.get('job','(unnamed)')} / Base: {cfg['base']} / Tables: {len(cfg['tables'])}{ws_label}")
