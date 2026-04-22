@@ -28,7 +28,12 @@ if [[ ! -f "$FOLDER/schema.json" ]]; then
     echo "오류: schema.json 없음 ($FOLDER)"; exit 1
 fi
 
-BASE=$(python3 -c "import json; d=json.load(open('$FOLDER/schema.json')); print(d.get('base','?'))" 2>/dev/null)
+# base 이름: --base 인수 > 폴더명 기본값
+BASE="$(basename "$FOLDER")"
+for arg in "$@"; do
+    if [[ "$PREV" == "--base" ]]; then BASE="$arg"; fi
+    PREV="$arg"
+done
 VER=$(python3 -c "import json; d=json.load(open('$FOLDER/schema.json')); print(d.get('version','?'))" 2>/dev/null)
 echo "▸ base: $BASE  version: $VER"
 echo "▸ 폴더: $FOLDER"

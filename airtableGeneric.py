@@ -153,8 +153,6 @@ def parse_fields(tbl_cfg):
 
 def validate_schema(cfg):
     errors = []
-    if "base" not in cfg:
-        errors.append("base 필드 없음")
     if "tables" not in cfg or not cfg["tables"]:
         errors.append("tables 배열 없음")
     else:
@@ -282,21 +280,22 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 예시:
-  # schema.json 설정 그대로 사용
+  # 폴더명(sisoso_1.0.1)이 base 이름이 됨
   cd ~/Downloads/sisoso_1.0.1 && python airtableGeneric.py
 
-  # base 이름만 바꿔서 생성
+  # base 이름 명시적으로 덮어쓰기
   cd ~/Downloads/sisoso_1.0.1 && python airtableGeneric.py --base "새프로젝트"
 
-  # base 이름 + 워크스페이스 둘 다 지정
-  cd ~/Downloads/sisoso_1.0.1 && python airtableGeneric.py --base "새프로젝트" --workspace wspXXX
+  # 워크스페이스 지정
+  cd ~/Downloads/sisoso_1.0.1 && python airtableGeneric.py --workspace wspXXX
 
-  # airtableUpload.sh 래퍼 사용 시
+  # airtableUpload.sh 래퍼 사용 시 (폴더 경로를 인수로)
+  airtableUpload ~/Downloads/sisoso_1.0.1
   airtableUpload ~/Downloads/sisoso_1.0.1 --base "새프로젝트" --workspace wspXXX
         """,
     )
-    parser.add_argument("--base", metavar="NAME", help="base 이름 (schema.json의 base 필드 오버라이드)")
-    parser.add_argument("--workspace", metavar="WS_ID", help="워크스페이스 ID (schema.json의 workspaceId 필드 오버라이드)")
+    parser.add_argument("--base", metavar="NAME", help="base 이름 (기본값: 현재 폴더명)")
+    parser.add_argument("--workspace", metavar="WS_ID", help="워크스페이스 ID")
     args = parser.parse_args()
 
     print("="*60)
@@ -313,11 +312,13 @@ def main():
 
     cfg = json.loads(schema_path.read_text(encoding="utf-8"))
 
-    # CLI 인수로 오버라이드
-    if args.base:
-        cfg["base"] = args.base
+    # base 이름: --base 명시 > 폴더명 기본값
+    cfg["base"] = args.base if args.base else pathlib.Path.cwd().name
+    # workspaceId: --workspace 명시 시만 설정
     if args.workspace:
         cfg["workspaceId"] = args.workspace
+    else:
+        cfg.pop("workspaceId", None)
 
     validate_schema(cfg)
     ws_label = f" / ws: {cfg['workspaceId']}" if cfg.get("workspaceId") else ""
