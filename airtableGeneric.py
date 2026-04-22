@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-범용 Airtable 업로더 v3 (schema.json 프로토콜 지원)
+범용 Airtable 업로더 v4 (schema.json 프로토콜 지원)
 ====================================================
-PROTOCOL.json 기반 schema.json + CSV 파일들만 있으면 어떤 데이터든 에어테이블에 넣음.
+OCI가 자동 생성한 schema.json + CSV 파일들로 어떤 데이터든 에어테이블에 넣음.
 테이블 생성, 필드타입, Linked Record까지 전부 자동.
 
-field type 코드:
-  TXT  — singleLineText (기본값, 생략 가능)
-  SEL  — singleSelect
+field type 코드 (OCI가 자동 생성 — 직접 작성 불필요):
+  TXT  — singleLineText (기본값)
   LNG  — multilineText
+  SEL  — singleSelect
+  MSEL — multipleSelects
+  ATT  — multipleAttachments
   LNK  — multipleRecordLinks ({ "type": "LNK", "target": "테이블명" })
 
 Usage:
@@ -34,11 +36,9 @@ HEADERS = {}
 # UTILS
 # ============================================================
 def load_pat():
-    # 1순위: 환경변수 (OCI/CI 환경)
     pat = os.environ.get("AIRTABLE_PAT")
     if pat:
         print(f"  PAT: (env) {pat[:8]}...{pat[-4:]}"); return pat
-    # 2순위: 스크립트 옆의 env.md (Mac 로컬)
     if ENV_PATH.exists():
         m = re.search(r'(pat[A-Za-z0-9_\-\.]{30,})', ENV_PATH.read_text(encoding="utf-8"))
         if m:
@@ -80,32 +80,76 @@ def unique(rows, col):
         r.get(col,"").strip() for r in rows if r.get(col,"").strip()
     ))
 
+def unique_msel(rows, col):
+    seen = {}
+    for r in rows:
+        raw = r.get(col, "").strip()
+        if not raw: continue
+        try:
+            vals = json.loads(raw)
+            if isinstance(vals, list):
+                for v in vals:
+                    if v: seen[str(v)] = True
+                continue
+        except Exception:
+            pass
+        for v in raw.split(","):
+            v = v.strip()
+            if v: seen[v] = True
+    return list(seen.keys())
+
 def choices(vals):
     return [{"name":v,"color":COLORS[i%len(COLORS)]} for i,v in enumerate(vals)]
 
+def parse_att(val):
+    """CSV 첨부파일 값 → Airtable API 형식 [{"url": "..."}]"""
+    if not val or not val.strip():
+        return None
+    try:
+        parsed = json.loads(val)
+        if isinstance(parsed, list):
+            urls = [{"url": a["url"]} for a in parsed if isinstance(a, dict) and "url" in a]
+            return urls if urls else None
+    except Exception:
+        pass
+    val = val.strip()
+    if val.startswith(("http://", "https://")):
+        return [{"url": val}]
+    return None
+
+def parse_msel(val):
+    """CSV 다중선택 값 → Airtable API 형식 ["opt1", "opt2"]"""
+    if not val or not val.strip():
+        return None
+    try:
+        parsed = json.loads(val)
+        if isinstance(parsed, list):
+            return [str(v) for v in parsed if v] or None
+    except Exception:
+        pass
+    vals = [v.strip() for v in val.split(",") if v.strip()]
+    return vals if vals else None
+
 # ============================================================
-# SCHEMA PARSER  (TXT / SEL / LNG / LNK)
+# SCHEMA PARSER
 # ============================================================
 def parse_fields(tbl_cfg):
-    """
-    schema.json fields 객체를 파싱해
-    (selects, longs, links) 세트/딕트로 반환.
-    """
-    selects = set()
-    longs   = set()
-    links   = {}   # col_name → target_table
+    selects  = set()
+    mselects = set()
+    longs    = set()
+    atts     = set()
+    links    = {}
 
     for col, spec in tbl_cfg.get("fields", {}).items():
         if isinstance(spec, dict):
             if spec.get("type") == "LNK":
                 links[col] = spec["target"]
-        elif spec == "SEL":
-            selects.add(col)
-        elif spec == "LNG":
-            longs.add(col)
-        # TXT 또는 생략 → singleLineText, 별도 처리 불필요
+        elif spec == "SEL":  selects.add(col)
+        elif spec == "MSEL": mselects.add(col)
+        elif spec == "LNG":  longs.add(col)
+        elif spec == "ATT":  atts.add(col)
 
-    return selects, longs, links
+    return selects, mselects, longs, atts, links
 
 def validate_schema(cfg):
     errors = []
@@ -133,12 +177,14 @@ def validate_schema(cfg):
 # ============================================================
 # CORE
 # ============================================================
-def create_base(name):
-    bases = call("get", f"{META}/bases").get("bases", [])
-    ws_id = None
-    if bases:
-        detail = call("get", f"{META}/bases/{bases[0]['id']}")
-        ws_id = detail.get("workspaceId")
+def create_base(cfg):
+    ws_id = cfg.get("workspaceId")
+    if not ws_id:
+        bases = call("get", f"{META}/bases").get("bases", [])
+        if bases:
+            detail = call("get", f"{META}/bases/{bases[0]['id']}")
+            ws_id = detail.get("workspaceId")
+    name = cfg["base"]
     body = {"name": name, "tables": [{"name": "_init", "fields": [{"name": "Name", "type": "singleLineText"}]}]}
     if ws_id:
         body["workspaceId"] = ws_id
@@ -146,11 +192,11 @@ def create_base(name):
     bid = res.get("id")
     if not bid:
         print(f"ERROR: base 생성 실패: {res}"); sys.exit(1)
-    print(f"  Base 생성: {name} → {bid}")
+    print(f"  Base 생성: {name} → {bid}" + (f" (ws: {ws_id})" if ws_id else ""))
     return bid
 
 def create_table(base_id, tbl_cfg, rows):
-    selects, longs, links = parse_fields(tbl_cfg)
+    selects, mselects, longs, atts, links = parse_fields(tbl_cfg)
     link_cols = set(links.keys())
 
     fields = []
@@ -160,8 +206,13 @@ def create_table(base_id, tbl_cfg, rows):
         if col in selects:
             fields.append({"name":col, "type":"singleSelect",
                           "options":{"choices":choices(unique(rows,col))}})
+        elif col in mselects:
+            fields.append({"name":col, "type":"multipleSelects",
+                          "options":{"choices":choices(unique_msel(rows,col))}})
         elif col in longs:
             fields.append({"name":col, "type":"multilineText"})
+        elif col in atts:
+            fields.append({"name":col, "type":"multipleAttachments"})
         else:
             fields.append({"name":col, "type":"singleLineText"})
 
@@ -171,9 +222,25 @@ def create_table(base_id, tbl_cfg, rows):
     print(f"  Created: {tbl_cfg['name']} → {tid}")
     return tid
 
-def upload_records(base_id, table_id, rows, exclude, name):
+def upload_records(base_id, table_id, rows, exclude, atts, mselects, name):
     ids = []
-    clean = [{k:v for k,v in r.items() if k not in exclude and v.strip()} for r in rows]
+    clean = []
+    for r in rows:
+        fdata = {}
+        for k, v in r.items():
+            if k in exclude:
+                continue
+            if k in atts:
+                att_val = parse_att(v)
+                if att_val:
+                    fdata[k] = att_val
+            elif k in mselects:
+                msel_val = parse_msel(v)
+                if msel_val:
+                    fdata[k] = msel_val
+            elif v.strip():
+                fdata[k] = v
+        clean.append(fdata)
     for i in range(0, len(clean), 10):
         res = call("post", f"{API}/{base_id}/{table_id}",
                    {"records":[{"fields":r} for r in clean[i:i+10]]})
@@ -202,7 +269,7 @@ def resolve(csv_val, id_map):
 # ============================================================
 def main():
     print("="*60)
-    print("Airtable 범용 업로더 v3")
+    print("Airtable 범용 업로더 v4")
     print("="*60)
 
     schema_path = pathlib.Path("schema.json")
@@ -215,13 +282,14 @@ def main():
 
     cfg = json.loads(schema_path.read_text(encoding="utf-8"))
     validate_schema(cfg)
-    print(f"  Job: {cfg.get('job','(unnamed)')} / Base: {cfg['base']} / Tables: {len(cfg['tables'])}")
+    ws_label = f" / ws: {cfg['workspaceId']}" if cfg.get("workspaceId") else ""
+    print(f"  Job: {cfg.get('job','(unnamed)')} / Base: {cfg['base']} / Tables: {len(cfg['tables'])}{ws_label}")
 
     pat = load_pat()
     HEADERS["Authorization"] = f"Bearer {pat}"
     HEADERS["Content-Type"] = "application/json"
 
-    base_id = create_base(cfg["base"])
+    base_id = create_base(cfg)
 
     # --- Phase 1: 테이블 생성 + 데이터 업로드 ---
     table_data = {}
@@ -231,10 +299,10 @@ def main():
         rows = read_csv(tbl["csv"])
         print(f"  CSV: {len(rows)} rows × {len(rows[0])} cols")
 
-        _, _, links = parse_fields(tbl)
+        selects, mselects, longs, atts, links = parse_fields(tbl)
         link_cols = set(links.keys())
         tid = create_table(base_id, tbl, rows)
-        rec_ids = upload_records(base_id, tid, rows, link_cols, tbl["name"])
+        rec_ids = upload_records(base_id, tid, rows, link_cols, atts, mselects, tbl["name"])
 
         pk = tbl["primary_key"]
         pk_map = {}
@@ -252,7 +320,7 @@ def main():
     created_links = {}
 
     for tbl in cfg["tables"]:
-        _, _, links = parse_fields(tbl)
+        _, _, _, _, links = parse_fields(tbl)
         if not links: continue
         src = table_data[tbl["name"]]
 
@@ -271,15 +339,16 @@ def main():
                 "options": {"linkedTableId": tgt["id"]}
             })
 
-            fid = res["id"]
+            fid = res.get("id")
             inv_fid = res.get("options",{}).get("inverseLinkFieldId")
-            created_links[(tbl["name"], target_name)] = fid
+            if fid:
+                created_links[(tbl["name"], target_name)] = fid
 
             if inv_fid:
                 inv_name = None
                 for t2 in cfg["tables"]:
                     if t2["name"] == target_name:
-                        _, _, t2_links = parse_fields(t2)
+                        _, _, _, _, t2_links = parse_fields(t2)
                         for lc, lc_target in t2_links.items():
                             if lc_target == tbl["name"]:
                                 inv_name = lc; break
@@ -294,7 +363,7 @@ def main():
     print(f"\n--- 데이터 연결 ---")
 
     for tbl in cfg["tables"]:
-        _, _, links = parse_fields(tbl)
+        _, _, _, _, links = parse_fields(tbl)
         if not links: continue
         src = table_data[tbl["name"]]
 
