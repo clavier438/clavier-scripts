@@ -91,9 +91,24 @@ ZSHRC
     echo "  브리핑 ~/.zshrc 등록됨."
 fi
 
-# ── 4. LaunchAgent 등록 ───────────────────────────────────────
+# ── 4. Claude 메모리 symlink ──────────────────────────────────
 echo ""
-echo "[ 4/5 ] LaunchAgent 등록..."
+echo "[ 4/6 ] Claude 메모리 symlink 연결..."
+CLAUDE_MEM_SRC="$SCRIPTS_DIR/memory"
+CLAUDE_MEM_LINK="$HOME/.claude/projects/-Users-clavier/memory"
+mkdir -p "$HOME/.claude/projects/-Users-clavier"
+if [ -L "$CLAUDE_MEM_LINK" ]; then
+    echo "  [skip] 이미 연결됨"
+elif [ -d "$CLAUDE_MEM_LINK" ]; then
+    echo "  [경고] 디렉토리 존재 — 수동 확인 필요: $CLAUDE_MEM_LINK"
+else
+    ln -s "$CLAUDE_MEM_SRC" "$CLAUDE_MEM_LINK"
+    echo "  [연결] $CLAUDE_MEM_LINK → $CLAUDE_MEM_SRC"
+fi
+
+# ── 5. LaunchAgent 등록 ───────────────────────────────────────
+echo ""
+echo "[ 5/6 ] LaunchAgent 등록..."
 mkdir -p "$HOME/Library/LaunchAgents"
 
 if [ ! -d "$LAUNCHAGENTS_SRC" ]; then
@@ -112,7 +127,7 @@ fi
 
 # ── 5. FDA 권한 안내 ──────────────────────────────────────────
 echo ""
-echo "[ 5/5 ] 수동으로 해야 할 것"
+echo "[ 6/6 ] 수동으로 해야 할 것"
 echo ""
 echo "  시스템 설정 → 개인 정보 보호 → 전체 디스크 접근 권한"
 echo "  + 버튼 → Cmd+Shift+G 로 경로 직접 입력"
