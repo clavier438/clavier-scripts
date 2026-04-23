@@ -86,13 +86,15 @@ GitHub (clavier0/clavier-scripts, private)
 scripts/memory-backup/     ← 메모리 백업 → GitHub push
 ```
 
-### Obsidian 싱크 (Mac 불필요)
+### Obsidian 싱크 (Mac → Google Drive, 이벤트드리븐)
 ```
-iPhone Obsidian (iCloud)
-    ↓  Scriptable: obsidianGdriveSync.js (Google Drive API 직접 호출)
+Obsidian vault (iCloud~md~obsidian/Documents/)
+    ↓  watcherObsidian LaunchAgent (WatchPaths, 변경 감지)
+    ↓  daemons/syncObsidian.py (Google Drive API 직접 호출)
 Google Drive: obsidianSync/          ← Sana AI가 읽음
 ```
-**결정 이유:** Sana AI가 Google Drive만 네이티브 지원. 제3자 서버 없이 본인 OAuth app으로 직접 연동.
+**방식:** rsync→로컬GDrive 마운트 아닌, Google Drive API 직접 호출 → 즉시 싱크.
+md5 캐시 기반 변경 파일만 업로드. 캐시: `~/.cache/syncObsidian.json`.
 
 ### Airtable ↔ Google Drive ↔ Sana (Mac/폰 불필요)
 
@@ -167,6 +169,7 @@ Google Drive: scriptsSync/
 |------|------|------|
 | `syncMemory` | Claude 메모리 → memory-backup/ rsync | watcherMemory가 자동 실행 |
 | `gitSync` | scripts 변경 → git commit + push | watcherGitSync가 자동 실행 |
+| `syncObsidian` | Obsidian vault → Google Drive API 직접 싱크 | watcherObsidian이 자동 실행 |
 
 ### 클라우드 서버 (scripts/clouds/)
 
@@ -191,6 +194,7 @@ Google Drive: scriptsSync/
 | `com.clavier.watcherScripts` | scripts 폴더 WatchPaths | installScripts |
 | `com.clavier.watcherGitSync` | scripts 폴더 WatchPaths + 5분 주기 | gitSync |
 | `com.clavier.watcherMemory` | memory 폴더 WatchPaths | syncMemory |
+| `com.clavier.watcherObsidian` | Obsidian vault WatchPaths | syncObsidian |
 | `com.clavier.watcherScreenshots` | Screenshots 폴더 WatchPaths | 스크린샷 처리 |
 | `com.clavier.workerPdf` | WatchPaths | pdfToImg 처리 |
 
