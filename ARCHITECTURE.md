@@ -46,8 +46,18 @@ Framer
 |------|------|
 | 소스/실행 분리 | `iCloud/0/scripts/` 수정 → `installScripts.sh` → `~/bin/` 배포 |
 | 하드코딩 금지 | 경로는 `$SELF_DIR`/`$HOME`, 키/토큰은 `~/.config/clavier/secrets` |
-| 폴더 구조 = 아키텍처 | `daemons/` `clouds/` `memory-backup/` 폴더 위치가 역할을 결정 |
+| 폴더 구조 = 아키텍처 | `tools/` `daemons/` `clouds/` `memory-backup/` 폴더 위치가 역할을 결정 |
 | 네이밍 | 파일/스크립트: camelCase |
+
+### 폴더 → 배포 매핑
+
+| 소스 위치 | ~/bin 내 위치 | 용도 |
+|----------|--------------|------|
+| 루트 (`.sh`, `.py`) | `~/bin/` | 인프라 (`installScripts`, `setup`) |
+| `tools/` | `~/bin/` (평면) | 사용자 유틸 명령 (`imgToWeb`, `pdfToImg`, `airtableGenericV5` 등) |
+| `daemons/` | `~/bin/daemons/` | LaunchAgent가 호출하는 데몬 |
+| `clouds/{svc}/` | `~/bin/clouds/{svc}/` | 서비스별 유틸 (namespace 구분) |
+| `webExporter/`, `memory-backup/`, `Markdown2ID/` | 배포 안 함 | 프로젝트/데이터 폴더 |
 
 ### 데몬 (daemons/)
 
@@ -104,6 +114,7 @@ Framer
 
 | 날짜 | 변경 내용 |
 |------|-----------|
+| 2026-04-25 | `tools/` 폴더 추가 — 루트의 유틸 스크립트 9개 이동(imgToWeb/pdfToImg/pdfToJpeg/renameKoToCamel/restoreQuickActions/runSafariTabsExport/scriptsList/airtableGenericV5/airtableUploadV5). installScripts.sh에 tools→~/bin 평면 배포 특별 처리 추가. 런타임 동작 무변화 |
 | 2026-04-24 | ARCHITECTURE.md 모듈화 — 각 repo가 자기 모듈 기술, 이 파일은 개요+Mac 모듈만 |
 | 2026-04-24 | syncObsidian.py 범용화 + cal 싱크 추가, GDrive icloudSync/ 통합 |
 | 2026-04-22 | iCloud→GDrive 싱크 데몬 전체 정리, OCI 역할 Airtable→GDrive만으로 축소 |

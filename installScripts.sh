@@ -3,8 +3,9 @@
 #
 # 폴더 기반 자동 배포 (SvelteKit 방식):
 #   루트 스크립트     → ~/bin/
+#   tools/*           → ~/bin/        (루트와 동등 — 사용자 유틸 명령 묶음)
 #   daemons/*.sh      → ~/bin/daemons/
-#   clouds/{svc}/*.sh → ~/bin/clouds/{svc}/   (PATH도 자동 추가)
+#   clouds/{svc}/*.sh → ~/bin/clouds/{svc}/
 #
 # 새 폴더를 만들면 자동으로 배포 대상에 포함됨.
 # 단, 아래 SKIP_DIRS에 있는 폴더는 배포하지 않음 (도구/데이터 폴더).
@@ -15,8 +16,8 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${1:-$HOME/bin}"
 
-# 배포하지 않을 폴더 (도구/데이터 폴더)
-SKIP_DIRS=("webExporter" "Markdown2ID" "memory-backup" "backup" ".git" ".claude" "PDF to JPEG.app" "PDF to JPEG.workflow")
+# 배포하지 않을 폴더 (도구/데이터 폴더) — tools 는 아래에서 특별 처리됨
+SKIP_DIRS=("webExporter" "Markdown2ID" "memory-backup" "backup" ".git" ".claude" "PDF to JPEG.app" "PDF to JPEG.workflow" "tools")
 
 mkdir -p "$BIN_DIR"
 
@@ -73,6 +74,15 @@ echo ""
 # ── 루트 스크립트 배포 ────────────────────────────────────
 echo "[ scripts → ~/bin ]"
 install_scripts "$SCRIPT_DIR" "$BIN_DIR"
+
+# ── tools/ 는 루트와 동등하게 ~/bin 으로 배포 ────────────
+# 유틸 명령(imgToWeb, pdfToImg 등)을 소스에서 묶어 관리하되
+# 런타임은 기존과 동일하게 ~/bin 바로 아래에 둠 (PATH 변경 불필요).
+if [ -d "$SCRIPT_DIR/tools" ]; then
+    echo ""
+    echo "[ tools → ~/bin ]"
+    install_scripts "$SCRIPT_DIR/tools" "$BIN_DIR"
+fi
 
 # ── 서브폴더 자동 감지 + 배포 ────────────────────────────
 # SKIP_DIRS에 없는 모든 서브폴더를 ~/bin/{폴더명}/ 으로 배포
