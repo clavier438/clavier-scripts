@@ -86,15 +86,21 @@ GitHub (clavier0/clavier-scripts, private)
 scripts/memory-backup/     ← 메모리 백업 → GitHub push
 ```
 
-### Obsidian 싱크 (Mac → Google Drive, 이벤트드리븐)
+### iCloud → Google Drive 싱크 (Mac, 이벤트드리븐)
+
+`daemons/syncObsidian.py` — 범용 iCloud→GDrive 싱크 스크립트. `--src`, `--gdrive-root` 등 인수로 대상 폴더 지정.
+**방식:** Google Drive API 직접 호출. md5 캐시 기반 변경 파일만 업로드. LaunchAgent WatchPaths 트리거.
+
 ```
-Obsidian vault (iCloud~md~obsidian/Documents/)
-    ↓  watcherObsidian LaunchAgent (WatchPaths, 변경 감지)
-    ↓  daemons/syncObsidian.py (Google Drive API 직접 호출)
-Google Drive: obsidianSync/          ← Sana AI가 읽음
+GDrive: icloudSync/
+├── obsidianSync/    ← Obsidian vault (Sana AI가 읽음)
+└── cal/             ← Scriptable data/cal/ (캘린더 히스토리)
 ```
-**방식:** rsync→로컬GDrive 마운트 아닌, Google Drive API 직접 호출 → 즉시 싱크.
-md5 캐시 기반 변경 파일만 업로드. 캐시: `~/.cache/syncObsidian.json`.
+
+| 소스 | GDrive 대상 | LaunchAgent | 캐시 |
+|------|------------|-------------|------|
+| Obsidian vault | icloudSync/obsidianSync/ | watcherObsidian | ~/.cache/syncObsidian.json |
+| Scriptable data/cal/ | icloudSync/cal/ | watcherCal | ~/.cache/syncCal.json |
 
 ### Airtable ↔ Google Drive ↔ Sana (Mac/폰 불필요)
 
@@ -281,6 +287,8 @@ iCloud/0/code/
 ## 변경 이력 (주요 아키텍처 변경만)
 
 | 날짜 | 변경 내용 |
+|------|-----------|
+| 2026-04-24 | syncObsidian.py → 범용 iCloud→GDrive 싱크 스크립트 (--src/--gdrive-root 인수화), cal 싱크 추가, GDrive icloudSync/ 상위 폴더로 통합 |
 |------|-----------|
 | 2026-04-21 | airtableUpload Mac bin 명령 — SSH→OCI localhost 호출, 포트 공개 없이 트리거, 베이스 자동 생성 |
 | 2026-04-21 | schema.json 버전 체계 — schema_version(DB구조), version(콘텐츠) 분리, GDrive job 폴더는 schema.json 고정명 |
