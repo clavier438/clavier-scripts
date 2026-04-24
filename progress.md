@@ -26,6 +26,18 @@
 
 ## 완료된 작업 (최근)
 
+### ✅ 2026-04-24 — cal 싱크 추가 + GDrive icloudSync/ 통합
+
+| 항목 | 내용 | 상태 |
+|------|------|------|
+| syncObsidian.py 범용화 | --src/--gdrive-parent/--gdrive-root/--cache/--lock/--log 인수 추가 | ✅ |
+| GDrive 구조 통합 | obsidianSync → icloudSync/obsidianSync/ 자동 이동 (재업로드 없음) | ✅ |
+| cal 싱크 추가 | Scriptable data/cal/ → icloudSync/cal/, watcherCal LaunchAgent 신설 | ✅ |
+
+**GDrive 현재 구조:** `icloudSync/obsidianSync/` + `icloudSync/cal/`
+
+---
+
 ### ✅ 2026-04-22 — 아키텍처 대정리
 
 | 항목 | 내용 | 상태 |
