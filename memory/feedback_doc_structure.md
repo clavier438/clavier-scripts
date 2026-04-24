@@ -25,3 +25,13 @@ originSessionId: 60429ae2-ed16-4953-9c3b-be57e431ce36
 - 작업 후 ARCHITECTURE.md만 업데이트하면 충분 (PROGRESS.md, memory 중복 업데이트 불필요)
 - 세션 시작 시: 관련 repo의 ARCHITECTURE.md + `git log --oneline -10`으로 컨텍스트 복구
 - memory에 새 항목을 추가하려 할 때: "행동지침인가, 사실 정보인가" 먼저 확인 — 사실 정보면 ARCHITECTURE.md로
+
+## 예외: 에코시스템 수준 굵직한 메모리
+
+프로젝트 독립적 행동지침이 원칙이지만, **일 전반에서 비중이 높고 반복적으로 등장하는 핵심 인프라/플랫폼**에 대해서는 아키텍처적 통찰, 제안 패턴, 창의적 조합 아이디어를 메모리에 저장한다.
+
+대상 에코시스템: Framer, Airtable, Cloudflare Workers, OCI, Google Cloud (Cloud Functions / Edge / AI Studio), Sana AI
+
+**Why:** 이 인프라들은 모든 프로젝트에 반복적으로 등장하며, 조합 방식에 대한 누적 인사이트가 있어야 Claude가 먼저 "이렇게도 할 수 있다"를 제안할 수 있다.
+
+**How to apply:** 새로운 아키텍처 패턴이나 조합 아이디어를 발견하면 `project_ecosystem_architecture.md`에 추가. Claude가 먼저 꺼낼 것 — 사용자가 물어보길 기다리지 말 것.
