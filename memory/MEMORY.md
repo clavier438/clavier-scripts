@@ -16,6 +16,7 @@
 - [피드백: 레퍼런스 클래스 탐색 방법론](feedback_reference_class.md) — 구현 전 동작 중인 케이스 먼저 탐색, 소스코드 직접 획득 우선, 한계 평가 후 합의하고 시작
 - [사용자 프로필](user_profile.md) — 역할, 목표, 작업 스타일 (응대 방식 조정용)
 - [프로젝트: hotelAgency_ops](project_hotel_agency_ops.md) — Notion→Airtable 마이그레이션, Worker 배포 완료, Framer 연동 대기 중
+- [프로젝트: platform-workers](project_platform_workers.md) — CF Workers 모음 repo (framer-sync + sisoso-api), Framer 두 경로 모두 지원, 새 프로젝트 추가 절차 포함
 - [인프라: Airtable 파이프라인](project_airtable_pipeline.md) — OCI→GDrive 싱크, schema.json 포맷, 클로드 워크스페이스 ID
 - [인프라: 보유 인프라 현황](project_infrastructure.md) — OCI/GCloud/Cloudflare/Scriptable 조합 제안 기준
 - [레퍼런스: Google Drive API](reference_google_drive_api.md) — OAuth 자격증명 위치, refresh token 재사용 방법
