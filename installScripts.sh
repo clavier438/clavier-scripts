@@ -129,3 +129,16 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     echo "⚠️  '$BIN_DIR' 가 PATH에 없습니다. ~/.zshrc 에 추가하세요:"
     echo "   export PATH=\"\$HOME/bin:\$PATH\""
 fi
+
+# ── ~/.clavier/env 심링크 — iCloud 파일을 단일 진실 소스로 사용 ──────────────
+# 새 맥 설정 시 iCloud 동기화 후 이 스크립트를 실행하면 자동 복구됨
+CLAVIER_ENV_SRC="$SCRIPT_DIR/clavier.env"
+CLAVIER_ENV_LINK="$HOME/.clavier/env"
+if [[ -f "$CLAVIER_ENV_SRC" ]]; then
+    mkdir -p "$HOME/.clavier"
+    if [[ ! -L "$CLAVIER_ENV_LINK" ]] || [[ "$(readlink "$CLAVIER_ENV_LINK")" != "$CLAVIER_ENV_SRC" ]]; then
+        ln -sf "$CLAVIER_ENV_SRC" "$CLAVIER_ENV_LINK"
+        echo ""
+        echo "  [env] ~/.clavier/env → iCloud/scripts/clavier.env (심링크 연결됨)"
+    fi
+fi
