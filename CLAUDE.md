@@ -5,11 +5,14 @@
 새 세션을 시작하면 **무조건** 아래 순서로 읽어라:
 
 ```
-1. clavier-hq/README.md    → 전체 시스템 지도
-2. clavier-hq/STATUS.md    → 현재 모든 시스템 상태
-3. clavier-hq/QUEUE.md     → 지금 해야 할 것 (우선순위순)
-4. clavier-hq/MISSION.md   → 방향과 기준
+1. clavier-hq/SYSTEM_ENV.md → 전체 환경변수·연결 현황 (아키텍트 지도)
+2. clavier-hq/STATUS.md     → 현재 모든 시스템 상태
+3. clavier-hq/QUEUE.md      → 지금 해야 할 것 (우선순위순)
+4. clavier-hq/MISSION.md    → 방향과 기준
 ```
+
+> SYSTEM_ENV.md 하나로 "어떤 워커가 어떤 Airtable·Framer와 연결돼 있는가"를 즉시 파악한다.
+> 이후 대화에서 사용자가 시스템을 다시 설명하지 않아도 된다.
 
 GitHub: https://github.com/clavier0/clavier-hq
 

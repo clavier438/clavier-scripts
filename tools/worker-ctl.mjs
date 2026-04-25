@@ -303,13 +303,57 @@ async function main() {
         }
     }
 
+    // all <함수> — 모든 워커에 동일 함수 일괄 실행
+    if (args[0] === "all" && args[1]) {
+        const fnId = args[1]
+        console.log(bold(`  📡 전체 워커 일괄 실행: ${cyan(fnId)}`))
+        console.log()
+
+        // params는 첫 번째 워커 capabilities에서 가져와 한 번만 입력받음
+        let body = null
+        const firstCaps = await fetchCapabilities(workers[0].url).catch(() => null)
+        const fnMeta = firstCaps?.functions?.find(f => f.id === fnId)
+        if (fnMeta?.params?.length) {
+            const rl = createInterface({ input: process.stdin, output: process.stdout })
+            body = await collectParams(rl, fnMeta.params)
+            rl.close()
+        }
+
+        const results = await Promise.allSettled(
+            workers.map(async w => {
+                const caps = await fetchCapabilities(w.url)
+                const fn = caps.functions?.find(f => f.id === fnId)
+                if (!fn) throw new Error(`함수 없음`)
+                const res = await fetch(`${w.url}${fn.path}`, {
+                    method: fn.method ?? "POST",
+                    headers: { "Content-Type": "application/json" },
+                    ...(body ? { body: JSON.stringify(body) } : {}),
+                    signal: AbortSignal.timeout(60_000),
+                })
+                return { worker: w, ok: res.ok, status: res.status }
+            })
+        )
+
+        results.forEach((r, i) => {
+            const w = workers[i]
+            if (r.status === "fulfilled") {
+                const { ok, status } = r.value
+                console.log(`  ${ok ? green("✅") : red("✗")}  ${bold(w.label ?? w.name)}  ${ok ? "" : red(`HTTP ${status}`)}`)
+            } else {
+                console.log(`  ${red("✗")}  ${bold(w.label ?? w.name)}  ${dim(r.reason?.message)}`)
+            }
+        })
+        console.log()
+        process.exit(0)
+    }
+
     // ① 워커 결정
     let worker
-    if (args[0]) {
+    if (args[0] && args[0] !== "all") {
         worker = workers.find(w => w.name === args[0] || w.label?.toLowerCase().includes(args[0].toLowerCase()))
         if (!worker) {
             console.error(red(`  ✗ 워커 "${args[0]}" 를 찾을 수 없습니다`))
-            console.log(gray(`  사용 가능: ${workers.map(w => w.name).join(", ")}`))
+            console.log(gray(`  사용 가능: all, ${workers.map(w => w.name).join(", ")}`))
             process.exit(1)
         }
         console.log(`  워커: ${bold(worker.label ?? worker.name)}`)
