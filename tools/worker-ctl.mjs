@@ -3,14 +3,10 @@
  * worker-ctl — Cloudflare Worker 제어 CLI
  *
  * 사용법:
- *   worker-ctl                        # 대화형 (워커 선택 → 함수 선택)
+ *   worker-ctl                        # 전체 브리핑 → 대화형 (워커 선택 → 함수 선택)
+ *   worker-ctl --help                 # 상세 도움말
  *   worker-ctl <워커이름>              # 워커 지정 후 함수 선택
  *   worker-ctl <워커이름> <함수id>     # 바로 실행
- *
- * 예시:
- *   worker-ctl
- *   worker-ctl sisoso
- *   worker-ctl sisoso sync-to-framer
  */
 
 import { createInterface } from "readline"
@@ -20,9 +16,6 @@ import { dirname, join } from "path"
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 
-// workers.json 탐색:
-//   1) 스크립트 옆 (소스에서 직접 실행할 때)
-//   2) iCloud 원본 경로 (~/bin에 설치된 뒤에도 동작)
 const WORKERS_JSON = (() => {
     const candidates = [
         join(__dir, "workers.json"),
@@ -42,12 +35,13 @@ const c = {
     red:    "\x1b[31m",
     gray:   "\x1b[90m",
 }
-const bold  = s => `${c.bold}${s}${c.reset}`
-const dim   = s => `${c.dim}${s}${c.reset}`
-const cyan  = s => `${c.cyan}${s}${c.reset}`
-const green = s => `${c.green}${s}${c.reset}`
-const red   = s => `${c.red}${s}${c.reset}`
-const gray  = s => `${c.gray}${s}${c.reset}`
+const bold   = s => `${c.bold}${s}${c.reset}`
+const dim    = s => `${c.dim}${s}${c.reset}`
+const cyan   = s => `${c.cyan}${s}${c.reset}`
+const green  = s => `${c.green}${s}${c.reset}`
+const yellow = s => `${c.yellow}${s}${c.reset}`
+const red    = s => `${c.red}${s}${c.reset}`
+const gray   = s => `${c.gray}${s}${c.reset}`
 
 // ── readline 유틸 ──────────────────────────────────────────────────────────
 function prompt(rl, question) {
@@ -85,7 +79,9 @@ async function fetchCapabilities(workerUrl) {
     }).catch(err => { throw new Error(`연결 실패: ${err.message}`) })
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    return res.json()
+    const data = await res.json()
+    if (!Array.isArray(data?.functions)) throw new Error("capabilities 형식 불일치")
+    return data
 }
 
 // ── 함수 실행 ─────────────────────────────────────────────────────────────
@@ -123,6 +119,122 @@ async function runFunction(workerUrl, fn) {
     return res.ok
 }
 
+// ── 도움말 ────────────────────────────────────────────────────────────────
+function showHelp(workers) {
+    const hr = gray("  " + "─".repeat(54))
+
+    console.log()
+    console.log(bold(cyan("  🔧 worker-ctl — Cloudflare Worker 제어 CLI")))
+    console.log()
+    console.log(hr)
+    console.log()
+
+    console.log(bold("  사용법"))
+    console.log()
+    console.log(`    ${cyan("worker-ctl")}                    ${dim("전체 브리핑 후 대화형 실행")}`)
+    console.log(`    ${cyan("worker-ctl --help")}             ${dim("이 도움말")}`)
+    console.log(`    ${cyan("worker-ctl <워커>")}             ${dim("워커 지정 → 함수 선택")}`)
+    console.log(`    ${cyan("worker-ctl <워커> <함수>")}      ${dim("바로 실행")}`)
+    console.log()
+    console.log(hr)
+    console.log()
+
+    console.log(bold("  등록된 워커  ") + dim(`(${WORKERS_JSON})`))
+    console.log()
+    workers.forEach(w => {
+        console.log(`    ${bold(cyan(w.name.padEnd(16)))} ${w.label ?? ""}`)
+        console.log(`    ${dim(" ".repeat(16))} ${gray(w.url)}`)
+        console.log()
+    })
+    console.log(hr)
+    console.log()
+
+    console.log(bold("  함수 목록은 워커가 /capabilities 로 노출"))
+    console.log()
+    console.log(`  각 워커는 ${cyan("GET /capabilities")} 엔드포인트로 실행 가능한 함수를 선언합니다.`)
+    console.log(`  worker-ctl 은 이 목록을 동적으로 읽어 메뉴로 제공합니다.`)
+    console.log()
+
+    const exampleFns = [
+        ["status",          "GET ",  "상태, 설정값, 마지막 실행 결과 확인"],
+        ["sync-to-framer",  "POST",  "Airtable → Framer CMS 동기화"],
+        ["sync-to-airtable","POST",  "Framer 편집 내용 → Airtable 역동기화"],
+        ["push",            "POST",  "일회성 Push (비관리형)"],
+        ["set-config",      "POST",  "연결 설정 변경 (Airtable ID, Framer 토큰 등)"],
+    ]
+    console.log(`  ${bold("ID".padEnd(20))} ${"METHOD".padEnd(6)} 설명`)
+    console.log(`  ${dim("─".repeat(52))}`)
+    exampleFns.forEach(([id, method, desc]) => {
+        console.log(`  ${cyan(id.padEnd(20))} ${gray(method.padEnd(6))} ${desc}`)
+    })
+    console.log()
+    console.log(dim("  * set-config 는 워커 코드에 엔드포인트가 구현되어야 나타납니다."))
+    console.log()
+    console.log(hr)
+    console.log()
+
+    console.log(bold("  예시"))
+    console.log()
+    console.log(`    ${dim("worker-ctl")}                         ${dim("→ 전체 브리핑 + 대화형")}`)
+    console.log(`    ${dim("worker-ctl sisoso")}                  ${dim("→ sisoso 함수 선택")}`)
+    console.log(`    ${dim("worker-ctl sisoso status")}           ${dim("→ 상태 즉시 확인")}`)
+    console.log(`    ${dim("worker-ctl sisoso sync-to-framer")}   ${dim("→ Airtable→Framer 동기화 즉시 실행")}`)
+    console.log(`    ${dim("worker-ctl sisoso set-config")}       ${dim("→ 연결 설정 변경")}`)
+    console.log()
+    console.log(hr)
+    console.log()
+
+    console.log(bold("  구조 메모"))
+    console.log()
+    console.log(`  ┌─ workers.json       등록 워커 목록 (이름, URL)`)
+    console.log(`  ├─ <worker>/capabilities  실행 가능 함수 선언 (동적)`)
+    console.log(`  └─ worker-ctl         위를 읽어 대화형 CLI 제공`)
+    console.log()
+    console.log(`  워커들이 같은 코드 템플릿을 공유하면,`)
+    console.log(`  템플릿 한 곳의 capabilities 수정이 모든 워커에 일괄 적용됩니다.`)
+    console.log()
+}
+
+// ── 전체 브리핑 ───────────────────────────────────────────────────────────
+async function showBriefing(workers) {
+    const hr = gray("  " + "─".repeat(54))
+
+    console.log(bold("  📡 시스템 브리핑"))
+    console.log()
+
+    // 모든 워커 capabilities 병렬 조회
+    const results = await Promise.allSettled(
+        workers.map(w => fetchCapabilities(w.url).then(caps => ({ worker: w, caps })))
+    )
+
+    let anyOk = false
+    results.forEach((r, i) => {
+        const w = workers[i]
+        if (r.status === "fulfilled") {
+            anyOk = true
+            const { caps } = r.value
+            const statusBadge = caps.configured ? green("✅ 설정됨") : yellow("⚠️  미설정")
+            const ver = caps.version ? dim(`v${caps.version}`) : ""
+            console.log(`  ${bold(w.label ?? w.name)}  ${statusBadge}  ${ver}`)
+            console.log(`  ${gray(w.url)}`)
+            if (caps.functions?.length) {
+                const fnList = caps.functions.map(f => cyan(f.id)).join("  ")
+                console.log(`  ${dim("함수:")} ${fnList}`)
+            }
+        } else {
+            console.log(`  ${bold(w.label ?? w.name)}  ${red("✗ 연결 실패")}`)
+            console.log(`  ${gray(w.url)}`)
+            console.log(`  ${dim(r.reason?.message ?? "알 수 없는 오류")}`)
+        }
+        console.log()
+    })
+
+    console.log(hr)
+    console.log()
+
+    return anyOk
+}
+
 // ── 메인 ──────────────────────────────────────────────────────────────────
 async function main() {
     const args = process.argv.slice(2)
@@ -131,6 +243,21 @@ async function main() {
     console.log()
     console.log(bold(cyan("  🔧 Worker Control")))
     console.log()
+
+    // --help / -h
+    if (args[0] === "--help" || args[0] === "-h") {
+        showHelp(workers)
+        process.exit(0)
+    }
+
+    // 워커를 인수로 받지 않은 경우 → 브리핑 먼저
+    if (!args[0]) {
+        const anyOk = await showBriefing(workers)
+        if (!anyOk) {
+            console.error(red("  모든 워커에 연결할 수 없습니다. 네트워크 또는 URL을 확인하세요."))
+            process.exit(1)
+        }
+    }
 
     // ① 워커 결정
     let worker
