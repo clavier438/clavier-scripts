@@ -13,10 +13,15 @@
 
 GitHub: https://github.com/clavier0/clavier-hq
 
-그 다음 이 repo의 ARCHITECTURE.md를 읽고 작업 시작.
+그 다음 이 repo에서:
+1. `CONVENTIONS.md` — 작업 원칙 (Clean Architecture, Git, 메모리, 단계적 수정 등)
+2. `ARCHITECTURE.md` — Mac 자동화 모듈 구조
+3. `env.md` — 시크릿/계정 정보 (필요할 때만)
 
-## 작업 원칙 (env.md에 상세 지침)
+## 핵심 원칙 (요약)
 
 - 모든 파일 변경 → git commit (목적 + 수단 명시)
 - 문제 하나씩 고치기 (여러 개 동시 수정 금지)
 - 완료한 작업 → clavier-hq/QUEUE.md에 ✅ 표시 후 커밋
+- 클린아키텍처 위반 발견 시 적극 시정 제안
+- 자세한 가이드는 CONVENTIONS.md 참조
