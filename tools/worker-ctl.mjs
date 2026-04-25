@@ -63,11 +63,20 @@ async function selectFromList(rl, items, labelFn) {
 }
 
 // ── 워커 레지스트리 로드 ───────────────────────────────────────────────────
-function loadWorkers() {
+// 클라우드 레지스트리 우선, 실패 시 로컬 workers.json fallback
+const REGISTRY_URL = process.env.REGISTRY_URL ?? "https://clavier-registry.hyuk439.workers.dev"
+
+async function loadWorkers() {
+    try {
+        const res = await fetch(`${REGISTRY_URL}/workers`, { signal: AbortSignal.timeout(5_000) })
+        if (res.ok) return await res.json()
+    } catch {
+        // 오프라인 또는 레지스트리 오류 → 로컬 fallback
+    }
     try {
         return JSON.parse(readFileSync(WORKERS_JSON, "utf8"))
     } catch {
-        console.error(red("✗ workers.json 읽기 실패: ") + WORKERS_JSON)
+        console.error(red("✗ workers.json 읽기 실패 (레지스트리도 오프라인): ") + WORKERS_JSON)
         process.exit(1)
     }
 }
@@ -89,21 +98,27 @@ async function collectParams(rl, params) {
     const body = {}
     console.log()
     console.log(bold("  설정 값을 입력하세요:"))
-    console.log(dim("  (선택 항목은 Enter로 건너뛸 수 있습니다)"))
+    console.log(dim("  (선택 항목은 Enter로 건너뛸 수 있습니다 / env에서 로드된 값은 자동 적용)"))
     console.log()
 
     for (const p of params) {
+        // envKey가 있으면 로컬 환경변수에서 자동 로드
+        const envVal = p.envKey ? process.env[p.envKey] : null
+        if (envVal) {
+            const preview = p.secret ? dim("***") : gray(envVal.slice(0, 20) + (envVal.length > 20 ? "…" : ""))
+            console.log(`  ${bold(p.label)}: ${green("✓")} ${dim(`$${p.envKey}`)} ${preview}`)
+            body[p.key] = envVal
+            continue
+        }
+
         const tag    = p.required ? red("*필수") : dim("선택")
         const hint   = p.hint ? gray(` (${p.hint})`) : ""
-        const secret = p.secret ? dim(" [입력 시 그대로 표시됨]") : ""
-        const label  = `  ${bold(p.label)}${hint} [${tag}]${secret}: `
+        const envHint = p.envKey ? dim(` [$${p.envKey} 미설정]`) : ""
+        const label  = `  ${bold(p.label)}${hint}${envHint} [${tag}]: `
 
         while (true) {
             const val = (await prompt(rl, label)).trim()
-            if (val) {
-                body[p.key] = val
-                break
-            }
+            if (val) { body[p.key] = val; break }
             if (!p.required) break
             console.log(red(`  ✗ 필수 항목입니다`))
         }
@@ -267,7 +282,7 @@ async function showBriefing(workers) {
 // ── 메인 ──────────────────────────────────────────────────────────────────
 async function main() {
     const args = process.argv.slice(2)
-    const workers = loadWorkers()
+    const workers = await loadWorkers()
 
     console.log()
     console.log(bold(cyan("  🔧 Worker Control")))

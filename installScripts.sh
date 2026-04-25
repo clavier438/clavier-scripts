@@ -33,9 +33,24 @@ install_scripts() {
     while IFS= read -r -d '' script; do
         local filename
         filename="$(basename "$script")"
+        local ext="${filename##*.}"
         local name="${filename%.*}"
         local target="$dst_dir/$name"
 
+        # .mjs 파일은 심볼릭 링크 — 소스 변경이 ~/bin에 즉시 반영됨 (버전 드리프트 방지)
+        if [[ "$ext" == "mjs" ]]; then
+            if [ -L "$target" ] && [ "$(readlink "$target")" = "$script" ]; then
+                continue  # 이미 올바른 심링크
+            fi
+            [ -e "$target" ] || [ -L "$target" ] && rm "$target"
+            ln -sf "$script" "$target"
+            chmod +x "$target"
+            echo "  [link]   $name → $filename"
+            ((count++))
+            continue
+        fi
+
+        # 나머지 파일은 복사
         if [ -f "$target" ] && [ ! -L "$target" ]; then
             if cmp -s "$script" "$target"; then
                 continue  # 이미 최신 → 출력 생략
