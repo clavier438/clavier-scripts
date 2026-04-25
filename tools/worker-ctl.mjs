@@ -14,12 +14,22 @@
  */
 
 import { createInterface } from "readline"
-import { readFileSync } from "fs"
+import { readFileSync, existsSync } from "fs"
 import { fileURLToPath } from "url"
 import { dirname, join } from "path"
 
 const __dir = dirname(fileURLToPath(import.meta.url))
-const WORKERS_JSON = join(__dir, "workers.json")
+
+// workers.json 탐색:
+//   1) 스크립트 옆 (소스에서 직접 실행할 때)
+//   2) iCloud 원본 경로 (~/bin에 설치된 뒤에도 동작)
+const WORKERS_JSON = (() => {
+    const candidates = [
+        join(__dir, "workers.json"),
+        join(process.env.HOME ?? "", "Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/workers.json"),
+    ]
+    return candidates.find(p => existsSync(p)) ?? candidates[0]
+})()
 
 // ── 색상 유틸 ──────────────────────────────────────────────────────────────
 const c = {
