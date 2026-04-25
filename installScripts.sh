@@ -52,7 +52,7 @@ install_scripts() {
             ((count++))
         fi
     done < <(find "$src_dir" -maxdepth 1 -type f \
-        \( -name "*.sh" -o -name "*.py" -o -name "*.rb" -o -name "*.js" \) \
+        \( -name "*.sh" -o -name "*.py" -o -name "*.rb" -o -name "*.js" -o -name "*.mjs" \) \
         -print0)
 
     echo "  완료: 신규 ${count}개, 업데이트 ${updated}개"
