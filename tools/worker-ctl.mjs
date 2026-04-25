@@ -131,9 +131,9 @@ async function runFunction(workerUrl, fn, body = null) {
 
     const elapsed = ((Date.now() - start) / 1000).toFixed(1)
 
-    let body
-    try { body = await res.json() }
-    catch { body = await res.text() }
+    let responseBody
+    try { responseBody = await res.json() }
+    catch { responseBody = await res.text() }
 
     if (res.ok) {
         console.log(green(`  ✅ 완료 (${elapsed}s)`))
@@ -142,7 +142,7 @@ async function runFunction(workerUrl, fn, body = null) {
     }
 
     console.log()
-    console.log(JSON.stringify(body, null, 2).split("\n").map(l => `  ${l}`).join("\n"))
+    console.log(JSON.stringify(responseBody, null, 2).split("\n").map(l => `  ${l}`).join("\n"))
     console.log()
 
     return res.ok
