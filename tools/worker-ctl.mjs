@@ -84,8 +84,36 @@ async function fetchCapabilities(workerUrl) {
     return data
 }
 
+// ── params 입력 수집 ───────────────────────────────────────────────────────
+async function collectParams(rl, params) {
+    const body = {}
+    console.log()
+    console.log(bold("  설정 값을 입력하세요:"))
+    console.log(dim("  (선택 항목은 Enter로 건너뛸 수 있습니다)"))
+    console.log()
+
+    for (const p of params) {
+        const tag    = p.required ? red("*필수") : dim("선택")
+        const hint   = p.hint ? gray(` (${p.hint})`) : ""
+        const secret = p.secret ? dim(" [입력 시 그대로 표시됨]") : ""
+        const label  = `  ${bold(p.label)}${hint} [${tag}]${secret}: `
+
+        while (true) {
+            const val = (await prompt(rl, label)).trim()
+            if (val) {
+                body[p.key] = val
+                break
+            }
+            if (!p.required) break
+            console.log(red(`  ✗ 필수 항목입니다`))
+        }
+    }
+    console.log()
+    return body
+}
+
 // ── 함수 실행 ─────────────────────────────────────────────────────────────
-async function runFunction(workerUrl, fn) {
+async function runFunction(workerUrl, fn, body = null) {
     const url = `${workerUrl}${fn.path}`
     const method = fn.method ?? "POST"
 
@@ -97,6 +125,7 @@ async function runFunction(workerUrl, fn) {
     const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
+        ...(body ? { body: JSON.stringify(body) } : {}),
         signal: AbortSignal.timeout(60_000),
     }).catch(err => { throw new Error(`요청 실패: ${err.message}`) })
 
@@ -319,8 +348,16 @@ async function main() {
         rl.close()
     }
 
-    // ④ 실행
-    const ok = await runFunction(worker.url, fn)
+    // ④ params 수집 (필요한 경우)
+    let body = null
+    if (fn.params?.length) {
+        const rl = createInterface({ input: process.stdin, output: process.stdout })
+        body = await collectParams(rl, fn.params)
+        rl.close()
+    }
+
+    // ⑤ 실행
+    const ok = await runFunction(worker.url, fn, body)
     process.exit(ok ? 0 : 1)
 }
 
