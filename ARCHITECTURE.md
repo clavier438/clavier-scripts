@@ -95,6 +95,28 @@ Framer
 | `airtableUpload` | SSH → OCI airtable-upload 트리거 (deprecated, 현재 Mac 직접 실행) |
 | `statusBriefing` | 터미널 시작 시 데몬 상태 + 서버 체크 |
 
+### Claude Code 통합 (SessionStart hook)
+
+**문제**: CLAUDE.md만으로는 모델이 "clavier-hq 먼저 읽기" 지침을 가끔 흘끔만 보고 작업으로 뛰어드는 경우 있음. 지침 의존 → 모델 의지 의존.
+
+**해결**: `~/.claude/settings.json`의 SessionStart hook이 `tools/sessionStartContext.sh`를 호출하여 매 새 세션 시작 시 핵심 문서들을 컨텍스트에 강제 주입.
+
+```
+새 세션 시작
+  ↓
+SessionStart hook 발동
+  ↓
+sessionStartContext.sh 실행
+  ├─ git pull clavier-hq (네트워크 실패 무시)
+  └─ 7종 문서를 합쳐 JSON으로 stdout 출력:
+       MISSION.md / MANUAL.md / STATUS.md / QUEUE.md   (clavier-hq)
+       ARCHITECTURE.md / ECOSYSTEM.md / env.md          (로컬 인프라)
+  ↓
+Claude Code가 추가 컨텍스트로 자동 주입
+```
+
+스크립트 위치는 iCloud 소스(`tools/`)이고 hook은 그 절대경로를 호출 — `~/bin`에 의존하지 않음(소스 = 진실).
+
 ### 주요 경로
 
 | 항목 | 경로 |
@@ -114,6 +136,7 @@ Framer
 
 | 날짜 | 변경 내용 |
 |------|-----------|
+| 2026-04-25 | `tools/sessionStartContext.sh` 신설 + `~/.claude/settings.json` SessionStart hook을 인라인 → 스크립트 호출로 단순화. clavier-hq 4종(MISSION/MANUAL/STATUS/QUEUE)을 강제 주입 대상에 추가. 모델 의지 의존을 시스템 강제로 격상 |
 | 2026-04-25 | `tools/` 폴더 추가 — 루트의 유틸 스크립트 9개 이동(imgToWeb/pdfToImg/pdfToJpeg/renameKoToCamel/restoreQuickActions/runSafariTabsExport/scriptsList/airtableGenericV5/airtableUploadV5). installScripts.sh에 tools→~/bin 평면 배포 특별 처리 추가. 런타임 동작 무변화 |
 | 2026-04-24 | ARCHITECTURE.md 모듈화 — 각 repo가 자기 모듈 기술, 이 파일은 개요+Mac 모듈만 |
 | 2026-04-24 | syncObsidian.py 범용화 + cal 싱크 추가, GDrive icloudSync/ 통합 |
