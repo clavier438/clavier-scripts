@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Worker Control Panel</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0 }
+  :root {
+    --bg: #0f0f10;
+    --surface: #1a1a1c;
+    --border: #2a2a2d;
+    --text: #e8e8ea;
+    --dim: #666;
+    --accent: #4f8ef7;
+    --green: #3ecf8e;
+    --red: #f76e6e;
+    --yellow: #f7c94f;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+    margin-bottom: 4px;
+  }
+  .subtitle { color: var(--dim); font-size: 12px; margin-bottom: 36px }
+
+  /* Steps */
+  .steps { display: flex; gap: 12px; width: 100%; max-width: 680px; flex-direction: column }
+
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    transition: opacity .2s;
+  }
+  .step.disabled { opacity: .35; pointer-events: none }
+  .step-header {
+    padding: 14px 18px;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+    color: var(--dim);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .step-num {
+    width: 20px; height: 20px;
+    background: var(--border);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; color: var(--text); font-weight: 700;
+  }
+  .step-body { padding: 14px }
+
+  /* Worker cards */
+  .grid { display: flex; flex-direction: column; gap: 8px }
+  .card {
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card:hover { border-color: var(--accent); background: rgba(79,142,247,.05) }
+  .card.selected { border-color: var(--accent); background: rgba(79,142,247,.08) }
+  .card-title { font-weight: 500 }
+  .card-url { font-size: 11px; color: var(--dim); margin-top: 2px }
+  .card-status { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500 }
+  .status-ok { background: rgba(62,207,142,.12); color: var(--green) }
+  .status-err { background: rgba(247,110,110,.12); color: var(--red) }
+  .status-loading { background: var(--border); color: var(--dim) }
+
+  /* Function buttons */
+  .fn-list { display: flex; flex-direction: column; gap: 8px }
+  .fn-btn {
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color .15s, background .15s;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .fn-btn:hover { border-color: var(--accent); background: rgba(79,142,247,.05) }
+  .fn-btn:disabled { opacity: .4; cursor: default }
+  .fn-btn.running { border-color: var(--yellow); background: rgba(247,201,79,.04) }
+  .fn-icon { font-size: 18px; flex-shrink: 0 }
+  .fn-label { font-weight: 500; font-size: 13px }
+  .fn-desc { font-size: 11px; color: var(--dim); margin-top: 2px }
+  .fn-method { font-size: 10px; font-family: monospace; padding: 2px 6px; background: var(--border); border-radius: 4px; margin-left: auto; flex-shrink: 0 }
+
+  /* Result */
+  #result-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: 100%; max-width: 680px;
+    margin-top: 12px;
+    overflow: hidden;
+    display: none;
+  }
+  .result-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600;
+  }
+  .result-body { padding: 16px 18px; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; line-height: 1.6; color: #aaa }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block }
+  .dot-green { background: var(--green) }
+  .dot-red   { background: var(--red) }
+  .dot-spin  {
+    background: var(--yellow);
+    animation: spin-pulse .8s infinite;
+  }
+  @keyframes spin-pulse { 0%,100% { opacity:1 } 50% { opacity:.3 } }
+
+  /* Workers 편집 */
+  .edit-link {
+    font-size: 11px; color: var(--dim); cursor: pointer;
+    text-decoration: underline; text-underline-offset: 2px;
+    margin-top: 10px; display: inline-block;
+  }
+  .edit-link:hover { color: var(--text) }
+  .edit-area {
+    width: 100%; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 6px;
+    color: var(--text); font-family: monospace; font-size: 12px;
+    padding: 10px; margin-top: 8px; resize: vertical; min-height: 100px;
+    display: none;
+  }
+  .save-btn {
+    margin-top: 6px; padding: 6px 14px;
+    background: var(--accent); color: #fff;
+    border: none; border-radius: 6px; cursor: pointer; font-size: 12px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<h1>🔧 Worker Control Panel</h1>
+<p class="subtitle">워커 선택 → 기능 실행</p>
+
+<div class="steps">
+
+  <!-- Step 1: 워커 선택 -->
+  <div class="step" id="step1">
+    <div class="step-header">
+      <span class="step-num">1</span> 워커 선택
+    </div>
+    <div class="step-body">
+      <div class="grid" id="worker-grid">
+        <div style="color:var(--dim);font-size:12px">워커 목록 불러오는 중...</div>
+      </div>
+      <span class="edit-link" onclick="toggleEdit()">목록 직접 편집</span>
+      <textarea class="edit-area" id="edit-area"></textarea>
+      <button class="save-btn" id="save-btn" onclick="saveEdit()">저장</button>
+    </div>
+  </div>
+
+  <!-- Step 2: 기능 선택 -->
+  <div class="step disabled" id="step2">
+    <div class="step-header">
+      <span class="step-num">2</span> 실행할 기능
+    </div>
+    <div class="step-body">
+      <div class="fn-list" id="fn-list">
+        <div style="color:var(--dim);font-size:12px">워커를 먼저 선택해주세요</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 결과 -->
+<div id="result-box">
+  <div class="result-header">
+    <span class="dot dot-spin" id="result-dot"></span>
+    <span id="result-title">실행 중...</span>
+    <span style="margin-left:auto;color:var(--dim);font-size:11px" id="result-elapsed"></span>
+  </div>
+  <div class="result-body" id="result-body"></div>
+</div>
+
+<script>
+// ── 워커 목록 소스 ─────────────────────────────────────────────────────────
+// workers.json을 GitHub에서 로드 (gitSync가 자동으로 푸시함)
+const WORKERS_RAW_URL = "https://raw.githubusercontent.com/clavier0/clavier-scripts/main/tools/workers.json"
+const LS_KEY = "worker-panel:workers"
+
+let workers = []
+let selectedWorker = null
+
+// ── 초기 로드 ─────────────────────────────────────────────────────────────
+async function init() {
+  // 1. localStorage에 캐시된 목록 먼저 표시
+  const cached = localStorage.getItem(LS_KEY)
+  if (cached) {
+    try { workers = JSON.parse(cached) } catch {}
+  }
+
+  // 2. GitHub에서 최신 목록 로드 시도
+  try {
+    const res = await fetch(WORKERS_RAW_URL, { cache: "no-cache" })
+    if (res.ok) {
+      const fresh = await res.json()
+      workers = fresh
+      localStorage.setItem(LS_KEY, JSON.stringify(fresh))
+    }
+  } catch {
+    // GitHub 접근 불가 → 캐시 사용
+  }
+
+  // 3. 여전히 비어있으면 기본값
+  if (!workers.length) {
+    workers = [
+      { name: "sisoso", label: "sisoso (Framer ↔ Airtable)", url: "https://framer-sync-sisoso.hyuk439.workers.dev" },
+      { name: "hotelAgency", label: "hotelAgency (Hotel Agency API)", url: "https://hotel-agency-ops-api.hyuk439.workers.dev" },
+    ]
+  }
+
+  renderWorkers()
+  document.getElementById("edit-area").value = JSON.stringify(workers, null, 2)
+}
+
+// ── 워커 카드 렌더 ────────────────────────────────────────────────────────
+function renderWorkers() {
+  const grid = document.getElementById("worker-grid")
+  grid.innerHTML = workers.map((w, i) => `
+    <div class="card" id="card-${i}" onclick="selectWorker(${i})">
+      <div>
+        <div class="card-title">${escHtml(w.label ?? w.name)}</div>
+        <div class="card-url">${escHtml(w.url)}</div>
+      </div>
+      <span class="card-status status-loading" id="status-${i}">확인 중</span>
+    </div>
+  `).join("")
+
+  // 각 워커 상태 비동기 확인
+  workers.forEach((w, i) => checkWorkerStatus(w, i))
+}
+
+async function checkWorkerStatus(worker, i) {
+  const el = document.getElementById(`status-${i}`)
+  try {
+    const res = await fetch(`${worker.url}/capabilities`, { signal: AbortSignal.timeout(5000) })
+    if (res.ok) {
+      const data = await res.json()
+      el.textContent = data.configured ? "설정됨" : "미설정"
+      el.className = "card-status " + (data.configured ? "status-ok" : "status-err")
+    } else {
+      el.textContent = `오류 ${res.status}`
+      el.className = "card-status status-err"
+    }
+  } catch {
+    el.textContent = "연결 불가"
+    el.className = "card-status status-err"
+  }
+}
+
+// ── 워커 선택 ─────────────────────────────────────────────────────────────
+async function selectWorker(i) {
+  document.querySelectorAll(".card").forEach(c => c.classList.remove("selected"))
+  document.getElementById(`card-${i}`).classList.add("selected")
+  selectedWorker = workers[i]
+
+  const step2 = document.getElementById("step2")
+  step2.classList.add("disabled")
+  document.getElementById("fn-list").innerHTML =
+    `<div style="color:var(--dim);font-size:12px">기능 목록 불러오는 중...</div>`
+
+  try {
+    const res = await fetch(`${selectedWorker.url}/capabilities`, { signal: AbortSignal.timeout(8000) })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const caps = await res.json()
+    renderFunctions(caps)
+    step2.classList.remove("disabled")
+  } catch (err) {
+    document.getElementById("fn-list").innerHTML =
+      `<div style="color:var(--red);font-size:12px">연결 실패: ${escHtml(err.message)}</div>`
+    step2.classList.remove("disabled")
+  }
+}
+
+// ── 함수 목록 렌더 ────────────────────────────────────────────────────────
+const ICONS = {
+  "sync-to-framer":   "⬇️",
+  "sync-to-airtable": "⬆️",
+  "status":           "📊",
+  "push":             "📤",
+}
+
+function renderFunctions(caps) {
+  const list = document.getElementById("fn-list")
+  list.innerHTML = caps.functions.map(fn => `
+    <button class="fn-btn" id="fnbtn-${fn.id}" onclick="runFn(${JSON.stringify(fn).replace(/"/g, '&quot;')})">
+      <span class="fn-icon">${ICONS[fn.id] ?? "⚡"}</span>
+      <div style="flex:1">
+        <div class="fn-label">${escHtml(fn.label)}</div>
+        ${fn.description ? `<div class="fn-desc">${escHtml(fn.description)}</div>` : ""}
+      </div>
+      <span class="fn-method">${fn.method}</span>
+    </button>
+  `).join("")
+}
+
+// ── 함수 실행 ─────────────────────────────────────────────────────────────
+async function runFn(fn) {
+  if (!selectedWorker) return
+
+  // 버튼 비활성화
+  document.querySelectorAll(".fn-btn").forEach(b => b.disabled = true)
+  const btn = document.getElementById(`fnbtn-${fn.id}`)
+  if (btn) btn.classList.add("running")
+
+  // 결과창 열기
+  const box = document.getElementById("result-box")
+  const dot = document.getElementById("result-dot")
+  const title = document.getElementById("result-title")
+  const elapsed = document.getElementById("result-elapsed")
+  const body = document.getElementById("result-body")
+
+  box.style.display = "block"
+  dot.className = "dot dot-spin"
+  title.textContent = `${fn.label} 실행 중...`
+  elapsed.textContent = ""
+  body.textContent = ""
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" })
+
+  const start = Date.now()
+  try {
+    const res = await fetch(`${selectedWorker.url}${fn.path}`, {
+      method: fn.method,
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(60_000),
+    })
+    const ms = Date.now() - start
+    elapsed.textContent = `${(ms / 1000).toFixed(1)}s`
+
+    let data
+    try { data = await res.json() } catch { data = await res.text() }
+
+    if (res.ok) {
+      dot.className = "dot dot-green"
+      title.textContent = `✅ ${fn.label} 완료`
+    } else {
+      dot.className = "dot dot-red"
+      title.textContent = `✗ ${fn.label} 실패 (HTTP ${res.status})`
+    }
+    body.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2)
+  } catch (err) {
+    const ms = Date.now() - start
+    elapsed.textContent = `${(ms / 1000).toFixed(1)}s`
+    dot.className = "dot dot-red"
+    title.textContent = `✗ 연결 오류`
+    body.textContent = err.message
+  }
+
+  // 버튼 재활성화
+  document.querySelectorAll(".fn-btn").forEach(b => b.disabled = false)
+  if (btn) btn.classList.remove("running")
+}
+
+// ── 편집 패널 ─────────────────────────────────────────────────────────────
+function toggleEdit() {
+  const area = document.getElementById("edit-area")
+  const btn  = document.getElementById("save-btn")
+  const show = area.style.display === "none" || !area.style.display
+  area.style.display = show ? "block" : "none"
+  btn.style.display  = show ? "inline-block" : "none"
+}
+
+function saveEdit() {
+  try {
+    const parsed = JSON.parse(document.getElementById("edit-area").value)
+    workers = parsed
+    localStorage.setItem(LS_KEY, JSON.stringify(parsed))
+    renderWorkers()
+    toggleEdit()
+  } catch (e) {
+    alert("JSON 형식 오류: " + e.message)
+  }
+}
+
+// ── 유틸 ──────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")
+}
+
+init()
+</script>
+</body>
+</html>

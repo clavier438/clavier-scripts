@@ -1,0 +1,12 @@
+[
+  {
+    "name": "sisoso",
+    "label": "sisoso (Framer ↔ Airtable)",
+    "url": "https://framer-sync-sisoso.hyuk439.workers.dev"
+  },
+  {
+    "name": "hotelAgency",
+    "label": "hotelAgency (Hotel Agency API)",
+    "url": "https://hotel-agency-ops-api.hyuk439.workers.dev"
+  }
+]
