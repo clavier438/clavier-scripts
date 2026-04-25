@@ -25,7 +25,7 @@ import os, sys, json, time, csv, re, pathlib, argparse
 import requests
 
 SELF_DIR = pathlib.Path(__file__).resolve().parent
-ENV_PATH = SELF_DIR / "env.md"
+CLAVIER_ENV = pathlib.Path.home() / ".clavier" / "env"
 META = "https://api.airtable.com/v0/meta"
 API  = "https://api.airtable.com/v0"
 COLORS = [
@@ -39,14 +39,19 @@ HEADERS = {}
 # UTILS
 # ============================================================
 def load_pat():
-    pat = os.environ.get("AIRTABLE_PAT")
-    if pat:
-        print(f"  PAT: (env) {pat[:8]}...{pat[-4:]}"); return pat
-    if ENV_PATH.exists():
-        m = re.search(r'(pat[A-Za-z0-9_\-\.]{30,})', ENV_PATH.read_text(encoding="utf-8"))
-        if m:
-            t = m.group(1); print(f"  PAT: (env.md) {t[:8]}...{t[-4:]}"); return t
-    print("ERROR: PAT 없음 — AIRTABLE_PAT 환경변수 또는 env.md 필요"); sys.exit(1)
+    for key in ("AIRTABLE_API_KEY", "AIRTABLE_PAT"):
+        pat = os.environ.get(key)
+        if pat:
+            print(f"  PAT: (env:{key}) {pat[:8]}...{pat[-4:]}"); return pat
+    if CLAVIER_ENV.exists():
+        for line in CLAVIER_ENV.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line: continue
+            k, v = line.split("=", 1)
+            if k.strip() in ("AIRTABLE_API_KEY", "AIRTABLE_PAT"):
+                t = v.strip()
+                print(f"  PAT: (~/.clavier/env) {t[:8]}...{t[-4:]}"); return t
+    print("ERROR: Airtable API 키 없음 — ~/.clavier/env 에 AIRTABLE_API_KEY=... 추가 필요"); sys.exit(1)
 
 def call(method, url, data=None):
     for attempt in range(3):

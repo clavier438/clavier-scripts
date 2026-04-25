@@ -13,6 +13,19 @@ import { createInterface } from "readline"
 import { readFileSync, existsSync } from "fs"
 import { fileURLToPath } from "url"
 import { dirname, join } from "path"
+import { homedir } from "os"
+
+// ~/.clavier/env 자동 로드 — 터미널 밖 실행 시에도 동작
+try {
+    const envFile = join(homedir(), ".clavier", "env")
+    readFileSync(envFile, "utf8").split("\n").forEach(line => {
+        line = line.trim()
+        if (!line || line.startsWith("#") || !line.includes("=")) return
+        const [k, ...rest] = line.split("=")
+        const key = k.trim()
+        if (!process.env[key]) process.env[key] = rest.join("=").trim()
+    })
+} catch { /* ~/.clavier/env 없으면 shell env 사용 */ }
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 
