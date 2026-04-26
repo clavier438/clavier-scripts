@@ -23,13 +23,9 @@ read_file() {
     fi
 }
 
-combined=$(printf '# === clavier-hq/MISSION.md (방향) ===\n%s\n\n# === clavier-hq/MANUAL.md (현재 사용법) ===\n%s\n\n# === clavier-hq/STATUS.md (현재 상태) ===\n%s\n\n# === clavier-hq/QUEUE.md (지금 할 일) ===\n%s\n\n# === scripts/ARCHITECTURE.md (Mac 자동화 구조) ===\n%s\n\n# === ECOSYSTEM.md (보유 인프라 전체 지도) ===\n%s\n\n# === env.md (시크릿/계정) ===\n%s' \
+combined=$(printf '# === clavier-hq/MISSION.md (방향) ===\n%s\n\n# === clavier-hq/STATUS.md (현재 상태) ===\n%s\n\n# === clavier-hq/QUEUE.md (지금 할 일) ===\n%s' \
   "$(read_file "$HQ/MISSION.md")" \
-  "$(read_file "$HQ/MANUAL.md")" \
   "$(read_file "$HQ/STATUS.md")" \
-  "$(read_file "$HQ/QUEUE.md")" \
-  "$(read_file "$ICLOUD/scripts/ARCHITECTURE.md")" \
-  "$(read_file "$ICLOUD/ECOSYSTEM.md")" \
-  "$(read_file "$ICLOUD/scripts/env.md")")
+  "$(read_file "$HQ/QUEUE.md")")
 
 echo "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":$(echo "$combined" | jq -Rs .)}}"
