@@ -6,7 +6,7 @@
 ## Claude에게 — 세션 시작 시
 
 이 파일로 전체 구조 파악 → 작업 대상 모듈의 ARCHITECTURE.md 읽기 → `git log --oneline -10`으로 최근 흐름 파악.
-PROGRESS.md는 없음. 진행 상황은 커밋 메시지로.
+PROGRESS.md는 없음. 진행 상황은 clavier-hq/QUEUE.md + 커밋 메시지로.
 
 ---
 
@@ -16,15 +16,16 @@ PROGRESS.md는 없음. 진행 상황은 커밋 메시지로.
 Airtable
   │
   ├─(웹훅)──► OCI 서버 ──► GDrive: airtable/sync/ ──► Sana AI
+  │               └─(GDrive 폴링)──► Airtable (역방향, 60초)
   │
-  └─(Mac 직접)──► airtableGeneric.py ──► Airtable (업로드 방향)
+  └─(Mac 직접)──► airtableGenericV5.py ──► Airtable (업로드 방향)
 
 iCloud (Obsidian / Scriptable)
   └─(Mac LaunchAgent)──► syncObsidian.py ──► GDrive: icloudSync/ ──► Sana AI
 
 Framer
-  ├─(CMS import)──► airtable-framer-sync ──► Framer CMS 컬렉션
-  └─(실시간)──► base-template-server-api (Cloudflare Worker) ──► Airtable REST
+  ├─(CMS 네이티브 컬렉션)──► framer-sync Worker ──► Airtable (양방향)
+  └─(실시간 REST)──► framer-sync Worker ──► Airtable REST
 ```
 
 ## 모듈 목록
@@ -32,9 +33,8 @@ Framer
 | 모듈 | Repo | ARCHITECTURE.md 위치 |
 |------|------|----------------------|
 | **Mac 자동화** | `clavier0/clavier-scripts` | 이 파일 |
-| **OCI 서버** | `clavier0/oci-scripts` | `ubuntu@168.107.63.94:~/oci-scripts/ARCHITECTURE.md` |
-| **Airtable→Framer CMS** | `clavier0/framer-sync-worker` | `iCloud/0/code/projects/airtable-framer-sync/ARCHITECTURE.md` |
-| **Worker REST API** | `clavier0/base-template-server-api` | `iCloud/0/code/projects/base-template-server-api/` (없음, 간단한 구조) |
+| **OCI 서버** | `clavier0/oci-scripts` | `oci-scripts/ARCHITECTURE.md` |
+| **Cloudflare Workers** | `clavier0/platform-workers` | `platform-workers/README.md` |
 
 ---
 
@@ -45,7 +45,7 @@ Framer
 | 원칙 | 내용 |
 |------|------|
 | 소스/실행 분리 | `iCloud/0/scripts/` 수정 → `installScripts.sh` → `~/bin/` 배포 |
-| 하드코딩 금지 | 경로는 `$SELF_DIR`/`$HOME`, 키/토큰은 `~/.config/clavier/secrets` |
+| 하드코딩 금지 | 경로는 `$SELF_DIR`/`$HOME`, 키/토큰은 `~/.clavier/env` |
 | 폴더 구조 = 아키텍처 | `tools/` `daemons/` `clouds/` `memory-backup/` 폴더 위치가 역할을 결정 |
 | 네이밍 | 파일/스크립트: camelCase |
 
@@ -92,7 +92,7 @@ Framer
 |------|------|
 | `ociIn` | SSH → OCI 서버 접속 |
 | `ociStatus` | SSH → OCI 상태 브리핑 |
-| `airtableUpload` | SSH → OCI airtable-upload 트리거 (deprecated, 현재 Mac 직접 실행) |
+| `worker-ctl` | Cloudflare Worker 제어 CLI (capabilities 자동 감지, all 일괄 실행) |
 | `statusBriefing` | 터미널 시작 시 데몬 상태 + 서버 체크 |
 
 ### Claude Code 통합 (SessionStart hook)
@@ -108,12 +108,14 @@ SessionStart hook 발동
   ↓
 sessionStartContext.sh 실행
   ├─ git pull clavier-hq (네트워크 실패 무시)
-  └─ 7종 문서를 합쳐 JSON으로 stdout 출력:
-       MISSION.md / MANUAL.md / STATUS.md / QUEUE.md   (clavier-hq)
-       ARCHITECTURE.md / ECOSYSTEM.md / env.md          (로컬 인프라)
+  └─ 3종 문서를 합쳐 JSON으로 stdout 출력:
+       MISSION.md / STATUS.md / QUEUE.md   (clavier-hq, ~8.7KB 이내)
   ↓
 Claude Code가 추가 컨텍스트로 자동 주입
 ```
+
+> ⚠️ 주입 제한: Claude Code hook 허용 한도 ~10KB. env.md는 시크릿이므로 자동 주입 금지.
+> MANUAL.md / ARCHITECTURE.md 등 참조용 파일은 필요 시 세션 중 직접 읽을 것.
 
 스크립트 위치는 iCloud 소스(`tools/`)이고 hook은 그 절대경로를 호출 — `~/bin`에 의존하지 않음(소스 = 진실).
 
@@ -124,7 +126,7 @@ Claude Code가 추가 컨텍스트로 자동 주입
 | 스크립트 소스 | `~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/` |
 | 프로젝트 코드 | `~/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/` |
 | 실행 바이너리 | `~/bin/` |
-| 시크릿 | `~/.config/clavier/secrets` |
+| 중앙 환경변수 | `~/.clavier/env` (iCloud clavier.env로 심링크) |
 | Claude 메모리 | `~/.claude/projects/-Users-clavier/memory/` |
 | 메모리 백업 | `iCloud/0/scripts/memory-backup/` |
 | LaunchAgent plist | `~/Library/LaunchAgents/com.clavier.*` |
@@ -136,11 +138,8 @@ Claude Code가 추가 컨텍스트로 자동 주입
 
 | 날짜 | 변경 내용 |
 |------|-----------|
-| 2026-04-25 | `tools/sessionStartContext.sh` 신설 + `~/.claude/settings.json` SessionStart hook을 인라인 → 스크립트 호출로 단순화. clavier-hq 4종(MISSION/MANUAL/STATUS/QUEUE)을 강제 주입 대상에 추가. 모델 의지 의존을 시스템 강제로 격상 |
-| 2026-04-25 | `tools/` 폴더 추가 — 루트의 유틸 스크립트 9개 이동(imgToWeb/pdfToImg/pdfToJpeg/renameKoToCamel/restoreQuickActions/runSafariTabsExport/scriptsList/airtableGenericV5/airtableUploadV5). installScripts.sh에 tools→~/bin 평면 배포 특별 처리 추가. 런타임 동작 무변화 |
+| 2026-04-26 | SessionStart hook 주입 파일 7개→3개로 축소 (MISSION+STATUS+QUEUE, ~8.7KB). env.md 자동 주입 금지 원칙 명시. 모듈 테이블 갱신 (framer-sync-worker/base-template-server-api → platform-workers). |
+| 2026-04-25 | `tools/sessionStartContext.sh` 신설 + `~/.claude/settings.json` SessionStart hook을 인라인 → 스크립트 호출로 단순화. clavier-hq 4종(MISSION/MANUAL/STATUS/QUEUE)을 강제 주입 대상에 추가. |
+| 2026-04-25 | `tools/` 폴더 추가 — 루트의 유틸 스크립트 9개 이동. installScripts.sh에 tools→~/bin 평면 배포 특별 처리 추가. |
 | 2026-04-24 | ARCHITECTURE.md 모듈화 — 각 repo가 자기 모듈 기술, 이 파일은 개요+Mac 모듈만 |
 | 2026-04-24 | syncObsidian.py 범용화 + cal 싱크 추가, GDrive icloudSync/ 통합 |
-| 2026-04-22 | iCloud→GDrive 싱크 데몬 전체 정리, OCI 역할 Airtable→GDrive만으로 축소 |
-| 2026-04-21 | OCI 브리핑 시스템, airtable-jobs 파이프라인, GDrive airtable/ 폴더 통합 |
-| 2026-04-18 | Google OAuth 발급, OCI airtableGdriveSync.py, airtable-data GitHub repo |
-| 2026-04-15 | statusBriefing 완전 동적화, 데몬 메타 주석 체계 |
