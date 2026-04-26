@@ -140,6 +140,40 @@ async function collectParams(rl, params) {
     return body
 }
 
+// ── 비동기 작업 status polling ────────────────────────────────────────────
+// 워커가 백그라운드로 작업을 돌리는 경우 (응답에 "시작됨" 등) /status를 polling해서
+// sync.lastSync 가 트리거 시점 이후로 갱신될 때까지 기다림.
+async function pollUntilComplete(workerUrl, triggerTimeMs, maxWaitMs = 15 * 60 * 1000) {
+    const start = Date.now()
+    let dotCount = 0
+    while (Date.now() - start < maxWaitMs) {
+        await new Promise(r => setTimeout(r, 3000))
+
+        const elapsed = ((Date.now() - start) / 1000).toFixed(0)
+        const dots = ".".repeat((dotCount++ % 3) + 1).padEnd(3)
+        process.stdout.write(`\r  ${gray(`백그라운드 작업 진행 중${dots} (${elapsed}s 경과)`)}     `)
+
+        try {
+            const res = await fetch(`${workerUrl}/status`, { signal: AbortSignal.timeout(5000) })
+            if (!res.ok) continue
+            const status = await res.json()
+            const lastSyncRaw = status?.sync?.lastSync
+            if (!lastSyncRaw) {
+                // /status에 sync 필드가 없는 워커 → polling 의미 없음 → 종료
+                process.stdout.write("\r" + " ".repeat(60) + "\r")
+                return null
+            }
+            const lastSyncTime = new Date(lastSyncRaw).getTime()
+            if (lastSyncTime > triggerTimeMs) {
+                process.stdout.write("\r" + " ".repeat(60) + "\r")
+                return status.sync
+            }
+        } catch { /* 일시적 오류 → 다음 시도 */ }
+    }
+    process.stdout.write("\r" + " ".repeat(60) + "\r")
+    return null
+}
+
 // ── 함수 실행 ─────────────────────────────────────────────────────────────
 async function runFunction(workerUrl, fn, body = null) {
     const url = `${workerUrl}${fn.path}`
@@ -149,6 +183,7 @@ async function runFunction(workerUrl, fn, body = null) {
     console.log(gray(`  ${method} ${url}`))
     console.log()
 
+    const triggerTime = Date.now()
     const start = Date.now()
     const res = await fetch(url, {
         method,
@@ -164,7 +199,7 @@ async function runFunction(workerUrl, fn, body = null) {
     catch { responseBody = await res.text() }
 
     if (res.ok) {
-        console.log(green(`  ✅ 완료 (${elapsed}s)`))
+        console.log(green(`  ✅ 요청 수락 (${elapsed}s)`))
     } else {
         console.log(red(`  ✗ 오류 (HTTP ${res.status}, ${elapsed}s)`))
     }
@@ -172,6 +207,30 @@ async function runFunction(workerUrl, fn, body = null) {
     console.log()
     console.log(JSON.stringify(responseBody, null, 2).split("\n").map(l => `  ${l}`).join("\n"))
     console.log()
+
+    // 비동기 작업 감지: 응답 메시지에 "시작됨"/"started" 키워드 → status polling
+    if (res.ok && typeof responseBody === "object" && responseBody !== null) {
+        const noteText = String(responseBody.note ?? responseBody.message ?? "")
+        const isAsync = /시작됨|started/i.test(noteText)
+        if (isAsync) {
+            const finalStatus = await pollUntilComplete(workerUrl, triggerTime)
+            if (finalStatus) {
+                const totalElapsed = ((Date.now() - triggerTime) / 1000).toFixed(0)
+                const ok = finalStatus.status === "ok"
+                console.log(ok
+                    ? green(`  ✅ 백그라운드 작업 완료 (총 ${totalElapsed}s)`)
+                    : red(`  ✗ 백그라운드 작업 실패 (총 ${totalElapsed}s)`))
+                console.log()
+                console.log(JSON.stringify(finalStatus, null, 2).split("\n").map(l => `  ${l}`).join("\n"))
+                console.log()
+                return ok
+            } else {
+                console.log(yellow(`  ⚠️ 백그라운드 작업 상태 확인 불가 (timeout 또는 /status 미지원)`))
+                console.log(dim(`     수동 확인: worker-ctl ${workerUrl.split("//")[1].split(".")[0]} status`))
+                console.log()
+            }
+        }
+    }
 
     return res.ok
 }
