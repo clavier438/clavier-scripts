@@ -1,6 +1,7 @@
 .DS_Store
 env.md
 *.env
+*.env.bak
 *_secret*
 *_private*
 *.log

@@ -19,7 +19,7 @@ GitHub: https://github.com/clavier0/clavier-hq
 그 다음 이 repo에서:
 1. `CONVENTIONS.md` — 작업 원칙 (Clean Architecture, Git, 메모리, 단계적 수정 등)
 2. `ARCHITECTURE.md` — Mac 자동화 모듈 구조
-3. `env.md` — 시크릿/계정 정보 (필요할 때만)
+3. `env.md` — 시크릿/계정 키 목록 (실제 값은 Doppler에 있음)
 
 ## 핵심 원칙 (요약)
 
@@ -28,3 +28,17 @@ GitHub: https://github.com/clavier0/clavier-hq
 - 완료한 작업 → clavier-hq/QUEUE.md에 ✅ 표시 후 커밋
 - 클린아키텍처 위반 발견 시 적극 시정 제안
 - 자세한 가이드는 CONVENTIONS.md 참조
+
+## 시크릿 사용 규칙 (2026-04-28~)
+
+**단일 진실 소스 = Doppler** (project: `clavier`, config: `prd`).
+
+스크립트·명령 실행 시:
+```bash
+doppler run -- <명령>     # 환경변수 자동 주입
+doppler secrets            # 현황 확인
+doppler secrets set K=V    # 값 변경 (Doppler 먼저)
+```
+
+iCloud `clavier.env`는 **백업 미러**. 값 다르면 Doppler가 정답.
+새 키 추가는 **Doppler에 먼저**, 그 다음 미러로 전파.

@@ -167,8 +167,8 @@ EOF
     echo "  [overnight] ~/Library/LaunchAgents/com.clavier.overnight.plist 등록 (매일 03:00 실행)"
 fi
 
-# ── ~/.clavier/env 심링크 — iCloud 파일을 단일 진실 소스로 사용 ──────────────
-# 새 맥 설정 시 iCloud 동기화 후 이 스크립트를 실행하면 자동 복구됨
+# ── ~/.clavier/env 심링크 — iCloud 파일을 백업 미러로 유지 ───────────────────
+# 단일 진실 소스는 Doppler (2026-04-28 이전). 이 심링크는 레거시·과도기 호환용.
 CLAVIER_ENV_SRC="$SCRIPT_DIR/clavier.env"
 CLAVIER_ENV_LINK="$HOME/.clavier/env"
 if [[ -f "$CLAVIER_ENV_SRC" ]]; then
@@ -176,6 +176,35 @@ if [[ -f "$CLAVIER_ENV_SRC" ]]; then
     if [[ ! -L "$CLAVIER_ENV_LINK" ]] || [[ "$(readlink "$CLAVIER_ENV_LINK")" != "$CLAVIER_ENV_SRC" ]]; then
         ln -sf "$CLAVIER_ENV_SRC" "$CLAVIER_ENV_LINK"
         echo ""
-        echo "  [env] ~/.clavier/env → iCloud/scripts/clavier.env (심링크 연결됨)"
+        echo "  [env] ~/.clavier/env → iCloud/scripts/clavier.env (백업 미러 심링크)"
+    fi
+fi
+
+# ── Doppler CLI 자동 설치 + 로그인 안내 ───────────────────────────────────────
+# 시크릿 단일 진실 소스 — 2026-04-28 iCloud → Doppler 이전
+if ! command -v doppler >/dev/null 2>&1; then
+    if command -v brew >/dev/null 2>&1; then
+        echo ""
+        echo "[ doppler CLI 설치 ]"
+        brew install dopplerhq/cli/doppler
+    else
+        echo ""
+        echo "⚠️  Homebrew 없음. Doppler CLI 수동 설치 필요: https://docs.doppler.com/docs/install-cli"
+    fi
+fi
+
+if command -v doppler >/dev/null 2>&1; then
+    if ! doppler me >/dev/null 2>&1; then
+        echo ""
+        echo "⚠️  Doppler 로그인 필요 — 다음 명령을 직접 실행하세요:"
+        echo "     doppler login"
+        echo "     cd \"$SCRIPT_DIR\" && doppler setup --project clavier --config prd --no-interactive"
+    else
+        # 이미 로그인됐으면 scripts 디렉터리 바인딩 보장 (idempotent)
+        bound_project="$(doppler configure get project --scope "$SCRIPT_DIR" --plain 2>/dev/null)"
+        if [[ "$bound_project" != "clavier" ]]; then
+            (cd "$SCRIPT_DIR" && doppler setup --project clavier --config prd --no-interactive >/dev/null 2>&1) \
+                && echo "  [doppler] $SCRIPT_DIR → clavier/prd 바인딩 완료"
+        fi
     fi
 fi
