@@ -56,15 +56,17 @@ EOF
 # 알파벳 순으로 정렬 (안정적 diff)
 echo "$SECRETS_CLEAN" | sort >> "$TMP_ENV"
 
-# diff 비교
-if [[ -f "$ICLOUD_ENV" ]] && diff -q "$TMP_ENV" "$ICLOUD_ENV" >/dev/null 2>&1; then
-    echo "✅ 변경 없음 — Doppler ↔ iCloud 일치"
-    exit 0
+# diff 비교 — timestamp 줄은 비교 대상에서 제외 (실질적 시크릿 변경만 감지)
+if [[ -f "$ICLOUD_ENV" ]]; then
+    if diff <(grep -v '^# 마지막 동기화:' "$TMP_ENV") <(grep -v '^# 마지막 동기화:' "$ICLOUD_ENV") >/dev/null 2>&1; then
+        echo "✅ 변경 없음 — Doppler ↔ iCloud 일치"
+        exit 0
+    fi
 fi
 
 if [[ "$CHECK_ONLY" == "1" ]]; then
-    echo "⚠️  차이 발견:"
-    diff "$ICLOUD_ENV" "$TMP_ENV" || true
+    echo "⚠️  차이 발견 (timestamp 무시):"
+    diff <(grep -v '^# 마지막 동기화:' "$ICLOUD_ENV") <(grep -v '^# 마지막 동기화:' "$TMP_ENV") || true
     exit 2
 fi
 
