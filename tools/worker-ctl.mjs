@@ -10,7 +10,7 @@
  */
 
 import { createInterface } from "readline"
-import { readFileSync, existsSync } from "fs"
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
 import { fileURLToPath } from "url"
 import { dirname, join } from "path"
 import { homedir } from "os"
@@ -107,11 +107,15 @@ async function fetchCapabilities(workerUrl) {
 }
 
 // ── params 입력 수집 ───────────────────────────────────────────────────────
-async function collectParams(rl, params) {
+// current: fn.currentFrom 으로 미리 조회한 현재 설정값 (없으면 {})
+async function collectParams(rl, params, current = {}) {
     const body = {}
     console.log()
     console.log(bold("  설정 값을 입력하세요:"))
-    console.log(dim("  (선택 항목은 Enter로 건너뛸 수 있습니다 / env에서 로드된 값은 자동 적용)"))
+    const hasExistingConfig = Object.keys(current).length > 0
+    console.log(dim(hasExistingConfig
+        ? "  (Enter: 현재 값 유지  ·  새 값 입력 시 교체)"
+        : "  (선택 항목은 Enter로 건너뛸 수 있습니다 / env 값은 자동 적용)"))
     console.log()
 
     for (const p of params) {
@@ -124,14 +128,29 @@ async function collectParams(rl, params) {
             continue
         }
 
-        const tag    = p.required ? red("*필수") : dim("선택")
-        const hint   = p.hint ? gray(` (${p.hint})`) : ""
-        const envHint = p.envKey ? dim(` [$${p.envKey} 미설정]`) : ""
-        const label  = `  ${bold(p.label)}${hint}${envHint} [${tag}]: `
+        // 현재 서버 설정값 (statusKey로 매핑)
+        const currentVal = p.statusKey !== undefined ? current[p.statusKey] : undefined
+        const hasExisting = currentVal === true || (typeof currentVal === "string" && currentVal.length > 0)
+
+        // 기존 값 있으면 required 강제 해제
+        const isRequired = p.required && !hasExisting
+
+        let hintDisplay = ""
+        if (hasExisting) {
+            hintDisplay = p.secret
+                ? dim("  설정됨 — Enter로 유지")
+                : `  ${gray(String(currentVal).slice(0, 40) + (String(currentVal).length > 40 ? "…" : ""))}${dim(" — Enter로 유지")}`
+        } else if (p.hint) {
+            hintDisplay = `  ${gray(`(${p.hint})`)}`
+        }
+
+        const tag   = isRequired ? red("*필수") : dim("선택")
+        const label = `  ${bold(p.label)}${hintDisplay} [${tag}]: `
 
         while (true) {
             const val = (await prompt(rl, label)).trim()
             if (val) { body[p.key] = val; break }
+            if (hasExisting) break  // Enter → 서버에서 기존 KV 값 유지
             if (!p.required) break
             console.log(red(`  ✗ 필수 항목입니다`))
         }
@@ -311,6 +330,147 @@ function showHelp(workers) {
     console.log()
 }
 
+// ── 스냅샷 디렉토리 ──────────────────────────────────────────────────────
+const SNAPSHOT_DIR = join(__dir, "worker-snapshots")
+
+async function fetchStatus(workerUrl) {
+    const res = await fetch(`${workerUrl}/status`, { signal: AbortSignal.timeout(15_000) })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return res.json()
+}
+
+function saveSnapshot(workerName, status) {
+    mkdirSync(SNAPSHOT_DIR, { recursive: true })
+    const file = join(SNAPSHOT_DIR, `${workerName}.json`)
+    const snapshot = { ...status, snapshotAt: new Date().toISOString() }
+    writeFileSync(file, JSON.stringify(snapshot, null, 2))
+    return file
+}
+
+function timeAgo(iso) {
+    if (!iso) return "—"
+    const diff = Date.now() - new Date(iso).getTime()
+    const m = Math.floor(diff / 60000)
+    if (m < 1) return "방금"
+    if (m < 60) return `${m}분 전`
+    const h = Math.floor(m / 60)
+    if (h < 24) return `${h}시간 전`
+    return `${Math.floor(h / 24)}일 전`
+}
+
+function truncate(s, n) {
+    if (!s) return "—"
+    return s.length > n ? s.slice(0, n - 1) + "…" : s
+}
+
+// ── panel: 모든 워커 /status를 표로 출력 + 스냅샷 저장 ──────────────────────
+async function runPanel(workers) {
+    console.log(bold("  📋 Worker Panel"))
+    console.log()
+
+    const results = await Promise.allSettled(
+        workers.map(async w => ({
+            worker: w,
+            status: await fetchStatus(w.url),
+        }))
+    )
+
+    const cols = ["WORKER", "VER", "AIRTABLE", "FRAMER", "GTM", "LAST SYNC"]
+    const widths = [16, 7, 18, 36, 14, 12]
+    console.log(`  ${cols.map((n, i) => bold(n.padEnd(widths[i]))).join("  ")}`)
+    console.log(gray("  " + "─".repeat(widths.reduce((a, b) => a + b + 2, 0))))
+
+    let savedCount = 0
+    results.forEach((r, i) => {
+        const w = workers[i]
+        if (r.status === "fulfilled") {
+            const s = r.value.status
+            saveSnapshot(w.name, s)
+            savedCount++
+            const framer = s.framerProjectUrl?.replace("https://framer.com/projects/", "f/") ?? null
+            const cells = [
+                truncate(w.name, widths[0]).padEnd(widths[0]),
+                truncate(s.version ?? null, widths[1]).padEnd(widths[1]),
+                truncate(s.airtableBaseId, widths[2]).padEnd(widths[2]),
+                truncate(framer, widths[3]).padEnd(widths[3]),
+                truncate(s.gtmContainerId, widths[4]).padEnd(widths[4]),
+                timeAgo(s.sync?.lastSync).padEnd(widths[5]),
+            ]
+            console.log(`  ${cells.join("  ")}`)
+        } else {
+            console.log(`  ${red(w.name.padEnd(widths[0]))}  ${dim("연결 실패: " + (r.reason?.message ?? ""))}`)
+        }
+    })
+    console.log()
+    console.log(dim(`  📁 스냅샷 ${savedCount}개 저장: ${SNAPSHOT_DIR}/`))
+    console.log()
+}
+
+// ── conduct: panel + clavier-hq/WORKER_STATUS.md 자동 생성 ──────────────
+function findClavierHq() {
+    const candidates = [
+        join(process.env.HOME ?? "", "Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq"),
+        join(__dir, "..", "..", "..", "code", "projects", "clavier-hq"),
+    ]
+    return candidates.find(p => existsSync(p))
+}
+
+async function runConduct(workers) {
+    await runPanel(workers)
+
+    const hqDir = findClavierHq()
+    if (!hqDir) {
+        console.log(yellow("  clavier-hq 위치 못 찾음 — WORKER_STATUS.md 생성 생략"))
+        return
+    }
+
+    const results = await Promise.allSettled(
+        workers.map(async w => ({ worker: w, status: await fetchStatus(w.url) }))
+    )
+
+    const lines = []
+    lines.push("# Worker Status (Auto-Generated)")
+    lines.push("")
+    lines.push(`> **이 파일은 자동 생성됨** — 수동 편집 금지. \`worker-ctl conduct\` 실행으로 갱신.`)
+    lines.push(`> 마지막 갱신: ${new Date().toISOString()}`)
+    lines.push(`> 진실의 원천 (런타임): 각 워커의 KV / 스냅샷: \`clavier-scripts/tools/worker-snapshots/\``)
+    lines.push("")
+    lines.push("---")
+    lines.push("")
+
+    results.forEach((r, i) => {
+        const w = workers[i]
+        lines.push(`## ${w.name}`)
+        lines.push("")
+        if (r.status === "fulfilled") {
+            const s = r.value.status
+            lines.push("| 항목 | 값 |")
+            lines.push("|------|-----|")
+            lines.push(`| Worker URL | ${w.url} |`)
+            lines.push(`| Worker | ${s.worker ?? "—"} v${s.version ?? "—"} |`)
+            lines.push(`| Configured | ${s.configured ? "✅" : "❌"} |`)
+            if (s.airtableBaseId) lines.push(`| Airtable Base | \`${s.airtableBaseId}\` |`)
+            if (s.framerProjectUrl) lines.push(`| Framer URL | ${s.framerProjectUrl} |`)
+            if (s.gtmContainerId !== undefined) lines.push(`| GTM Container | ${s.gtmContainerId ?? "_미설정_"} |`)
+            if (s.tables?.length) {
+                const tables = s.tables.map(t => `${t.name}(${t.fields})`).join(", ")
+                lines.push(`| 테이블 | ${tables} |`)
+            }
+            if (s.sync) {
+                lines.push(`| 마지막 싱크 | ${s.sync.lastSync ?? "—"} (${s.sync.status ?? "—"}) |`)
+            }
+        } else {
+            lines.push(`⚠️ 연결 실패: ${r.reason?.message ?? "unknown"}`)
+        }
+        lines.push("")
+    })
+
+    const outFile = join(hqDir, "WORKER_STATUS.md")
+    writeFileSync(outFile, lines.join("\n"))
+    console.log(dim(`  📄 WORKER_STATUS.md 갱신: ${outFile}`))
+    console.log()
+}
+
 // ── 전체 브리핑 ───────────────────────────────────────────────────────────
 async function showBriefing(workers) {
     const hr = gray("  " + "─".repeat(54))
@@ -363,6 +523,18 @@ async function main() {
     // --help / -h
     if (args[0] === "--help" || args[0] === "-h") {
         showHelp(workers)
+        process.exit(0)
+    }
+
+    // panel — 모든 워커 한 화면 표 + 스냅샷 저장
+    if (args[0] === "panel") {
+        await runPanel(workers)
+        process.exit(0)
+    }
+
+    // conduct — panel + clavier-hq/WORKER_STATUS.md 자동 갱신
+    if (args[0] === "conduct") {
+        await runConduct(workers)
         process.exit(0)
     }
 
@@ -483,7 +655,15 @@ async function main() {
     let body = null
     if (fn.params?.length) {
         const rl = createInterface({ input: process.stdin, output: process.stdout })
-        body = await collectParams(rl, fn.params)
+        // currentFrom이 있으면 현재 설정값 미리 조회 → Enter로 유지 기능
+        let current = {}
+        if (fn.currentFrom) {
+            try {
+                const res = await fetch(`${worker.url}${fn.currentFrom}`, { signal: AbortSignal.timeout(5_000) })
+                if (res.ok) current = await res.json()
+            } catch { /* 조회 실패 → current = {} */ }
+        }
+        body = await collectParams(rl, fn.params, current)
         rl.close()
     }
 

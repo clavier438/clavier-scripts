@@ -1,0 +1,71 @@
+{
+  "worker": "framer-sync",
+  "version": "2.3.0",
+  "configured": true,
+  "airtableBaseId": "appIrjwfcGeVMI9xb",
+  "hasAirtableToken": true,
+  "framerProjectUrl": "https://framer.com/projects/baseTemplate-sisoso-workers-latest--wzpwPMubOM1Z6pte62Im-5xRa5",
+  "hasFramerApiKey": true,
+  "gtmContainerId": null,
+  "tables": [
+    {
+      "name": "tag0",
+      "fields": 16,
+      "slugField": "slug"
+    },
+    {
+      "name": "tags",
+      "fields": 12,
+      "slugField": "name"
+    },
+    {
+      "name": "items",
+      "fields": 28,
+      "slugField": "name"
+    },
+    {
+      "name": "subitems",
+      "fields": 10,
+      "slugField": "id"
+    },
+    {
+      "name": "stories",
+      "fields": 18,
+      "slugField": "name"
+    }
+  ],
+  "sync": {
+    "lastSync": "2026-04-27T06:32:45.801Z",
+    "status": "ok",
+    "mode": "native",
+    "results": {
+      "tag0": {
+        "added": 0,
+        "updated": 0,
+        "skipped": 9
+      },
+      "tags": {
+        "added": 0,
+        "updated": 0,
+        "skipped": 10
+      },
+      "items": {
+        "added": 0,
+        "updated": 1,
+        "skipped": 71
+      },
+      "subitems": {
+        "added": 0,
+        "updated": 0,
+        "skipped": 15
+      },
+      "stories": {
+        "added": 0,
+        "updated": 0,
+        "skipped": 5
+      }
+    }
+  },
+  "conversion": null,
+  "snapshotAt": "2026-04-27T09:02:41.507Z"
+}
