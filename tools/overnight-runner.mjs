@@ -174,10 +174,32 @@ async function main() {
     }
     log.push("")
 
-    // 3. 큐 작업 — 매번 re-parse (line idx 무효화 방지). 최대 20개.
+    // 3. 월요일 전용: Conductor 주간 감사
+    const dayOfWeek = new Date().getDay() // 0=일, 1=월
+    log.push("## 3. 월요일 전용: Conductor 주간 감사")
+    if (dayOfWeek === 1) {
+        const conductorPromptPath = join(HQ, "conductor-prompt.md")
+        if (existsSync(conductorPromptPath)) {
+            const conductorResult = runCmd(
+                `claude --dangerously-skip-permissions -p "$(cat '${conductorPromptPath}')"`,
+                600000  // 10분 타임아웃 (감사 + 파일 수정 + git push까지)
+            )
+            log.push(conductorResult.ok ? "✅ 성공" : "❌ 실패")
+            log.push("```")
+            log.push(conductorResult.output)
+            log.push("```")
+        } else {
+            log.push("⚠️ conductor-prompt.md 없음 — 건너뜀")
+        }
+    } else {
+        log.push("_오늘은 월요일이 아님 — 건너뜀_")
+    }
+    log.push("")
+
+    // 4. 큐 작업 — 매번 re-parse (line idx 무효화 방지). 최대 20개.
     let text = readFileSync(QUEUE_FILE, "utf8")
     const initialTasks = parseQueue(text).tasks
-    log.push(`## 3. 큐 작업 (${initialTasks.length}개)`)
+    log.push(`## 4. 큐 작업 (${initialTasks.length}개)`)
     log.push("")
 
     if (initialTasks.length === 0) {
@@ -209,7 +231,7 @@ async function main() {
         }
     }
 
-    // 3. 오래된 완료 항목 정리
+    // 5. 오래된 완료 항목 정리
     text = pruneOldDone(text)
 
     if (!DRY) {
