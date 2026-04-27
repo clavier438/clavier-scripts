@@ -217,7 +217,7 @@ async function main() {
         log.push("```sh")
         log.push(next.cmd)
         log.push("```")
-        const r = runCmd(next.cmd)
+        const r = runCmd(next.cmd, 900000)  // 15분 — claude -p 서브 에이전트가 오래 걸림
         log.push(r.ok ? "✅ 성공" : "❌ 실패")
         log.push("```")
         log.push(r.output)
