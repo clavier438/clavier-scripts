@@ -130,6 +130,43 @@ if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
     echo "   export PATH=\"\$HOME/bin:\$PATH\""
 fi
 
+# ── overnight LaunchAgent 등록 — 매일 03:00 새벽 큐 처리 ────────────────────
+LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
+OVERNIGHT_PLIST="$LAUNCH_AGENTS_DIR/com.clavier.overnight.plist"
+OVERNIGHT_RUNNER="$SCRIPT_DIR/tools/overnight-runner.mjs"
+NODE_BIN="$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)"
+if [[ -f "$OVERNIGHT_RUNNER" ]] && [[ -x "$NODE_BIN" ]]; then
+    mkdir -p "$LAUNCH_AGENTS_DIR" "$HOME/Library/Logs"
+    cat > "$OVERNIGHT_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.clavier.overnight</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>${NODE_BIN}</string>
+        <string>${OVERNIGHT_RUNNER}</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
+    <key>RunAtLoad</key><false/>
+    <key>StandardOutPath</key><string>${HOME}/Library/Logs/overnight.log</string>
+    <key>StandardErrorPath</key><string>${HOME}/Library/Logs/overnight_error.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key><string>${HOME}</string>
+    </dict>
+</dict>
+</plist>
+EOF
+    launchctl unload "$OVERNIGHT_PLIST" 2>/dev/null
+    launchctl load "$OVERNIGHT_PLIST" 2>/dev/null
+    echo ""
+    echo "  [overnight] ~/Library/LaunchAgents/com.clavier.overnight.plist 등록 (매일 03:00 실행)"
+fi
+
 # ── ~/.clavier/env 심링크 — iCloud 파일을 단일 진실 소스로 사용 ──────────────
 # 새 맥 설정 시 iCloud 동기화 후 이 스크립트를 실행하면 자동 복구됨
 CLAVIER_ENV_SRC="$SCRIPT_DIR/clavier.env"
