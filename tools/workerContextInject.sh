@@ -7,27 +7,66 @@
 #
 # 출력: hookSpecificOutput JSON (Claude Code UserPromptSubmit hook 규약)
 # 키워드 미매칭 시: silent exit (컨텍스트 주입 없음)
+#
+# 도메인 설정: tools/contextInject.json (OCP — 새 도메인 = JSON 편집만)
+
+# jq 없으면 silent exit (JSON 조립 불가)
+command -v jq >/dev/null || exit 0
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG="$SCRIPT_DIR/contextInject.json"
+
+[ -f "$CONFIG" ] || exit 0
 
 input=$(cat)
 prompt=$(echo "$input" | jq -r '.prompt // ""')
 
-# 워커 관련 키워드 매칭 (대소문자 무시)
-if ! echo "$prompt" | grep -qiE "worker|워커|platform-workers|framer-sync|worker-ctl|refresh-schema|wrangler|control-tower|hotelAgency|sisoso.*sync|sync.*sisoso"; then
-    exit 0
+# contextInject.json에서 도메인별 키워드·파일 목록을 읽어 매칭
+matched_files=""
+matched_domain=""
+
+domain_count=$(jq 'length' "$CONFIG")
+for i in $(seq 0 $((domain_count - 1))); do
+    domain=$(jq -r ".[$i].domain" "$CONFIG")
+    keyword_count=$(jq ".[$i].keywords | length" "$CONFIG")
+
+    for j in $(seq 0 $((keyword_count - 1))); do
+        kw=$(jq -r ".[$i].keywords[$j]" "$CONFIG")
+        if echo "$prompt" | grep -qiE "$kw"; then
+            matched_domain="$domain"
+            matched_files=$(jq -r ".[$i].files[]" "$CONFIG")
+            break 2
+        fi
+    done
+done
+
+# 키워드 미매칭 시 silent exit
+[ -z "$matched_domain" ] && exit 0
+
+# 파일 내용 수집 (존재하는 파일만)
+header="# === [worker context auto-inject — 워커 키워드 감지] ==="
+combined="$header"
+
+while IFS= read -r filepath; do
+    [ -z "$filepath" ] && continue
+    label=$(basename "$(dirname "$filepath")")/$(basename "$filepath")
+    if [ -f "$filepath" ]; then
+        content=$(cat "$filepath")
+    else
+        content="(파일 없음: $filepath)"
+    fi
+    combined=$(printf '%s\n\n## %s\n\n%s' "$combined" "$label" "$content")
+done <<< "$matched_files"
+
+# 100KB 캡 — 초과 시 잘라내고 경고 추가
+MAX_BYTES=102400
+byte_size=${#combined}
+if [ "$byte_size" -gt "$MAX_BYTES" ]; then
+    combined="${combined:0:$MAX_BYTES}"
+    combined=$(printf '%s\n\n[truncated: %d KB exceeded 100 KB cap]' \
+        "$combined" $(( byte_size / 1024 )))
 fi
 
-ICLOUD="/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0"
-ARCH_FRAMER_SYNC="$ICLOUD/code/projects/platform-workers/framer-sync/ARCHITECTURE.md"
-ARCH_PLATFORM="$ICLOUD/code/projects/platform-workers/ARCHITECTURE.md"
-SYS_ENV="$ICLOUD/code/projects/clavier-hq/SYSTEM_ENV.md"
-
-read_file() {
-    [ -f "$1" ] && cat "$1" || echo "(파일 없음: $1)"
-}
-
-combined=$(printf '# === [worker context auto-inject — 워커 키워드 감지] ===\n\n## platform-workers/framer-sync/ARCHITECTURE.md\n\n%s\n\n## platform-workers/ARCHITECTURE.md\n\n%s\n\n## clavier-hq/SYSTEM_ENV.md\n\n%s' \
-  "$(read_file "$ARCH_FRAMER_SYNC")" \
-  "$(read_file "$ARCH_PLATFORM")" \
-  "$(read_file "$SYS_ENV")")
-
-echo "{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\",\"additionalContext\":$(echo "$combined" | jq -Rs .)}}"
+# jq로 안전하게 JSON 조립
+jq -n --arg ctx "$combined" \
+    '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:$ctx}}'
