@@ -13,18 +13,21 @@ PROGRESS.md는 없음. 진행 상황은 커밋 메시지로.
 ## 전체 시스템 개요
 
 ```
-Airtable
+Airtable (데이터 원천)
   │
-  ├─(웹훅)──► OCI 서버 ──► GDrive: airtable/sync/ ──► Sana AI
-  │
-  └─(Mac 직접)──► airtableGeneric.py ──► Airtable (업로드 방향)
+  └─(webhook / REST)──► platform-workers (Cloudflare) ──► Framer (UI)
+                              │
+                         health-check-worker (30분 cron)
+                              │
+                         Airtable system_registry (상태 기록)
 
 iCloud (Obsidian / Scriptable)
-  └─(Mac LaunchAgent)──► syncObsidian.py ──► GDrive: icloudSync/ ──► Sana AI
+  └─(Mac LaunchAgent)──► syncObsidian.py ──► GDrive: icloudSync/
 
-Framer
-  ├─(CMS import)──► airtable-framer-sync ──► Framer CMS 컬렉션
-  └─(실시간)──► base-template-server-api (Cloudflare Worker) ──► Airtable REST
+Mac overnight-runner (03:00 매일)
+  ├─ worker-ctl conduct   (워커 스냅샷)
+  ├─ info-arch            (Notion 점검, 매일)
+  └─ Conductor            (클린아키텍처 감사, 월요일만)
 ```
 
 ## 모듈 목록
@@ -32,9 +35,8 @@ Framer
 | 모듈 | Repo | ARCHITECTURE.md 위치 |
 |------|------|----------------------|
 | **Mac 자동화** | `clavier0/clavier-scripts` | 이 파일 |
-| **OCI 서버** | `clavier0/oci-scripts` | `ubuntu@168.107.63.94:~/oci-scripts/ARCHITECTURE.md` |
-| **Airtable→Framer CMS** | `clavier0/framer-sync-worker` | `iCloud/0/code/projects/airtable-framer-sync/ARCHITECTURE.md` |
-| **Worker REST API** | `clavier0/base-template-server-api` | `iCloud/0/code/projects/base-template-server-api/` (없음, 간단한 구조) |
+| **CF Workers** | `clavier0/platform-workers` | `iCloud/0/code/projects/platform-workers/framer-sync/ARCHITECTURE.md` |
+| **시스템 상태** | `clavier0/clavier-hq` | `iCloud/0/code/projects/clavier-hq/` (MISSION/STATUS/QUEUE/DECISIONS) |
 
 ---
 
@@ -85,6 +87,7 @@ Framer
 | `com.clavier.watcherCal` | Scriptable data/cal WatchPaths | syncObsidian.py (--src cal) |
 | `com.clavier.watcherScreenshots` | Screenshots WatchPaths | 스크린샷 처리 |
 | `com.clavier.workerPdf` | WatchPaths | pdfToImg 처리 |
+| `com.clavier.overnight` | 매일 03:00 (StartCalendarInterval) | overnight-runner.mjs (conduct + info-arch + Conductor) |
 
 ### bin 명령어
 
@@ -108,12 +111,14 @@ SessionStart hook 발동
   ↓
 sessionStartContext.sh 실행
   ├─ git pull clavier-hq (네트워크 실패 무시)
-  └─ 7종 문서를 합쳐 JSON으로 stdout 출력:
-       MISSION.md / MANUAL.md / STATUS.md / QUEUE.md   (clavier-hq)
-       ARCHITECTURE.md / ECOSYSTEM.md / env.md          (로컬 인프라)
+  └─ 3종 문서를 합쳐 JSON으로 stdout 출력:
+       MISSION.md / SYSTEM_ENV.md   (clavier-hq)
+       workerContextInject.sh       (워커 키워드 감지 시 ARCHITECTURE 자동 주입)
   ↓
 Claude Code가 추가 컨텍스트로 자동 주입
 ```
+
+> 7종 → 3종으로 줄인 이유: SessionStart hook 허용 한도(~10KB) 초과 방지. MANUAL/STATUS/QUEUE/ARCHITECTURE는 필요 시 세션 중 읽는 것으로 충분. env.md는 시크릿 포함이라 자동 주입 부적절.
 
 스크립트 위치는 iCloud 소스(`tools/`)이고 hook은 그 절대경로를 호출 — `~/bin`에 의존하지 않음(소스 = 진실).
 
@@ -136,6 +141,10 @@ Claude Code가 추가 컨텍스트로 자동 주입
 
 | 날짜 | 변경 내용 |
 |------|-----------|
+| 2026-04-28 | 전체 시스템 개요 + 모듈 표 최신화 (OCI/framer-sync-worker/base-template-server-api 제거 → platform-workers/clavier-hq 반영). SessionStart hook 3종 문서 명시. overnight LaunchAgent 추가 |
+| 2026-04-27 | `tools/overnight-runner.mjs` 신설 + `com.clavier.overnight` LaunchAgent (매일 03:00). conduct + info-arch + Conductor(월) 통합 실행 |
+| 2026-04-27 | `tools/workerContextInject.sh` + UserPromptSubmit hook — 워커 키워드 감지 시 ARCHITECTURE.md 자동 주입 |
+| 2026-04-26 | SessionStart hook 7종 → 3종 축소 (한도 초과 방지) |
 | 2026-04-25 | `tools/sessionStartContext.sh` 신설 + `~/.claude/settings.json` SessionStart hook을 인라인 → 스크립트 호출로 단순화. clavier-hq 4종(MISSION/MANUAL/STATUS/QUEUE)을 강제 주입 대상에 추가. 모델 의지 의존을 시스템 강제로 격상 |
 | 2026-04-25 | `tools/` 폴더 추가 — 루트의 유틸 스크립트 9개 이동(imgToWeb/pdfToImg/pdfToJpeg/renameKoToCamel/restoreQuickActions/runSafariTabsExport/scriptsList/airtableGenericV5/airtableUploadV5). installScripts.sh에 tools→~/bin 평면 배포 특별 처리 추가. 런타임 동작 무변화 |
 | 2026-04-24 | ARCHITECTURE.md 모듈화 — 각 repo가 자기 모듈 기술, 이 파일은 개요+Mac 모듈만 |
