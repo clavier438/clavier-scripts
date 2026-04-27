@@ -80,12 +80,12 @@ function parseQueue(text) {
     return { tasks, lines, pendingStart, pendingEnd, doneStart }
 }
 
-function runCmd(cmd) {
+function runCmd(cmd, timeoutMs = 120000) {
     if (DRY) {
         return { ok: true, output: "(dry-run, not executed)" }
     }
     try {
-        const output = execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
+        const output = execSync(cmd, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: timeoutMs })
         return { ok: true, output: output.slice(0, 2000) }
     } catch (e) {
         return { ok: false, output: (e.stdout ?? "") + (e.stderr ?? "") + "\n" + e.message }
@@ -157,10 +157,27 @@ async function main() {
     log.push("```")
     log.push("")
 
-    // 2. 큐 작업 — 매번 re-parse (line idx 무효화 방지). 최대 20개.
+    // 2. 항상 실행: info-arch (Notion 정보 아키텍처 점검)
+    log.push("## 2. 영구 작업: info-arch (Notion 정보 아키텍처)")
+    const infoArchPromptPath = join(HQ, "info-arch-prompt.md")
+    if (existsSync(infoArchPromptPath)) {
+        const infoArchResult = runCmd(
+            `claude --dangerously-skip-permissions -p "$(cat '${infoArchPromptPath}')"`,
+            300000  // 5분 타임아웃 (AI 실행이라 오래 걸릴 수 있음)
+        )
+        log.push(infoArchResult.ok ? "✅ 성공" : "❌ 실패")
+        log.push("```")
+        log.push(infoArchResult.output)
+        log.push("```")
+    } else {
+        log.push("⚠️ info-arch-prompt.md 없음 — 건너뜀")
+    }
+    log.push("")
+
+    // 3. 큐 작업 — 매번 re-parse (line idx 무효화 방지). 최대 20개.
     let text = readFileSync(QUEUE_FILE, "utf8")
     const initialTasks = parseQueue(text).tasks
-    log.push(`## 2. 큐 작업 (${initialTasks.length}개)`)
+    log.push(`## 3. 큐 작업 (${initialTasks.length}개)`)
     log.push("")
 
     if (initialTasks.length === 0) {
