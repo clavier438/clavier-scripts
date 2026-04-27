@@ -268,6 +268,9 @@ function showHelp(workers) {
     console.log()
     console.log(`    ${cyan("worker-ctl")}                    ${dim("전체 브리핑 후 대화형 실행")}`)
     console.log(`    ${cyan("worker-ctl --help")}             ${dim("이 도움말")}`)
+    console.log(`    ${cyan("worker-ctl panel")}              ${dim("모든 워커 상태 표 출력 + 스냅샷 저장")}`)
+    console.log(`    ${cyan("worker-ctl conduct")}            ${dim("panel + WORKER_STATUS.md 자동 갱신")}`)
+    console.log(`    ${cyan("worker-ctl backup")}             ${dim("모든 워커 상태 → Airtable system_snapshots 저장")}`)
     console.log(`    ${cyan("worker-ctl <워커>")}             ${dim("워커 지정 → 함수 선택")}`)
     console.log(`    ${cyan("worker-ctl <워커> <함수>")}      ${dim("바로 실행")}`)
     console.log()
@@ -406,6 +409,102 @@ async function runPanel(workers) {
     console.log()
 }
 
+// ── backup: 모든 워커 /status → Airtable system_snapshots에 직접 insert ──
+const BACKUP_BASE  = "appfLfZUE4zVncTpY"
+const BACKUP_TABLE = "tblXSf0epaEj4JY9F"
+
+async function runBackup(workers) {
+    const apiKey = process.env.AIRTABLE_API_KEY
+    if (!apiKey) {
+        console.error(red("  ✗ AIRTABLE_API_KEY 가 설정되지 않았습니다 (~/.clavier/env 확인)"))
+        process.exit(1)
+    }
+
+    console.log(bold("  💾 Worker Backup → Airtable system_snapshots"))
+    console.log()
+
+    // 모든 워커 /status 병렬 조회
+    const results = await Promise.allSettled(
+        workers.map(async w => ({
+            worker: w,
+            status: await fetchStatus(w.url),
+        }))
+    )
+
+    const ts = new Date().toISOString()
+
+    // 결과 표 헤더 (panel과 동일한 스타일)
+    const cols = ["WORKER", "STATUS", "AIRTABLE_RECORD", "NOTE"]
+    const widths = [16, 8, 30, 30]
+    console.log(`  ${cols.map((n, i) => bold(n.padEnd(widths[i]))).join("  ")}`)
+    console.log(gray("  " + "─".repeat(widths.reduce((a, b) => a + b + 2, 0))))
+
+    let successCount = 0
+    let failCount = 0
+
+    for (let i = 0; i < results.length; i++) {
+        const r = results[i]
+        const w = workers[i]
+
+        if (r.status === "rejected") {
+            failCount++
+            console.log(`  ${red(w.name.padEnd(widths[0]))}  ${red("FAIL".padEnd(widths[1]))}  ${dim("—".padEnd(widths[2]))}  ${dim(truncate(r.reason?.message ?? "연결 실패", widths[3]))}`)
+            continue
+        }
+
+        const s = r.value.status
+        const recordId = `${w.name}-${ts}`
+        const snapshotStr = JSON.stringify(s, null, 2)
+        // Airtable multilineText 최대 100KB 제한
+        const snapshotTruncated = snapshotStr.length > 100_000
+            ? snapshotStr.slice(0, 100_000)
+            : snapshotStr
+
+        const fields = {
+            id:               recordId,
+            worker:           w.name,
+            recordedAt:       ts,
+            trigger:          "manual",
+        }
+        if (s.version           !== undefined) fields.version          = String(s.version)
+        if (s.airtableBaseId    !== undefined) fields.airtableBaseId   = s.airtableBaseId
+        if (s.framerProjectUrl  !== undefined) fields.framerProjectUrl = s.framerProjectUrl
+        if (s.gtmContainerId    !== undefined) fields.gtmContainerId   = s.gtmContainerId
+        fields.snapshotJson = snapshotTruncated
+
+        try {
+            const res = await fetch(
+                `https://api.airtable.com/v0/${BACKUP_BASE}/${BACKUP_TABLE}`,
+                {
+                    method: "POST",
+                    headers: {
+                        Authorization: `Bearer ${apiKey}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ fields }),
+                    signal: AbortSignal.timeout(15_000),
+                }
+            )
+            if (!res.ok) {
+                const errBody = await res.text().catch(() => "")
+                failCount++
+                console.log(`  ${red(w.name.padEnd(widths[0]))}  ${red("FAIL".padEnd(widths[1]))}  ${dim("—".padEnd(widths[2]))}  ${dim(truncate(`HTTP ${res.status}: ${errBody}`, widths[3]))}`)
+            } else {
+                const created = await res.json()
+                successCount++
+                console.log(`  ${green(w.name.padEnd(widths[0]))}  ${green("OK".padEnd(widths[1]))}  ${cyan(truncate(created.id ?? recordId, widths[2]).padEnd(widths[2]))}  ${dim(truncate(s.version ? `v${s.version}` : "—", widths[3]))}`)
+            }
+        } catch (err) {
+            failCount++
+            console.log(`  ${red(w.name.padEnd(widths[0]))}  ${red("FAIL".padEnd(widths[1]))}  ${dim("—".padEnd(widths[2]))}  ${dim(truncate(err.message, widths[3]))}`)
+        }
+    }
+
+    console.log()
+    console.log(dim(`  ✅ 성공 ${successCount}개  /  ✗ 실패 ${failCount}개  (trigger=manual, ts=${ts})`))
+    console.log()
+}
+
 // ── conduct: panel + clavier-hq/WORKER_STATUS.md 자동 생성 ──────────────
 function findClavierHq() {
     const candidates = [
@@ -535,6 +634,12 @@ async function main() {
     // conduct — panel + clavier-hq/WORKER_STATUS.md 자동 갱신
     if (args[0] === "conduct") {
         await runConduct(workers)
+        process.exit(0)
+    }
+
+    // backup — 모든 워커 /status → Airtable system_snapshots 직접 insert
+    if (args[0] === "backup") {
+        await runBackup(workers)
         process.exit(0)
     }
 
