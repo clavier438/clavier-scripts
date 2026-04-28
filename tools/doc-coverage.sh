@@ -77,10 +77,12 @@ check_coverage() {
             ((missing++))
             continue
         fi
+        # grep -c 는 매치 0건일 때 exit code 1 — `|| echo 0` 쓰면 "0\n0" 오염됨.
+        # `|| true` 로 종료코드만 무시하고, 실제 값은 grep 출력 그대로.
         local count
-        count=$(grep -ci "$concept" "$path" 2>/dev/null || echo 0)
+        count=$(grep -ci "$concept" "$path" 2>/dev/null || true)
         count=${count:-0}
-        if [[ "$count" -gt 0 ]]; then
+        if [[ "${count:-0}" -gt 0 ]] 2>/dev/null; then
             printf "  ${GREEN}✅ %-25s${OFF} ${DIM}%d회${OFF}\n" "$label" "$count"
         else
             printf "  ${RED}❌ %-25s 0회 — 갱신 필요${OFF}\n" "$label"
