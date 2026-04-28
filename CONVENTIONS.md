@@ -70,10 +70,28 @@
 - `clavier-hq/STATUS.md`: 모든 시스템 현황
 - `clavier-hq/QUEUE.md`: 우선순위별 할 일
 - `clavier-hq/DECISIONS.md`: 아키텍처 결정 이력
+- `clavier-hq/CONCEPTS.md`: 클린아키텍처 개념 사전 (학습용)
 - `clavier-hq/briefings/`: 주간 Conductor 브리핑
 
 세션 시작 시 무조건 clavier-hq를 먼저 읽고 작업 시작.
 완료한 작업 → QUEUE.md에 ✅ 표시 후 커밋.
+
+---
+
+## 시크릿 관리 — Doppler-first (2026-04-28~)
+
+**모든 시크릿/API 키의 단일 진실 소스 = Doppler** (project: `clavier`, config: `prd`).
+
+- 스크립트 작성 시 시크릿이 필요하면: `process.env.X` / `os.environ.get("X")` 그대로 사용. `~/.zshrc`가 이미 Doppler에서 env를 주입함
+- LaunchAgent에서 시크릿 필요한 경우: plist `ProgramArguments`를 `doppler run --project clavier --config prd --silent -- <원래 명령>` 형태로 래핑
+- 시크릿 파일을 직접 읽는 코드 작성 금지 (`SECRETS_FILE = ...` 같은 패턴 안티패턴)
+- 새 키 추가 시:
+  1. `clavier-config set KEY=VALUE` (자동으로 Doppler + iCloud 미러 동기화)
+  2. 워커가 쓰는 시크릿이면 `doppler-sync-wrangler` 의 SYNC_MAP에도 추가
+  3. `clavier-hq/SYSTEM_ENV.md` 환경변수 지도에 행 추가
+
+iCloud `clavier.env` 직접 편집 금지 — `doppler-mirror-icloud`로 자동 생성되는 미러일 뿐.
+자세한 설계 의도: `clavier-hq/DECISIONS.md` 2026-04-28 ADR + `clavier-hq/CONCEPTS.md` (SSOT, Master/Mirror 개념).
 
 ---
 

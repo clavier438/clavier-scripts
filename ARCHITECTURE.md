@@ -13,6 +13,13 @@ PROGRESS.md는 없음. 진행 상황은 커밋 메시지로.
 ## 전체 시스템 개요
 
 ```
+Doppler (시크릿 단일 진실 소스, 외부 SaaS) ─┐
+   │                                       │ env 자동 주입
+   ├─► ~/.zshrc (모든 새 셸)                 │
+   ├─► LaunchAgent plist 4종 (doppler run)  │
+   ├─► doppler-mirror-icloud → iCloud clavier.env (백업 미러)
+   └─► doppler-sync-wrangler → Wrangler secrets (Worker 종속 레이어)
+
 Airtable (데이터 원천)
   │
   └─(webhook / REST)──► platform-workers (Cloudflare) ──► Framer (UI)
@@ -22,13 +29,15 @@ Airtable (데이터 원천)
                          Airtable system_registry (상태 기록)
 
 iCloud (Obsidian / Scriptable)
-  └─(Mac LaunchAgent)──► syncObsidian.py ──► GDrive: icloudSync/
+  └─(Mac LaunchAgent + doppler run)──► syncObsidian.py ──► GDrive: icloudSync/
 
-Mac overnight-runner (03:00 매일)
+Mac overnight-runner (03:00 매일, doppler run 래핑)
   ├─ worker-ctl conduct   (워커 스냅샷)
   ├─ info-arch            (Notion 점검, 매일)
   └─ Conductor            (클린아키텍처 감사, 월요일만)
 ```
+
+> **시크릿 흐름**: 진실 소스는 항상 Doppler. 다른 위치는 모두 자동 동기화되는 종속 레이어 (DECISIONS.md 2026-04-28 ADR 참조).
 
 ## 모듈 목록
 
@@ -141,6 +150,7 @@ Claude Code가 추가 컨텍스트로 자동 주입
 
 | 날짜 | 변경 내용 |
 |------|-----------|
+| 2026-04-28 | **시크릿 SSOT 이전**: iCloud `clavier.env` → Doppler `clavier/prd`. ~/.zshrc 하이브리드 전환, 4개 LaunchAgent (overnight/Git/Obsidian/Cal) doppler run 래핑, clavier-config Doppler 래퍼화, 신규 도구 `tools/doppler-mirror-icloud`/`tools/doppler-sync-wrangler`. iCloud는 백업 미러로 강등. DECISIONS.md 2026-04-28 ADR + clavier-hq/CONCEPTS.md 신설 |
 | 2026-04-28 | 전체 시스템 개요 + 모듈 표 최신화 (OCI/framer-sync-worker/base-template-server-api 제거 → platform-workers/clavier-hq 반영). SessionStart hook 3종 문서 명시. overnight LaunchAgent 추가 |
 | 2026-04-27 | `tools/overnight-runner.mjs` 신설 + `com.clavier.overnight` LaunchAgent (매일 03:00). conduct + info-arch + Conductor(월) 통합 실행 |
 | 2026-04-27 | `tools/workerContextInject.sh` + UserPromptSubmit hook — 워커 키워드 감지 시 ARCHITECTURE.md 자동 주입 |

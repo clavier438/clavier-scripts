@@ -3,9 +3,15 @@
 > **포맷 후 복구 한 줄 요약**
 > ```bash
 > bash ~/Library/Mobile\ Documents/com\~apple\~CloudDocs/0/scripts/setup.sh
+> doppler login                                                # 시크릿 복구 (브라우저 인증)
+> cd "$(dirname "$0")" && doppler setup --project clavier --config prd --no-interactive
 > ```
 
-민감한 토큰/키는 `env.md` 참고. 절대 공개 저장소에 올리지 말 것.
+**시크릿 단일 진실 소스 = Doppler** (project: `clavier`, config: `prd`) — 2026-04-28~.
+- 사용: `doppler run -- <명령>` 으로 환경변수 자동 주입
+- 관리: `clavier-config list/get/set/delete` (Doppler + iCloud 미러 자동 동기화)
+- iCloud `clavier.env` 는 **백업 미러** (자동 생성, 직접 편집 금지)
+- 카탈로그·복구 절차: `env.md`
 
 ---
 
