@@ -145,6 +145,14 @@ if [[ -f "$OVERNIGHT_RUNNER" ]] && [[ -x "$NODE_BIN" ]]; then
     <key>Label</key><string>com.clavier.overnight</string>
     <key>ProgramArguments</key>
     <array>
+        <string>/opt/homebrew/bin/doppler</string>
+        <string>run</string>
+        <string>--project</string>
+        <string>clavier</string>
+        <string>--config</string>
+        <string>prd</string>
+        <string>--silent</string>
+        <string>--</string>
         <string>${NODE_BIN}</string>
         <string>${OVERNIGHT_RUNNER}</string>
     </array>

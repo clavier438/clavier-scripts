@@ -39,7 +39,7 @@ except ImportError:
     sys.exit(1)
 
 # ── 고정 설정 ─────────────────────────────────────────────────────────────────
-SECRETS_FILE  = Path.home() / ".config/clavier/secrets"
+# 시크릿(GDRIVE_*)은 Doppler clavier/prd에서 환경변수로 주입됨 (LaunchAgent plist의 doppler run 래퍼).
 EXCLUDE_NAMES = {".DS_Store", ".trash", ".obsidian", ".sync.pid", ".sync.log"}
 EXCLUDE_EXTS  = {".icloud"}
 
@@ -71,18 +71,13 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
-# ── 시크릿 로드 ───────────────────────────────────────────────────────────────
+# ── 시크릿 로드 (환경변수 — Doppler에서 주입) ─────────────────────────────────
 def load_secrets() -> dict:
-    if not SECRETS_FILE.exists():
-        return {}
-    result = {}
-    for line in SECRETS_FILE.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        k, v = line.split("=", 1)
-        result[k.strip()] = v.strip()
-    return result
+    return {
+        "GDRIVE_CLIENT_ID":     os.environ.get("GDRIVE_CLIENT_ID", ""),
+        "GDRIVE_CLIENT_SECRET": os.environ.get("GDRIVE_CLIENT_SECRET", ""),
+        "GDRIVE_REFRESH_TOKEN": os.environ.get("GDRIVE_REFRESH_TOKEN", ""),
+    }
 
 
 # ── Google Drive 클라이언트 ───────────────────────────────────────────────────
@@ -418,7 +413,7 @@ def main():
         if not all([client_id, client_secret, refresh_token]):
             log.error(
                 "GDRIVE_CLIENT_ID / GDRIVE_CLIENT_SECRET / GDRIVE_REFRESH_TOKEN "
-                "이 ~/.config/clavier/secrets 에 없음"
+                "환경변수 없음 — Doppler 등록 + LaunchAgent plist의 doppler run 래퍼 확인"
             )
             sys.exit(1)
 

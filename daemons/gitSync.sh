@@ -5,7 +5,7 @@
 # @type launchagent
 # @label com.clavier.watcherGitSync
 #
-# 의존: ANTHROPIC_API_KEY (환경변수 또는 ~/.config/clavier/secrets)
+# 의존: ANTHROPIC_API_KEY (Doppler clavier/prd — LaunchAgent plist이 doppler run으로 주입)
 #       git remote origin (push 시)
 
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -13,17 +13,6 @@ REPO_DIR="$(dirname "$SELF_DIR")"   # daemons/ 의 부모 = scripts/
 LOG_FILE="$HOME/Library/Logs/gitSync.log"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
-
-# ── API 키 로드 ───────────────────────────────────────────────
-SECRETS_FILE="$HOME/.config/clavier/secrets"
-if [[ -f "$SECRETS_FILE" ]]; then
-    # 각 줄을 KEY=VALUE 형태로 export (주석, 빈 줄 무시)
-    while IFS='=' read -r key val; do
-        [[ "$key" =~ ^[[:space:]]*# ]] && continue
-        [[ -z "$key" ]] && continue
-        export "$key"="${val}"
-    done < "$SECRETS_FILE"
-fi
 
 # ── 변경사항 확인 ────────────────────────────────────────────
 cd "$REPO_DIR" || { log "ERROR: repo dir not found: $REPO_DIR"; exit 1; }

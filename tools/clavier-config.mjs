@@ -1,39 +1,58 @@
 #!/usr/bin/env node
 /**
- * clavier-config — ~/.clavier/env 관리 CLI
+ * clavier-config — Doppler 시크릿 관리 CLI (단일 진실 소스 = Doppler clavier/prd)
+ *
+ * 2026-04-28 이전: ~/.clavier/env 직접 편집 → Doppler 래퍼.
+ * 변경 시 doppler-mirror-icloud 자동 호출로 iCloud 미러 갱신.
  *
  * 사용법:
- *   clavier-config list          # 모든 키 출력 (값 마스킹)
- *   clavier-config get KEY       # 특정 키 값 출력
- *   clavier-config set KEY VALUE # 값 저장
- *   clavier-config delete KEY    # 키 삭제
+ *   clavier-config list             # 모든 키 출력 (값 마스킹)
+ *   clavier-config get KEY          # 특정 키 값 출력
+ *   clavier-config set KEY VALUE    # 값 저장 (Doppler + iCloud 미러)
+ *   clavier-config delete KEY       # 키 삭제 (Doppler + iCloud 미러)
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
-import { join, dirname } from "path"
-import { homedir } from "os"
+import { execFileSync, spawnSync } from "child_process"
 
-const ENV_PATH = join(homedir(), ".clavier", "env")
+const PROJECT = "clavier"
+const CONFIG = "prd"
+const META_KEYS = new Set(["DOPPLER_PROJECT", "DOPPLER_CONFIG", "DOPPLER_ENVIRONMENT"])
 
-function readEnv() {
-    if (!existsSync(ENV_PATH)) return []
-    return readFileSync(ENV_PATH, "utf8").split("\n")
+const bold  = s => `\x1b[1m${s}\x1b[0m`
+const dim   = s => `\x1b[2m${s}\x1b[0m`
+const green = s => `\x1b[32m${s}\x1b[0m`
+const red   = s => `\x1b[31m${s}\x1b[0m`
+const yellow = s => `\x1b[33m${s}\x1b[0m`
+
+function dopplerLoggedIn() {
+    const r = spawnSync("doppler", ["me"], { stdio: "ignore" })
+    return r.status === 0
 }
 
-function writeEnv(lines) {
-    mkdirSync(dirname(ENV_PATH), { recursive: true })
-    writeFileSync(ENV_PATH, lines.join("\n"), "utf8")
+function dopplerJSON() {
+    const out = execFileSync("doppler", [
+        "secrets", "--project", PROJECT, "--config", CONFIG, "--json"
+    ], { encoding: "utf8" })
+    return JSON.parse(out)
 }
 
-function parseLines(lines) {
-    const map = new Map()
-    for (const line of lines) {
-        const t = line.trim()
-        if (!t || t.startsWith("#") || !t.includes("=")) continue
-        const [k, ...rest] = t.split("=")
-        map.set(k.trim(), rest.join("=").trim())
-    }
-    return map
+function dopplerSet(key, value) {
+    execFileSync("doppler", [
+        "secrets", "set", `${key}=${value}`,
+        "--project", PROJECT, "--config", CONFIG, "--no-interactive"
+    ], { stdio: ["ignore", "ignore", "inherit"] })
+}
+
+function dopplerDelete(key) {
+    execFileSync("doppler", [
+        "secrets", "delete", key,
+        "--project", PROJECT, "--config", CONFIG, "--yes"
+    ], { stdio: ["ignore", "ignore", "inherit"] })
+}
+
+function syncMirror() {
+    // iCloud 미러 자동 갱신 — silent (실패해도 Doppler 작업은 성공으로 간주)
+    spawnSync("doppler-mirror-icloud", [], { stdio: "ignore" })
 }
 
 function mask(val) {
@@ -41,71 +60,69 @@ function mask(val) {
     return val.slice(0, 8) + "..." + val.slice(-4)
 }
 
+function abort(msg) { console.error(red(msg)); process.exit(1) }
+
+if (!dopplerLoggedIn()) {
+    abort("Doppler 로그인 필요 — 'doppler login' 실행 후 다시 시도하세요.")
+}
+
 const [,, cmd, ...rest] = process.argv
-const bold = s => `\x1b[1m${s}\x1b[0m`
-const dim  = s => `\x1b[2m${s}\x1b[0m`
-const green = s => `\x1b[32m${s}\x1b[0m`
-const red   = s => `\x1b[31m${s}\x1b[0m`
 
 if (!cmd || cmd === "list") {
-    const lines = readEnv()
-    const map = parseLines(lines)
-    if (map.size === 0) {
+    const data = dopplerJSON()
+    const entries = Object.entries(data).filter(([k]) => !META_KEYS.has(k))
+    if (entries.length === 0) {
         console.log(dim("(비어있음) — clavier-config set KEY VALUE 로 추가"))
     } else {
-        console.log(bold(`\n~/.clavier/env (${map.size}개)\n`))
-        for (const [k, v] of map) {
+        console.log(bold(`\nDoppler ${PROJECT}/${CONFIG} (${entries.length}개)\n`))
+        for (const [k, info] of entries.sort(([a], [b]) => a.localeCompare(b))) {
+            const v = typeof info === "string" ? info : (info?.computed ?? info?.raw ?? "")
             console.log(`  ${bold(k.padEnd(30))} ${dim(mask(v))}`)
         }
+        console.log(dim("\n  값 변경: clavier-config set KEY VALUE"))
         console.log()
     }
 
 } else if (cmd === "get") {
     const key = rest[0]
-    if (!key) { console.error("사용법: clavier-config get KEY"); process.exit(1) }
-    const map = parseLines(readEnv())
-    const val = map.get(key) ?? process.env[key]
-    if (!val) { console.error(red(`키 없음: ${key}`)); process.exit(1) }
-    console.log(val)
+    if (!key) abort("사용법: clavier-config get KEY")
+    try {
+        const out = execFileSync("doppler", [
+            "secrets", "get", key, "--plain",
+            "--project", PROJECT, "--config", CONFIG
+        ], { encoding: "utf8" })
+        process.stdout.write(out)
+    } catch {
+        abort(`키 없음: ${key}`)
+    }
 
 } else if (cmd === "set") {
     const [key, ...valParts] = rest
     const value = valParts.join("=")
-    if (!key || !value) { console.error("사용법: clavier-config set KEY VALUE"); process.exit(1) }
-    const lines = readEnv()
-    let found = false
-    const updated = lines.map(line => {
-        const t = line.trim()
-        if (!t || t.startsWith("#") || !t.includes("=")) return line
-        const k = t.split("=")[0].trim()
-        if (k === key) { found = true; return `${key}=${value}` }
-        return line
-    })
-    if (!found) updated.push(`${key}=${value}`)
-    writeEnv(updated)
-    console.log(green(`✓ ${key} 저장됨`), dim(`(${mask(value)})`))
+    if (!key || !value) abort("사용법: clavier-config set KEY VALUE")
+    dopplerSet(key, value)
+    console.log(green(`✓ Doppler에 ${key} 저장됨`), dim(`(${mask(value)})`))
+    syncMirror()
+    console.log(dim(`  → iCloud 미러 동기화 완료`))
 
 } else if (cmd === "delete") {
     const key = rest[0]
-    if (!key) { console.error("사용법: clavier-config delete KEY"); process.exit(1) }
-    const lines = readEnv()
-    const filtered = lines.filter(line => {
-        const t = line.trim()
-        if (!t || t.startsWith("#") || !t.includes("=")) return true
-        return t.split("=")[0].trim() !== key
-    })
-    writeEnv(filtered)
-    console.log(green(`✓ ${key} 삭제됨`))
+    if (!key) abort("사용법: clavier-config delete KEY")
+    dopplerDelete(key)
+    console.log(green(`✓ Doppler에서 ${key} 삭제됨`))
+    syncMirror()
+    console.log(dim(`  → iCloud 미러 동기화 완료`))
 
 } else {
     console.log(`
-${bold("clavier-config")} — ~/.clavier/env 관리
+${bold("clavier-config")} — Doppler 시크릿 관리 (project: ${PROJECT}, config: ${CONFIG})
 
   ${bold("list")}             모든 키 목록 (값 마스킹)
   ${bold("get")} KEY          특정 키 값 출력
-  ${bold("set")} KEY VALUE    값 저장/갱신
-  ${bold("delete")} KEY       키 삭제
+  ${bold("set")} KEY VALUE    값 저장/갱신 (Doppler + iCloud 미러)
+  ${bold("delete")} KEY       키 삭제 (Doppler + iCloud 미러)
 
-${dim("~/.clavier/env 는 모든 clavier 스크립트의 단일 환경변수 소스다.")}
+${dim("Doppler가 단일 진실 소스. iCloud는 백업 미러로 자동 동기화됨.")}
+${dim("직접 명령: doppler secrets / doppler secrets set / doppler run -- <명령>")}
 `)
 }
