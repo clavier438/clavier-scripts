@@ -191,6 +191,23 @@ async function main() {
     }
     log.push("")
 
+    // 2.6 영구 작업: efficiency-minister (직전 24h 작업 효율 감사)
+    log.push("## 2.6 영구 작업: efficiency-minister (작업 효율 감사)")
+    const efficiencyPromptPath = join(HQ, "efficiency-minister-prompt.md")
+    if (existsSync(efficiencyPromptPath)) {
+        const efficiencyResult = runCmd(
+            `claude --dangerously-skip-permissions -p "$(cat '${efficiencyPromptPath}')"`,
+            300000  // 5분 타임아웃
+        )
+        log.push(efficiencyResult.ok ? "✅ 성공" : "❌ 실패")
+        log.push("```")
+        log.push(efficiencyResult.output)
+        log.push("```")
+    } else {
+        log.push("⚠️ efficiency-minister-prompt.md 없음 — 건너뜀")
+    }
+    log.push("")
+
     // 3. 월요일 전용: Conductor 주간 감사
     const dayOfWeek = new Date().getDay() // 0=일, 1=월
     log.push("## 3. 월요일 전용: Conductor 주간 감사")
