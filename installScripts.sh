@@ -216,3 +216,14 @@ if command -v doppler >/dev/null 2>&1; then
         fi
     fi
 fi
+
+# ── clavier-hq git hooks 자동 활성화 (구조적 보호 Layer 2) ────────────────────
+# DECISIONS.md 변경 시 doc-coverage 자동 검증. 새 맥 복구해도 바로 작동.
+HQ_DIR="${CLAVIER_HQ:-$HOME/clavier-hq}"
+if [[ -d "$HQ_DIR/.git" ]] && [[ -d "$HQ_DIR/hooks" ]]; then
+    bound_hooks="$(cd "$HQ_DIR" && git config --local core.hooksPath 2>/dev/null || true)"
+    if [[ "$bound_hooks" != "hooks" ]]; then
+        (cd "$HQ_DIR" && git config --local core.hooksPath hooks) \
+            && echo "  [hooks] clavier-hq core.hooksPath = hooks (post-commit 자동 검증 활성화)"
+    fi
+fi

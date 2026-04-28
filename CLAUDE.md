@@ -42,3 +42,15 @@ doppler secrets set K=V    # 값 변경 (Doppler 먼저)
 
 iCloud `clavier.env`는 **백업 미러**. 값 다르면 Doppler가 정답.
 새 키 추가는 **Doppler에 먼저**, 그 다음 미러로 전파.
+
+## 시스템 일관성 규칙 — 결정 전파 (Layer 1, 2026-04-28~)
+
+**아키텍처 결정(ADR)은 시스템 전체 문서에 즉시 반영돼야 한다.**
+
+`clavier-hq/DECISIONS.md`에 새 ADR을 추가하면:
+1. **즉시** `doc-coverage <개념>` 또는 `doc-coverage --recent` 실행
+2. 12개 표준 문서 중 ❌ 표시된 곳을 모두 갱신할 때까지 다음 작업 시작 금지
+3. clavier-hq commit 시 post-commit 훅이 자동 재검증 (Layer 2 백업)
+4. 일주일 안 catch는 Conductor 책무 #4가 마지막 그물 (Layer 3)
+
+**왜 이 규칙인가**: ADR을 추가하고 다른 문서를 빠뜨리면 의존 작업이 잘못된 가정 위에서 돌아감. 사용자 자리에 없을 때도 자동 보장돼야 함. (CONCEPTS.md "SSOT" 항목 참조)
