@@ -208,6 +208,23 @@ async function main() {
     }
     log.push("")
 
+    // 2.7 영구 작업: researcher (브랜드/비즈니스 리서처 — stayClients DB 미완료 1건/일)
+    log.push("## 2.7 영구 작업: researcher (브랜드/비즈니스 리서치)")
+    const researcherPromptPath = join(HQ, "researcher-prompt.md")
+    if (existsSync(researcherPromptPath)) {
+        const researcherResult = runCmd(
+            `claude --dangerously-skip-permissions -p "$(cat '${researcherPromptPath}')"`,
+            900000  // 15분 타임아웃 (웹 리서치 + 보고서 작성)
+        )
+        log.push(researcherResult.ok ? "✅ 성공" : "❌ 실패")
+        log.push("```")
+        log.push(researcherResult.output)
+        log.push("```")
+    } else {
+        log.push("⚠️ researcher-prompt.md 없음 — 건너뜀")
+    }
+    log.push("")
+
     // 3. 월요일 전용: Conductor 주간 감사
     const dayOfWeek = new Date().getDay() // 0=일, 1=월
     log.push("## 3. 월요일 전용: Conductor 주간 감사")
