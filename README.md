@@ -211,6 +211,7 @@ scriptable-gdrive-sync restart
 | 항목 | 경로 |
 |---|---|
 | 스크립트 소스 | `~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/` |
+| platform-workers (canonical, 2026-04-28) | `~/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/` (단일 클론 — DECISIONS.md "platform-workers canonical 클론 = iCloud 경로" 참조) |
 | Obsidian vault | `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/` |
 | Scriptable | `~/Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/` |
 | Google Drive | `~/Library/CloudStorage/GoogleDrive-hyuk439@gmail.com/My Drive/` |

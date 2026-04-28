@@ -49,6 +49,8 @@ Mac overnight-runner (03:00 매일, doppler run 래핑)
 | **CF Workers** | `clavier0/platform-workers` | `iCloud/0/code/projects/platform-workers/framer-sync/ARCHITECTURE.md` |
 | **시스템 상태** | `clavier0/clavier-hq` | `iCloud/0/code/projects/clavier-hq/` (MISSION/STATUS/QUEUE/DECISIONS) |
 
+> **canonical 클론 원칙 (2026-04-28~)**: 위 표의 경로는 **유일한 로컬 클론**이다. 같은 repo를 다른 경로(`~/platform-workers`, `~/code/...`)에 추가 클론하지 말 것 — silent drift 발생. `doppler-sync-wrangler`의 `PLATFORM_WORKERS_DIR` 등 도구 기본값도 이 경로 기준. DECISIONS.md "platform-workers canonical 클론 = iCloud 경로" 참조.
+
 ---
 
 ## Mac 자동화 모듈

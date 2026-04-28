@@ -10,9 +10,11 @@
 
 **관리 대상 repo — 동일한 원칙 적용:**
 - `clavier-hq`: 신경 중추 (모든 세션이 먼저 읽는 곳)
-- `platform-workers`: Cloudflare Workers 모음
+- `platform-workers`: Cloudflare Workers 모음 — **canonical 로컬 클론 1개**: `~/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/` (2026-04-28 ADR "platform-workers canonical 클론 = iCloud 경로". 다른 경로 클론 금지 — silent drift 위험. CONCEPTS.md #12 "Cache vs SSOT")
 - `clavier-scripts` (Mac): `~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/`
 - `oci-scripts` (OCI 서버): `~/oci-scripts/` on ubuntu@168.107.63.94
+
+**1 repo = 1 canonical 클론**: 같은 repo를 여러 경로에 클론하지 말 것. stale 클론은 "어느 게 진실인가" 모호함을 만들고 잘못된 결론(예: "코드가 어디에도 없다")으로 이어짐.
 
 어떤 작업을 하든, 크든 작든, 각 폴더 안의 파일을 건드렸다면 **반드시 git commit을 남겨라.**
 

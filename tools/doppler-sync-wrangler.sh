@@ -32,13 +32,14 @@ done
 
 # 매핑 정의: "워커디렉터리|env이름(없으면 -)|Doppler키|Wrangler키"
 # 신규 워커 코드가 platform-workers에 추가되면 여기 행 추가.
-# health-check-worker는 Cloudflare엔 배포돼있지만 로컬 코드 위치 미확인 — 추후 추가.
 SYNC_MAP=(
     "framer-sync|sisoso|AIRTABLE_API_KEY|AIRTABLE_API_KEY"
     "framer-sync|hotelAgencyOps|AIRTABLE_API_KEY|AIRTABLE_API_KEY"
+    "health-check|-|AIRTABLE_PAT|AIRTABLE_PAT"
 )
 
-PLATFORM_WORKERS_DIR="${PLATFORM_WORKERS_DIR:-/Users/clavier/platform-workers}"
+# 2026-04-28: canonical 클론은 iCloud 경로 (DECISIONS.md 참조)
+PLATFORM_WORKERS_DIR="${PLATFORM_WORKERS_DIR:-/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers}"
 
 if ! doppler me >/dev/null 2>&1; then
     echo "❌ Doppler 로그인 필요." >&2

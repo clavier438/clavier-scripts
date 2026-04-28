@@ -66,3 +66,9 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 - health-check-worker처럼 외부 SoT(Airtable system_registry)에 직접 쓰는 워커는 KV/D1 둘 다 미사용
 
 부가: `webExporter/webSiteExporter.py` 의 `webSiteExporter discover_pages` 가 인덱스 페이지네이션 인지(1~3p × detail 3개) 크롤링 지원(2026-04-28).
+
+## platform-workers 클론 규칙 (2026-04-28~)
+
+**`platform-workers` repo의 canonical 로컬 클론은 1개**: `~/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers`. 다른 경로(`~/platform-workers`, `~/code/platform-workers`)에 새 클론 만들지 말 것. 이미 있다면 삭제 권유.
+
+**왜**: 동일 repo 다중 클론은 silent drift의 정의적 케이스 (CONCEPTS.md #12 "Cache vs SSOT"). 도구(`doppler-sync-wrangler` 등)도 stale 클론을 가리키면 잘못된 결론을 만듦. DECISIONS.md 2026-04-28 "platform-workers canonical 클론 = iCloud 경로" 참조.
