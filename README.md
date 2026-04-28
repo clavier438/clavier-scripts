@@ -253,3 +253,5 @@ scriptable-gdrive-sync restart
 Cloudflare Workers의 상태는 **D1을 단일 진실 소스**로 운영. KV는 바이너리 캐시 외 사용 안 함 (계정 단위 일일 한도 1000회 → 다중 워커 동시 마비 위험).
 
 framer-sync는 D1에 4 테이블 보유: `worker_state`, `collection_items`, `collection_fields`, **`airtable_cache`** (data:{table} REST API 캐시 — 2026-04-28 airtable_cache 도입으로 KV 이전). 예외: `webp-cache:{id}`는 2시간 TTL+수동 트리거라 KV 유지, health-check-worker는 KV 미사용(Airtable system_registry SSOT).
+
+`webExporter/webSiteExporter.py` 의 `webSiteExporter discover_pages` 함수는 인덱스 페이지네이션 1~3p × detail 3개 모델로 사이트 백업 누락을 줄임(2026-04-28).

@@ -64,3 +64,5 @@ iCloud `clavier.env`는 **백업 미러**. 값 다르면 Doppler가 정답.
 framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection_fields`, **`airtable_cache`** (data:{table} 캐시 — 2026-04-28 airtable_cache 도입으로 KV에서 이전). 예외 분류:
 - `webp-cache:{id}`는 2시간 TTL+사용자 수동 트리거 → KV 유지가 합리적
 - health-check-worker처럼 외부 SoT(Airtable system_registry)에 직접 쓰는 워커는 KV/D1 둘 다 미사용
+
+부가: `webExporter/webSiteExporter.py` 의 `webSiteExporter discover_pages` 가 인덱스 페이지네이션 인지(1~3p × detail 3개) 크롤링 지원(2026-04-28).
