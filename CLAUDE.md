@@ -53,4 +53,6 @@ iCloud `clavier.env`는 **백업 미러**. 값 다르면 Doppler가 정답.
 3. clavier-hq commit 시 post-commit 훅이 자동 재검증 (Layer 2 백업)
 4. 일주일 안 catch는 Conductor 책무 #4가 마지막 그물 (Layer 3)
 
-**왜 이 규칙인가**: ADR을 추가하고 다른 문서를 빠뜨리면 의존 작업이 잘못된 가정 위에서 돌아감. 사용자 자리에 없을 때도 자동 보장돼야 함. (CONCEPTS.md "SSOT" 항목 참조)
+**왜 이 규칙인가**: ADR을 추가하고 다른 문서를 빠뜨리면 의존 작업이 잘못된 가정 위에서 돌아감. 사용자 자리에 없을 때도 자동 보장돼야 함. (CONCEPTS.md "SSOT" + "Defense in Depth" 항목 참조)
+
+추가로, 모든 ADR/개념은 **Notion Architecture Archive**에 매일 03:00 자동 미러됨 (overnight-runner Step 2.5). 사용자가 노션에서 학습용으로 읽음 — Notion 직접 편집 금지.

@@ -56,11 +56,21 @@ list_docs() {
 }
 
 extract_recent_concept() {
+    # ADR 제목에서 핵심 키워드 추출. ' — ' (em dash 구분자) 앞부분만 사용.
+    # 부제·설명을 제외해 다른 문서가 짧게 언급한 경우도 매치되도록.
+    # 예: "Notion Architecture Archive — 교육용 미러 (이중 인덱스)" → "Notion Architecture Archive"
     if [[ ! -f "$HQ/DECISIONS.md" ]]; then
         echo "ERROR: $HQ/DECISIONS.md 없음" >&2
         return 1
     fi
-    awk '/^## [0-9]{4}-[0-9]{2}-[0-9]{2}:/ {sub(/^## [0-9]{4}-[0-9]{2}-[0-9]{2}: */, ""); print; exit}' "$HQ/DECISIONS.md"
+    awk '
+        /^## [0-9]{4}-[0-9]{2}-[0-9]{2}:/ {
+            sub(/^## [0-9]{4}-[0-9]{2}-[0-9]{2}: */, "")
+            sub(/ +— .*/, "")   # em dash 구분자 이후 제거
+            sub(/ +\(.*/, "")    # 괄호 부제 제거
+            print; exit
+        }
+    ' "$HQ/DECISIONS.md"
 }
 
 check_coverage() {

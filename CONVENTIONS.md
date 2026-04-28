@@ -95,6 +95,19 @@ iCloud `clavier.env` 직접 편집 금지 — `doppler-mirror-icloud`로 자동 
 
 ---
 
+## 결정 전파 자동 검증 (Defense in Depth, 2026-04-28~)
+
+clavier-hq `DECISIONS.md`에 새 ADR 추가 시 **즉시** `doc-coverage <개념>` 또는 `doc-coverage --recent` 호출. ❌ 표시된 12개 표준 문서 모두 갱신 후 다음 작업 시작.
+
+3 Layer 보호:
+- **Layer 1** — Claude 행동 규칙 (CLAUDE.md + 메모리)
+- **Layer 2** — clavier-hq `hooks/post-commit` (자동 발동, 구조적 강제)
+- **Layer 3** — Conductor 주간 책무 #4 (마지막 그물)
+
+추가로 모든 ADR/개념은 **Notion Architecture Archive**에 자동 미러 (overnight-runner Step 2.5, 매일 03:00). master = GitHub. 노션 직접 편집 금지.
+
+---
+
 ## 보유 인프라 — 항상 먼저 떠올릴 것
 
 나는 아래 인프라를 이미 보유하고 있다. **제약이나 한계가 보이면 사용자가 먼저 묻기 전에 적극적으로 제안**해라.

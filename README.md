@@ -13,6 +13,11 @@
 - iCloud `clavier.env` 는 **백업 미러** (자동 생성, 직접 편집 금지)
 - 카탈로그·복구 절차: `env.md`
 
+**시스템 일관성 자동 검증 (2026-04-28~)** — Defense in Depth 3 Layer:
+- `doc-coverage <개념>` 또는 `doc-coverage --recent` — 12개 표준 문서 일관성 검사
+- clavier-hq `hooks/post-commit` 자동 발동 — DECISIONS.md commit 시 즉시 검증
+- Notion Architecture Archive — DECISIONS/CONCEPTS 자동 미러 (overnight-runner 매일 03:00)
+
 ---
 
 ## 디렉토리 구조

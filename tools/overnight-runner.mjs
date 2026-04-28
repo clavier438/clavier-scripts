@@ -174,6 +174,23 @@ async function main() {
     }
     log.push("")
 
+    // 2.5 영구 작업: notion-mirror-arch (DECISIONS/CONCEPTS → Notion Architecture Archive)
+    log.push("## 2.5 영구 작업: notion-mirror-arch (아키텍처 기록 자동 미러)")
+    const notionMirrorPromptPath = join(HQ, "notion-mirror-prompt.md")
+    if (existsSync(notionMirrorPromptPath)) {
+        const notionMirrorResult = runCmd(
+            `claude --dangerously-skip-permissions -p "$(cat '${notionMirrorPromptPath}')"`,
+            600000  // 10분 타임아웃 (페이지 다수 생성 가능)
+        )
+        log.push(notionMirrorResult.ok ? "✅ 성공" : "❌ 실패")
+        log.push("```")
+        log.push(notionMirrorResult.output)
+        log.push("```")
+    } else {
+        log.push("⚠️ notion-mirror-prompt.md 없음 — 건너뜀")
+    }
+    log.push("")
+
     // 3. 월요일 전용: Conductor 주간 감사
     const dayOfWeek = new Date().getDay() // 0=일, 1=월
     log.push("## 3. 월요일 전용: Conductor 주간 감사")

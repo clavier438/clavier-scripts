@@ -38,6 +38,8 @@ Mac overnight-runner (03:00 매일, doppler run 래핑)
 ```
 
 > **시크릿 흐름**: 진실 소스는 항상 Doppler. 다른 위치는 모두 자동 동기화되는 종속 레이어 (DECISIONS.md 2026-04-28 ADR 참조).
+>
+> **결정 전파 자동 검증 (Defense in Depth, 2026-04-28~)**: DECISIONS.md ADR이 12개 표준 문서에 일관되게 반영됐는지 `doc-coverage` 도구가 자동 검증. 3 Layer (Claude 즉시 규칙 + clavier-hq post-commit 훅 + Conductor 주간). 모든 ADR/개념은 **Notion Architecture Archive**에 자동 미러 (overnight-runner 매일 03:00, Timeline + Concepts 이중 인덱스).
 
 ## 모듈 목록
 
