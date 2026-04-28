@@ -226,3 +226,5 @@ clavier-hq `DECISIONS.md`에 새 ADR 추가 시 **즉시** `doc-coverage <개념
 - **D1을 단일 진실 소스**로. 새 워커는 D1 우선, KV는 바이너리 캐시 외 사용 금지.
 - KV write가 새로 추가되면 즉시 DECISIONS.md ADR로 정당성 기록.
 - 이유: KV write 일일 한도가 계정 단위라 한 워커 소진 시 모든 워커 동시 마비 (2026-04-28 사건 참조).
+- framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection_fields`, **`airtable_cache`** (data:{table} 캐시 — 2026-04-28 airtable_cache 도입으로 KV 이전).
+- 예외 분류: `webp-cache:{id}`는 2시간 TTL+수동 트리거라 KV 유지, health-check-worker는 Airtable system_registry가 SSOT라 KV/D1 둘 다 미사용.

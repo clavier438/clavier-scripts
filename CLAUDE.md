@@ -59,4 +59,8 @@ iCloud `clavier.env`는 **백업 미러**. 값 다르면 Doppler가 정답.
 
 ## 데이터 저장소 규칙 (2026-04-28~)
 
-워커 상태(매핑·해시·config·webhook·sync 결과)는 **D1을 단일 진실 소스**로 운영. KV는 바이너리 캐시 외 사용 금지. 새 워커 추가 시 D1 우선 검토.
+워커 상태(매핑·해시·config·webhook·sync 결과·Airtable JSON 캐시)는 **D1을 단일 진실 소스**로 운영. KV는 바이너리 캐시 외 사용 금지. 새 워커 추가 시 D1 우선 검토.
+
+framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection_fields`, **`airtable_cache`** (data:{table} 캐시 — 2026-04-28 airtable_cache 도입으로 KV에서 이전). 예외 분류:
+- `webp-cache:{id}`는 2시간 TTL+사용자 수동 트리거 → KV 유지가 합리적
+- health-check-worker처럼 외부 SoT(Airtable system_registry)에 직접 쓰는 워커는 KV/D1 둘 다 미사용
