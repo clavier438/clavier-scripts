@@ -154,6 +154,7 @@ Claude Code가 추가 컨텍스트로 자동 주입
 
 | 날짜 | 변경 내용 |
 |------|-----------|
+| 2026-04-28 | **framer-sync 인터페이스 동결**: "프레이머가 변화를 알 수 없게 한다" — `addFields`/`createCollection` 등 Framer 측 스키마 변경 RPC 호출 전면 제거, `getFields()` read-only만 사용. 매칭 안 되는 필드는 `[needs-manual-framer-setup]` 경고 후 graceful skip. 4중 양파 디버깅 (typia/fldXXX/Connection error/D1 chicken-egg) 모두 호환성 종속에서 발생 → 호환성 영구 보장. 브랜치 `framer-immutable-refactor` (commit 68a8ce1, sisoso production deployed). clavier-hq/DECISIONS.md 2026-04-28 + CONCEPTS.md "외부 인터페이스 동결" 항목 |
 | 2026-04-28 | **시크릿 SSOT 이전**: iCloud `clavier.env` → Doppler `clavier/prd`. ~/.zshrc 하이브리드 전환, 4개 LaunchAgent (overnight/Git/Obsidian/Cal) doppler run 래핑, clavier-config Doppler 래퍼화, 신규 도구 `tools/doppler-mirror-icloud`/`tools/doppler-sync-wrangler`. iCloud는 백업 미러로 강등. DECISIONS.md 2026-04-28 ADR + clavier-hq/CONCEPTS.md 신설 |
 | 2026-04-28 | 전체 시스템 개요 + 모듈 표 최신화 (OCI/framer-sync-worker/base-template-server-api 제거 → platform-workers/clavier-hq 반영). SessionStart hook 3종 문서 명시. overnight LaunchAgent 추가 |
 | 2026-04-27 | `tools/overnight-runner.mjs` 신설 + `com.clavier.overnight` LaunchAgent (매일 03:00). conduct + info-arch + Conductor(월) 통합 실행 |

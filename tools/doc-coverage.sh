@@ -16,7 +16,7 @@
 
 set -euo pipefail
 
-HQ="${CLAVIER_HQ:-/Users/clavier/clavier-hq}"
+HQ="${CLAVIER_HQ:-/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq}"
 SCRIPTS="${CLAVIER_SCRIPTS:-/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts}"
 
 # 표준 문서 목록 — 시스템 전체 인지 검증 대상.

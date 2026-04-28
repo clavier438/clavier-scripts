@@ -72,3 +72,7 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 **`platform-workers` repo의 canonical 로컬 클론은 1개**: `~/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers`. 다른 경로(`~/platform-workers`, `~/code/platform-workers`)에 새 클론 만들지 말 것. 이미 있다면 삭제 권유.
 
 **왜**: 동일 repo 다중 클론은 silent drift의 정의적 케이스 (CONCEPTS.md #12 "Cache vs SSOT"). 도구(`doppler-sync-wrangler` 등)도 stale 클론을 가리키면 잘못된 결론을 만듦. DECISIONS.md 2026-04-28 "platform-workers canonical 클론 = iCloud 경로" 참조.
+
+## framer-sync 인터페이스 동결 규칙 (2026-04-28~)
+
+**프레이머가 변화를 알 수 없게 한다.** framer-sync 워커는 Framer 측 스키마를 수정하는 모든 RPC 호출(`addFields`, `createCollection`, `removeFields`)을 호출하지 않는다. `getFields()`로 read-only 조회만 하고, 매칭 안 되는 필드는 `[needs-manual-framer-setup]` 경고 후 graceful skip. Airtable에 새 필드를 추가했는데 Framer 슬롯이 없는 상황을 마주치면 → 워커 코드를 고치려 하지 말고, 사용자에게 "Framer 편집기에서 슬롯 생성하세요" 안내. 그 후 sync 트리거하면 자동 발견. DECISIONS.md 2026-04-28 "framer-sync = '프레이머를 속인다'" 참조.
