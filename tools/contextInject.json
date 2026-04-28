@@ -4,8 +4,9 @@
     "keywords": ["worker", "워커", "platform-workers", "framer-sync", "worker-ctl", "refresh-schema", "wrangler", "control-tower", "hotelAgency", "sisoso.*sync", "sync.*sisoso"],
     "files": [
       "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/framer-sync/ARCHITECTURE.md",
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/ARCHITECTURE.md",
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/SYSTEM_ENV.md"
+      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/SYSTEM_ENV.md",
+      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/WORKER_STATUS.md",
+      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/QUEUE.md"
     ]
   }
 ]
