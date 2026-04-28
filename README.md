@@ -247,3 +247,7 @@ scriptable-gdrive-sync restart
 
 > **rsync 주의**: macOS 내장 openrsync는 iCloud+GDrive 조합에서 mmap 버그 있음.
 > 반드시 `brew install rsync` (GNU rsync 3.4+) 사용.
+
+## 워커 데이터 저장소 (2026-04-28)
+
+Cloudflare Workers의 상태는 **D1을 단일 진실 소스**로 운영. KV는 바이너리 캐시 외 사용 안 함 (계정 단위 일일 한도 1000회 → 다중 워커 동시 마비 위험).

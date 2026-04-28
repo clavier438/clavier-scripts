@@ -165,3 +165,9 @@ Claude Code가 추가 컨텍스트로 자동 주입
 | 2026-04-21 | OCI 브리핑 시스템, airtable-jobs 파이프라인, GDrive airtable/ 폴더 통합 |
 | 2026-04-18 | Google OAuth 발급, OCI airtableGdriveSync.py, airtable-data GitHub repo |
 | 2026-04-15 | statusBriefing 완전 동적화, 데몬 메타 주석 체계 |
+
+---
+
+## 워커 데이터 레이어 (2026-04-28 추가)
+
+framer-sync, control-tower 등 platform-workers는 **D1을 단일 진실 소스**로 운영. KV write 일일 한도가 계정 단위(1000회)인 위험을 D1(100K/일)로 회피. 자세한 워커별 D1 ID는 clavier-hq/SYSTEM_ENV.md 참조.

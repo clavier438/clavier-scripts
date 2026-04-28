@@ -56,3 +56,7 @@ iCloud `clavier.env`는 **백업 미러**. 값 다르면 Doppler가 정답.
 **왜 이 규칙인가**: ADR을 추가하고 다른 문서를 빠뜨리면 의존 작업이 잘못된 가정 위에서 돌아감. 사용자 자리에 없을 때도 자동 보장돼야 함. (CONCEPTS.md "SSOT" + "Defense in Depth" 항목 참조)
 
 추가로, 모든 ADR/개념은 **Notion Architecture Archive**에 매일 03:00 자동 미러됨 (overnight-runner Step 2.5). 사용자가 노션에서 학습용으로 읽음 — Notion 직접 편집 금지.
+
+## 데이터 저장소 규칙 (2026-04-28~)
+
+워커 상태(매핑·해시·config·webhook·sync 결과)는 **D1을 단일 진실 소스**로 운영. KV는 바이너리 캐시 외 사용 금지. 새 워커 추가 시 D1 우선 검토.

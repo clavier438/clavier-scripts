@@ -220,3 +220,9 @@ clavier-hq `DECISIONS.md`에 새 ADR 추가 시 **즉시** `doc-coverage <개념
 **env.md 경로:** `~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/env.md` (gitignored)
 
 사용자가 "env 확인해봐"라고 말하는 것 자체가 이 파일을 먼저 읽으라는 뜻이다.
+
+## 워커 데이터 저장소 원칙 (2026-04-28~)
+
+- **D1을 단일 진실 소스**로. 새 워커는 D1 우선, KV는 바이너리 캐시 외 사용 금지.
+- KV write가 새로 추가되면 즉시 DECISIONS.md ADR로 정당성 기록.
+- 이유: KV write 일일 한도가 계정 단위라 한 워커 소진 시 모든 워커 동시 마비 (2026-04-28 사건 참조).
