@@ -11,9 +11,27 @@
 
 import { createInterface } from "readline"
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
+import { execSync } from "child_process"
 import { fileURLToPath } from "url"
 import { dirname, join } from "path"
 import { homedir } from "os"
+
+// framer-sync 코드 본체 경로 (wrangler 명령 실행 기준 디렉토리)
+const FRAMER_SYNC_DIR = process.env.FRAMER_SYNC_DIR
+    ?? join(process.env.HOME ?? "", "Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/framer-sync")
+
+// 워커 URL 패턴 — Cloudflare account subdomain
+const WORKER_SUBDOMAIN = process.env.WORKER_SUBDOMAIN ?? "hyuk439.workers.dev"
+
+// wrangler shell 실행 — CLOUDFLARE_API_TOKEN="" 강제 (Doppler OAuth 우회, 저장된 wrangler login 사용)
+function shellWrangler(cmd) {
+    return execSync(cmd, {
+        cwd: FRAMER_SYNC_DIR,
+        encoding: "utf8",
+        env: { ...process.env, CLOUDFLARE_API_TOKEN: "" },
+        stdio: ["pipe", "pipe", "pipe"],
+    })
+}
 
 // ~/.clavier/env 자동 로드 — 터미널 밖 실행 시에도 동작
 try {
@@ -569,60 +587,192 @@ function saveWorkersJson(workers) {
     writeFileSync(WORKERS_JSON, JSON.stringify(workers, null, 2) + "\n")
 }
 
-// register: 새 워커를 workers.json에 추가 + configure 실행
+// register: 새 프로젝트 전체 프로비저닝
+// 사용자 결정: 이름, Airtable Base ID/Token, Framer URL/Key
+// 자동: KV생성 → D1생성 → wrangler.toml 추가 → 마이그레이션 → 배포 → workers.json 등록 → configure → sync
 async function runRegister(args) {
-    const [name, url, ...rest] = args
-    if (!name || !url) {
-        console.error(red("  사용법: workerCtl register <이름> <URL> [레이블]"))
-        console.error(dim("  예)  workerCtl register myProject https://framer-sync-myproject.hyuk439.workers.dev"))
-        process.exit(1)
-    }
-    const label = rest.join(" ") || `${name} (Framer ↔ Airtable)`
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
 
-    const workers = loadWorkersJson()
-    const existing = workers.find(w => w.name === name)
-    if (existing) {
-        console.log(yellow(`  ⚠️  "${name}" 이미 등록됨 (URL: ${existing.url})`))
-        console.log(dim(`     URL만 바꾸려면: workerCtl set-url ${name} <새URL>`))
-        console.log()
-    } else {
-        workers.push({ name, label, url })
-        saveWorkersJson(workers)
-        console.log(green(`  ✅ workers.json 등록: ${name} → ${url}`))
-        console.log()
-    }
-
-    // configure 실행 — Airtable/Framer 연결 설정
-    console.log(bold(`  🔧 "${name}" configure 실행`))
-    console.log(dim(`     (Enter로 건너뛸 수 있습니다 — 나중에 workerCtl ${name} configure 로 재실행)`))
+    console.log(bold("  🆕 새 프로젝트 프로비저닝"))
+    console.log(dim("  사용자 결정 항목만 입력 — 나머지는 자동"))
     console.log()
 
-    let caps
-    try {
-        process.stdout.write(gray("  capabilities 조회 중..."))
-        caps = await fetchCapabilities(url)
-        process.stdout.write("\r" + " ".repeat(30) + "\r")
-    } catch (err) {
-        console.log(yellow(`  ⚠️ capabilities 조회 실패 (${err.message}) — configure 건너뜀`))
-        return
+    // ── 사용자 결정 항목 수집 ──────────────────────────────────────────────
+    const name = (args[0] ?? (await prompt(rl, `  ${bold("프로젝트 이름")} ${dim("(예: myproject)")}: `)).trim()).trim()
+    if (!name) { rl.close(); console.error(red("  ✗ 이름 필수")); process.exit(1) }
+
+    const airtableBaseId = (await prompt(rl, `  ${bold("Airtable Base ID")} ${dim("(appXXX...)")}: `)).trim()
+    if (!airtableBaseId) { rl.close(); console.error(red("  ✗ Base ID 필수")); process.exit(1) }
+
+    const envAirtableToken = process.env.AIRTABLE_API_KEY ?? process.env.AIRTABLE_TOKEN ?? ""
+    let airtableToken = envAirtableToken
+    if (airtableToken) {
+        console.log(`  ${bold("Airtable Token")}: ${green("✓")} ${dim("$AIRTABLE_API_KEY")} ${dim("***")}`)
+    } else {
+        airtableToken = (await prompt(rl, `  ${bold("Airtable API Token")} ${dim("(pat...)")}: `)).trim()
+        if (!airtableToken) { rl.close(); console.error(red("  ✗ Token 필수")); process.exit(1) }
     }
 
-    const configureFn = caps.functions?.find(f => f.id === "configure")
-    if (!configureFn) {
-        console.log(yellow("  ⚠️ configure 함수 없음 — 수동으로 /configure 호출 필요"))
-        return
+    const framerProjectUrl = (await prompt(rl, `  ${bold("Framer Project URL")} ${dim("(https://framer.com/projects/...)")}: `)).trim()
+    if (!framerProjectUrl) { rl.close(); console.error(red("  ✗ Framer URL 필수")); process.exit(1) }
+
+    const envFramerToken = process.env.FRAMER_TOKEN ?? process.env.FRAMER_API_KEY ?? ""
+    let framerApiKey = envFramerToken
+    if (framerApiKey) {
+        console.log(`  ${bold("Framer API Key")}: ${green("✓")} ${dim("$FRAMER_TOKEN")} ${dim("***")}`)
+    } else {
+        framerApiKey = (await prompt(rl, `  ${bold("Framer API Key")} ${dim("(fr_...)")}: `)).trim()
+        if (!framerApiKey) { rl.close(); console.error(red("  ✗ Framer Key 필수")); process.exit(1) }
     }
 
-    const rl = createInterface({ input: process.stdin, output: process.stdout })
-    const body = await collectParams(rl, configureFn.params ?? [], {})
+    const gtmId = (await prompt(rl, `  ${bold("GTM Container ID")} ${dim("(선택 — Enter 건너뜀)")}: `)).trim()
     rl.close()
 
-    if (Object.keys(body).length === 0) {
-        console.log(dim("  configure 입력 없음 — 건너뜀"))
-        return
+    // env key: sisoso, myProject (wrangler.toml [env.<key>])
+    // wrangler은 camelCase env key를 권장하지만 소문자도 가능 — 이름 그대로 사용
+    const envKey = name
+    const workerName = `framer-sync-${name}`
+    const workerUrl  = `https://${workerName}.${WORKER_SUBDOMAIN}`
+    const d1Name     = `framer-sync-${name}`
+
+    console.log()
+    console.log(bold(`  🚀 프로비저닝 시작 — ${cyan(name)}`))
+    console.log(gray(`     Cloudflare Worker: ${workerName}`))
+    console.log(gray(`     URL: ${workerUrl}`))
+    console.log()
+
+    // ── Step 1: KV namespace 생성 ─────────────────────────────────────────
+    process.stdout.write(`  ${bold("1/7")} KV namespace 생성...`)
+    let kvId
+    try {
+        const out = shellWrangler(`npx wrangler kv namespace create "${name}"`)
+        const match = out.match(/id\s*=\s*["']?([a-f0-9]{32})["']?/)
+        if (!match) throw new Error(`KV id 파싱 실패\n출력:\n${out}`)
+        kvId = match[1]
+        console.log(green(`  ✅ ${kvId.slice(0, 8)}...`))
+    } catch (e) {
+        console.log(red(`  ✗\n  ${e.message}`))
+        process.exit(1)
     }
 
-    await runFunction(url, configureFn, body)
+    // ── Step 2: D1 database 생성 ──────────────────────────────────────────
+    process.stdout.write(`  ${bold("2/7")} D1 database 생성...`)
+    let d1Id
+    try {
+        const out = shellWrangler(`npx wrangler d1 create ${d1Name}`)
+        const match = out.match(/database_id\s*=\s*["']?([a-f0-9-]{36})["']?/)
+        if (!match) throw new Error(`D1 id 파싱 실패\n출력:\n${out}`)
+        d1Id = match[1]
+        console.log(green(`  ✅ ${d1Id.slice(0, 8)}...`))
+    } catch (e) {
+        console.log(red(`  ✗\n  ${e.message}`))
+        process.exit(1)
+    }
+
+    // ── Step 3: wrangler.toml에 env 블록 추가 ─────────────────────────────
+    process.stdout.write(`  ${bold("3/7")} wrangler.toml 업데이트...`)
+    try {
+        const wranglerPath = join(FRAMER_SYNC_DIR, "wrangler.toml")
+        const existing = readFileSync(wranglerPath, "utf8")
+        const block = `
+# ── ${name} ──────────────────────────────────────────────────
+[env.${envKey}]
+name = "${workerName}"
+
+[[env.${envKey}.kv_namespaces]]
+binding = "KV"
+id = "${kvId}"
+
+[[env.${envKey}.d1_databases]]
+binding = "DB"
+database_name = "${d1Name}"
+database_id = "${d1Id}"
+
+[[env.${envKey}.r2_buckets]]
+binding = "R2"
+bucket_name = "framer-sync-webp-cache"
+
+[[env.${envKey}.services]]
+binding = "CONTROL_TOWER"
+service = "control-tower-worker"
+
+[env.${envKey}.triggers]
+crons = ["0 0 */5 * *"]
+`
+        writeFileSync(wranglerPath, existing + block)
+        console.log(green(`  ✅ [env.${envKey}] 추가`))
+    } catch (e) {
+        console.log(red(`  ✗ ${e.message}`))
+        process.exit(1)
+    }
+
+    // ── Step 4: D1 마이그레이션 적용 ─────────────────────────────────────
+    process.stdout.write(`  ${bold("4/7")} D1 마이그레이션 적용...`)
+    try {
+        shellWrangler(`npx wrangler d1 migrations apply ${d1Name} --env ${envKey}`)
+        console.log(green(`  ✅`))
+    } catch (e) {
+        // 마이그레이션 실패 시 경고만 — 배포 자체는 계속
+        console.log(yellow(`  ⚠️ ${e.message.split("\n")[0]} — 나중에 수동 적용 가능`))
+    }
+
+    // ── Step 5: 워커 배포 ────────────────────────────────────────────────
+    process.stdout.write(`  ${bold("5/7")} 워커 배포...`)
+    try {
+        shellWrangler(`npx wrangler deploy --env ${envKey}`)
+        console.log(green(`  ✅`))
+    } catch (e) {
+        console.log(red(`  ✗\n  ${e.message}`))
+        process.exit(1)
+    }
+
+    // ── Step 6: workers.json 등록 ────────────────────────────────────────
+    process.stdout.write(`  ${bold("6/7")} workers.json 등록...`)
+    try {
+        const list = loadWorkersJson()
+        if (!list.find(w => w.name === name)) {
+            list.push({ name, label: `${name} (Framer ↔ Airtable)`, url: workerUrl })
+            saveWorkersJson(list)
+        }
+        console.log(green(`  ✅`))
+    } catch (e) {
+        console.log(yellow(`  ⚠️ ${e.message}`))
+    }
+
+    // ── Step 7: configure + 초기 sync ───────────────────────────────────
+    process.stdout.write(`  ${bold("7/7")} configure 실행... (배포 반영 대기 중)`)
+    await new Promise(r => setTimeout(r, 3000))
+    process.stdout.write("\r" + " ".repeat(60) + "\r")
+    process.stdout.write(`  ${bold("7/7")} configure 실행...`)
+    try {
+        const res = await fetch(`${workerUrl}/configure`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                airtableBaseId,
+                airtableToken,
+                framerProjectUrl,
+                framerToken: framerApiKey,
+                ...(gtmId ? { gtmContainerId: gtmId } : {}),
+            }),
+            signal: AbortSignal.timeout(30_000),
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        console.log(green(`  ✅`))
+    } catch (e) {
+        console.log(yellow(`  ⚠️ ${e.message}`))
+        console.log(dim(`     수동 실행: workerCtl.mjs ${name} configure`))
+    }
+
+    console.log()
+    console.log(green(`  ✅ 프로비저닝 완료`))
+    console.log()
+    console.log(`  ${bold("워커")}   ${cyan(workerUrl)}`)
+    console.log(`  ${bold("D1")}     ${gray(d1Name)} ${dim(`(${d1Id?.slice(0, 8)}...)`)}}`)
+    console.log(`  ${bold("KV")}     ${gray(kvId?.slice(0, 8) + "...")}`)
+    console.log()
+    console.log(dim(`  초기 sync: workerCtl.mjs ${name} sync-full`))
+    console.log()
 }
 
 // set-url: workers.json의 기존 워커 URL 변경
