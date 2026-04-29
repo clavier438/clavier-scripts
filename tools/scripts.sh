@@ -120,7 +120,7 @@ _main() {
     done
 
     echo ""
-    echo "${DIM}  tip: worker-ctl <워커> <함수>   예) worker-ctl sisoso sync-to-framer${RESET}"
+    echo "${DIM}  tip: workerCtl <워커> <함수>   예) workerCtl sisoso sync-full${RESET}"
     echo ""
 }
 
