@@ -172,7 +172,9 @@ async function collectParams(rl, params, current = {}) {
 }
 
 // ── 비동기 작업 status polling ────────────────────────────────────────────
-async function pollUntilComplete(workerUrl, triggerTimeMs, maxWaitMs = 15 * 60 * 1000) {
+// statusPath="/status" → 구 방식 (sync.lastSync 비교)
+// statusPath 그 외    → 범용 방식 (status === "done" | "error" 감지)
+async function pollUntilComplete(workerUrl, triggerTimeMs, statusPath = "/status", maxWaitMs = 15 * 60 * 1000) {
     const start = Date.now()
     let dotCount = 0
     while (Date.now() - start < maxWaitMs) {
@@ -183,10 +185,22 @@ async function pollUntilComplete(workerUrl, triggerTimeMs, maxWaitMs = 15 * 60 *
         process.stdout.write(`\r  ${gray(`백그라운드 작업 진행 중${dots} (${elapsed}s 경과)`)}     `)
 
         try {
-            const res = await fetch(`${workerUrl}/status`, { signal: AbortSignal.timeout(5000) })
+            const res = await fetch(`${workerUrl}${statusPath}`, { signal: AbortSignal.timeout(5000) })
             if (!res.ok) continue
-            const status = await res.json()
-            const lastSyncRaw = status?.sync?.lastSync
+            const data = await res.json()
+
+            if (statusPath !== "/status") {
+                // 범용: status 필드가 "done" 또는 "error" 이면 완료
+                const s = data?.status
+                if (s === "done" || s === "error") {
+                    process.stdout.write("\r" + " ".repeat(60) + "\r")
+                    return data
+                }
+                continue
+            }
+
+            // 구 방식: /status의 sync.lastSync가 트리거 이후면 완료
+            const lastSyncRaw = data?.sync?.lastSync
             if (!lastSyncRaw) {
                 process.stdout.write("\r" + " ".repeat(60) + "\r")
                 return null
@@ -194,7 +208,7 @@ async function pollUntilComplete(workerUrl, triggerTimeMs, maxWaitMs = 15 * 60 *
             const lastSyncTime = new Date(lastSyncRaw).getTime()
             if (lastSyncTime > triggerTimeMs) {
                 process.stdout.write("\r" + " ".repeat(60) + "\r")
-                return status.sync
+                return data.sync
             }
         } catch { /* 일시적 오류 → 다음 시도 */ }
     }
@@ -321,10 +335,11 @@ async function runFunction(workerUrl, fn, body = null) {
         const noteText = String(responseBody.note ?? responseBody.message ?? "")
         const isAsync = /시작됨|started/i.test(noteText)
         if (isAsync) {
-            const finalStatus = await pollUntilComplete(workerUrl, triggerTime)
+            const statusPath = fn.asyncStatusPath ?? "/status"
+            const finalStatus = await pollUntilComplete(workerUrl, triggerTime, statusPath)
             if (finalStatus) {
                 const totalElapsed = ((Date.now() - triggerTime) / 1000).toFixed(0)
-                const ok = finalStatus.status === "ok"
+                const ok = statusPath === "/status" ? finalStatus.status === "ok" : finalStatus.status === "done"
                 console.log(ok
                     ? green(`  ✅ 백그라운드 작업 완료 (총 ${totalElapsed}s)`)
                     : red(`  ✗ 백그라운드 작업 실패 (총 ${totalElapsed}s)`))
@@ -333,8 +348,9 @@ async function runFunction(workerUrl, fn, body = null) {
                 console.log()
                 return ok
             } else {
-                console.log(yellow(`  ⚠️ 백그라운드 작업 상태 확인 불가 (timeout 또는 /status 미지원)`))
-                console.log(dim(`     수동 확인: workerCtl ${workerUrl.split("//")[1].split(".")[0]} status`))
+                const workerShort = workerUrl.split("//")[1].split(".")[0]
+                console.log(yellow(`  ⚠️ 백그라운드 작업 상태 확인 불가 (timeout 또는 미지원)`))
+                console.log(dim(`     수동 확인: workerCtl ${workerShort} managed-status`))
                 console.log()
             }
         }
@@ -378,17 +394,19 @@ function showHelp(workers) {
     console.log(hr)
     console.log()
 
-    console.log(bold("  2-stage 파이프라인 (framer-sync 기준)"))
+    console.log(bold("  3-레이어 파이프라인 (framer-sync 기준)"))
     console.log()
-    console.log(`  ┌─ Stage 1: Airtable → D1 stage1_cache    ${dim("(Framer 호출 없음)")}`)
-    console.log(`  └─ Stage 2: D1 stage1_cache → Framer      ${dim("(Airtable 호출 없음)")}`)
+    console.log(`  ┌─ Layer 1: Airtable → D1 stage1_cache         ${dim("(Framer 호출 없음)")}`)
+    console.log(`  ├─ Layer 2: D1 → ManagedCollection (push-managed)  ${dim("(Framer 공식 API)")}`)
+    console.log(`  └─ Layer 3: ManagedCollection → Native         ${dim("(Framer 편집기 UI, 수동)")}`)
     console.log()
 
     const exampleFns = [
-        ["sync-full",       "POST",  "Stage 1 + 2 전체 — NDJSON 스트리밍 (실시간 결과)"],
-        ["sync-stage1",     "POST",  "Stage 1만 — Airtable → D1 (동기 응답)"],
-        ["sync-stage2",     "POST",  "Stage 2만 — D1 → Framer (백그라운드 + polling)"],
-        ["sync-to-framer",  "POST",  "Legacy — Airtable → Framer 직통 (구 방식)"],
+        ["push-managed",    "POST",  "Layer 1+2: Airtable → ManagedCollection (백그라운드 + polling)"],
+        ["managed-status",  "GET ",  "push-managed 진행 상태 확인"],
+        ["sync-full",       "POST",  "Native 전체 — NDJSON 스트리밍 (레거시)"],
+        ["sync-stage1",     "POST",  "Layer 1만 — Airtable → D1 (동기 응답)"],
+        ["sync-stage2",     "POST",  "D1 → Framer Native (백그라운드 + polling, 레거시)"],
         ["sync-to-airtable","POST",  "Framer → Airtable 역동기화"],
         ["status",          "GET ",  "상태, 설정값, 마지막 실행 결과 확인"],
         ["configure",       "POST",  "연결 설정 변경 (Airtable ID, Framer 토큰 등)"],
@@ -407,9 +425,11 @@ function showHelp(workers) {
     console.log(`    ${dim("workerCtl")}                          ${dim("→ 전체 브리핑 + 대화형")}`)
     console.log(`    ${dim("workerCtl sisoso")}                   ${dim("→ sisoso 함수 선택")}`)
     console.log(`    ${dim("workerCtl sisoso status")}            ${dim("→ 상태 즉시 확인")}`)
-    console.log(`    ${dim("workerCtl sisoso sync-full")}         ${dim("→ 전체 sync (실시간 스트리밍)")}`)
-    console.log(`    ${dim("workerCtl sisoso sync-stage1")}       ${dim("→ Stage 1만 실행")}`)
-    console.log(`    ${dim("workerCtl sisoso sync-stage2")}       ${dim("→ Stage 2만 실행")}`)
+    console.log(`    ${dim("workerCtl sisoso push-managed")}      ${dim("→ Layer 1+2 ManagedCollection 전체 푸시")}`)
+    console.log(`    ${dim("workerCtl sisoso managed-status")}    ${dim("→ push-managed 진행 상태 확인")}`)
+    console.log(`    ${dim("workerCtl sisoso sync-stage1")}       ${dim("→ Layer 1만 실행 (Airtable → D1)")}`)
+    console.log(`    ${dim("workerCtl sisoso sync-full")}         ${dim("→ Native 전체 sync (레거시, 스트리밍)")}`)
+
     console.log(`    ${dim("workerCtl sisoso configure")}         ${dim("→ Airtable/Framer 연결 설정 변경")}`)
     console.log(`    ${dim("workerCtl register")}                ${dim("→ 새 프로젝트 대화형 프로비저닝")}`)
     console.log(`    ${dim("workerCtl register myproject")}      ${dim("→ 이름 지정해서 바로 시작")}`)
