@@ -337,13 +337,15 @@ function showHelp(workers) {
 
     console.log(bold("  사용법"))
     console.log()
-    console.log(`    ${cyan("workerCtl")}                    ${dim("전체 브리핑 후 대화형 실행")}`)
-    console.log(`    ${cyan("workerCtl --help")}             ${dim("이 도움말")}`)
-    console.log(`    ${cyan("workerCtl panel")}              ${dim("모든 워커 상태 표 출력 + 스냅샷 저장")}`)
-    console.log(`    ${cyan("workerCtl conduct")}            ${dim("panel + WORKER_STATUS.md 자동 갱신")}`)
-    console.log(`    ${cyan("workerCtl backup")}             ${dim("모든 워커 상태 → Airtable system_snapshots 저장")}`)
-    console.log(`    ${cyan("workerCtl <워커>")}             ${dim("워커 지정 → 함수 선택")}`)
-    console.log(`    ${cyan("workerCtl <워커> <함수>")}      ${dim("바로 실행")}`)
+    console.log(`    ${cyan("workerCtl")}                          ${dim("전체 브리핑 후 대화형 실행")}`)
+    console.log(`    ${cyan("workerCtl --help")}                   ${dim("이 도움말")}`)
+    console.log(`    ${cyan("workerCtl panel")}                    ${dim("모든 워커 상태 표 출력 + 스냅샷 저장")}`)
+    console.log(`    ${cyan("workerCtl conduct")}                  ${dim("panel + WORKER_STATUS.md 자동 갱신")}`)
+    console.log(`    ${cyan("workerCtl backup")}                   ${dim("모든 워커 상태 → Airtable system_snapshots 저장")}`)
+    console.log(`    ${cyan("workerCtl register <이름> <URL>")}    ${dim("새 워커를 workers.json에 등록 후 configure 실행")}`)
+    console.log(`    ${cyan("workerCtl set-url <워커> <URL>")}     ${dim("workers.json의 워커 URL 변경")}`)
+    console.log(`    ${cyan("workerCtl <워커>")}                   ${dim("워커 지정 → 함수 선택")}`)
+    console.log(`    ${cyan("workerCtl <워커> <함수>")}            ${dim("바로 실행")}`)
     console.log()
     console.log(hr)
     console.log()
@@ -390,7 +392,9 @@ function showHelp(workers) {
     console.log(`    ${dim("workerCtl sisoso sync-full")}         ${dim("→ 전체 sync (실시간 스트리밍)")}`)
     console.log(`    ${dim("workerCtl sisoso sync-stage1")}       ${dim("→ Stage 1만 실행")}`)
     console.log(`    ${dim("workerCtl sisoso sync-stage2")}       ${dim("→ Stage 2만 실행")}`)
-    console.log(`    ${dim("workerCtl sisoso configure")}         ${dim("→ 연결 설정 변경")}`)
+    console.log(`    ${dim("workerCtl sisoso configure")}              ${dim("→ Airtable/Framer 연결 설정 변경")}`)
+    console.log(`    ${dim("workerCtl register myWorker https://...")} ${dim("→ 새 워커 등록")}`)
+    console.log(`    ${dim("workerCtl set-url sisoso https://...")}    ${dim("→ 워커 URL 변경")}`)
     console.log()
     console.log(hr)
     console.log()
@@ -554,6 +558,101 @@ async function runBackup(workers) {
     console.log()
 }
 
+// ── workers.json 로컬 편집 유틸 ──────────────────────────────────────────
+
+function loadWorkersJson() {
+    try { return JSON.parse(readFileSync(WORKERS_JSON, "utf8")) }
+    catch { return [] }
+}
+
+function saveWorkersJson(workers) {
+    writeFileSync(WORKERS_JSON, JSON.stringify(workers, null, 2) + "\n")
+}
+
+// register: 새 워커를 workers.json에 추가 + configure 실행
+async function runRegister(args) {
+    const [name, url, ...rest] = args
+    if (!name || !url) {
+        console.error(red("  사용법: workerCtl register <이름> <URL> [레이블]"))
+        console.error(dim("  예)  workerCtl register myProject https://framer-sync-myproject.hyuk439.workers.dev"))
+        process.exit(1)
+    }
+    const label = rest.join(" ") || `${name} (Framer ↔ Airtable)`
+
+    const workers = loadWorkersJson()
+    const existing = workers.find(w => w.name === name)
+    if (existing) {
+        console.log(yellow(`  ⚠️  "${name}" 이미 등록됨 (URL: ${existing.url})`))
+        console.log(dim(`     URL만 바꾸려면: workerCtl set-url ${name} <새URL>`))
+        console.log()
+    } else {
+        workers.push({ name, label, url })
+        saveWorkersJson(workers)
+        console.log(green(`  ✅ workers.json 등록: ${name} → ${url}`))
+        console.log()
+    }
+
+    // configure 실행 — Airtable/Framer 연결 설정
+    console.log(bold(`  🔧 "${name}" configure 실행`))
+    console.log(dim(`     (Enter로 건너뛸 수 있습니다 — 나중에 workerCtl ${name} configure 로 재실행)`))
+    console.log()
+
+    let caps
+    try {
+        process.stdout.write(gray("  capabilities 조회 중..."))
+        caps = await fetchCapabilities(url)
+        process.stdout.write("\r" + " ".repeat(30) + "\r")
+    } catch (err) {
+        console.log(yellow(`  ⚠️ capabilities 조회 실패 (${err.message}) — configure 건너뜀`))
+        return
+    }
+
+    const configureFn = caps.functions?.find(f => f.id === "configure")
+    if (!configureFn) {
+        console.log(yellow("  ⚠️ configure 함수 없음 — 수동으로 /configure 호출 필요"))
+        return
+    }
+
+    const rl = createInterface({ input: process.stdin, output: process.stdout })
+    const body = await collectParams(rl, configureFn.params ?? [], {})
+    rl.close()
+
+    if (Object.keys(body).length === 0) {
+        console.log(dim("  configure 입력 없음 — 건너뜀"))
+        return
+    }
+
+    await runFunction(url, configureFn, body)
+}
+
+// set-url: workers.json의 기존 워커 URL 변경
+async function runSetUrl(args) {
+    const [name, newUrl] = args
+    if (!name || !newUrl) {
+        console.error(red("  사용법: workerCtl set-url <워커이름> <새URL>"))
+        process.exit(1)
+    }
+
+    const workers = loadWorkersJson()
+    const w = workers.find(w => w.name === name)
+    if (!w) {
+        console.error(red(`  ✗ "${name}" 워커를 찾을 수 없음`))
+        console.log(gray(`  등록된 워커: ${workers.map(w => w.name).join(", ")}`))
+        process.exit(1)
+    }
+
+    const oldUrl = w.url
+    w.url = newUrl
+    saveWorkersJson(workers)
+
+    console.log(green(`  ✅ URL 변경 완료`))
+    console.log(`     ${dim(oldUrl)}`)
+    console.log(`  →  ${cyan(newUrl)}`)
+    console.log()
+    console.log(dim(`  연결 설정(Airtable/Framer)도 바꾸려면: workerCtl ${name} configure`))
+    console.log()
+}
+
 // ── conduct ───────────────────────────────────────────────────────────────
 function findClavierHq() {
     const candidates = [
@@ -684,6 +783,18 @@ async function main() {
 
     if (args[0] === "backup") {
         await runBackup(workers)
+        process.exit(0)
+    }
+
+    // register — 새 워커 등록 + configure
+    if (args[0] === "register") {
+        await runRegister(args.slice(1))
+        process.exit(0)
+    }
+
+    // set-url — workers.json의 URL 변경
+    if (args[0] === "set-url") {
+        await runSetUrl(args.slice(1))
         process.exit(0)
     }
 
