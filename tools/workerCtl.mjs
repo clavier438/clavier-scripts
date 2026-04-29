@@ -402,19 +402,20 @@ function showHelp(workers) {
     console.log()
 
     const exampleFns = [
-        ["push-managed",    "POST",  "Layer 1+2: Airtable → ManagedCollection (백그라운드 + polling)"],
-        ["managed-status",  "GET ",  "push-managed 진행 상태 확인"],
-        ["sync-full",       "POST",  "Native 전체 — NDJSON 스트리밍 (레거시)"],
-        ["sync-stage1",     "POST",  "Layer 1만 — Airtable → D1 (동기 응답)"],
-        ["sync-stage2",     "POST",  "D1 → Framer Native (백그라운드 + polling, 레거시)"],
-        ["sync-to-airtable","POST",  "Framer → Airtable 역동기화"],
-        ["status",          "GET ",  "상태, 설정값, 마지막 실행 결과 확인"],
-        ["configure",       "POST",  "연결 설정 변경 (Airtable ID, Framer 토큰 등)"],
+        ["push-managed",    "POST",  "Layer 1+2: Airtable → ManagedCollection",          "⚠ 새 컬렉션 생성 전용 · 갱신 여부 검증 예정"],
+        ["managed-status",  "GET ",  "push-managed 진행 상태 확인",                        ""],
+        ["sync-full",       "POST",  "Native 전체 — NDJSON 스트리밍 (레거시)",              ""],
+        ["sync-stage1",     "POST",  "Layer 1만 — Airtable → D1",                         ""],
+        ["sync-stage2",     "POST",  "D1 → Framer Native (레거시)",                        "⚠ 기존 필드값 변경만"],
+        ["sync-to-airtable","POST",  "Framer → Airtable 역동기화",                         ""],
+        ["status",          "GET ",  "상태, 설정값, 마지막 실행 결과 확인",                   ""],
+        ["configure",       "POST",  "연결 설정 변경 (Airtable ID, Framer 토큰 등)",         ""],
     ]
     console.log(`  ${bold("ID".padEnd(20))} ${"METHOD".padEnd(6)} 설명`)
-    console.log(`  ${dim("─".repeat(60))}`)
-    exampleFns.forEach(([id, method, desc]) => {
-        console.log(`  ${cyan(id.padEnd(20))} ${gray(method.padEnd(6))} ${desc}`)
+    console.log(`  ${dim("─".repeat(70))}`)
+    exampleFns.forEach(([id, method, desc, constraint]) => {
+        const note = constraint ? `  ${yellow(constraint)}` : ""
+        console.log(`  ${cyan(id.padEnd(20))} ${gray(method.padEnd(6))} ${desc}${note}`)
     })
     console.log()
     console.log(hr)
@@ -1075,7 +1076,10 @@ async function main() {
         fn = await selectFromList(
             rl,
             caps.functions,
-            f => `${bold(f.label)}  ${dim(f.description ?? "")}`
+            f => {
+                const base = `${bold(f.label)}  ${dim(f.description ?? "")}`
+                return f.constraint ? base + `  ${yellow("[" + f.constraint + "]")}` : base
+            }
         )
         rl.close()
     }
@@ -1093,6 +1097,12 @@ async function main() {
         }
         body = await collectParams(rl, fn.params, current)
         rl.close()
+    }
+
+    // constraint 경고 표시
+    if (fn.constraint) {
+        console.log(yellow(`  ⚠️  ${fn.constraint}`))
+        console.log()
     }
 
     // ⑤ 실행
