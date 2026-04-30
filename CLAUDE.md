@@ -27,6 +27,7 @@ GitHub: https://github.com/clavier0/clavier-hq
 - 문제 하나씩 고치기 (여러 개 동시 수정 금지)
 - 완료한 작업 → clavier-hq/QUEUE.md에 ✅ 표시 후 커밋
 - 클린아키텍처 위반 발견 시 적극 시정 제안
+- **대형 변경(D1 마이그레이션·파이프라인 재설계 등) 직후**: cold-start 세션에서 SOLID 감사 실시 — CONCEPTS.md #13 "구조 점검" + DECISIONS.md 2026-04-30 "framer-sync / control-tower 구조 점검" 참조
 - 자세한 가이드는 CONVENTIONS.md 참조
 
 ## 시크릿 사용 규칙 (2026-04-28~)

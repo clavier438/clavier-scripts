@@ -255,6 +255,8 @@ Cloudflare Workers의 상태는 **D1을 단일 진실 소스**로 운영. KV는 
 
 framer-sync는 D1에 4 테이블 보유: `worker_state`, `collection_items`, `collection_fields`, **`airtable_cache`** (data:{table} REST API 캐시 — 2026-04-28 airtable_cache 도입으로 KV 이전). **webp-cache KV→R2 이전 완료 (2026-04-30)**: `webp-cache:{id}` 바이너리는 R2 버킷(`framer-sync-webp-cache`)으로 완전 이전. KV 바이너리 write 없음. health-check-worker는 KV 미사용(Airtable system_registry SSOT).
 
+**framer-sync / control-tower 구조 점검 (2026-04-30)**: D1 SSOT 마이그레이션 직후 SOLID 감사 완료. 주요 발견: `syncCollectionNative ↔ syncCollectionFromD1` 중복(높음), KV 사망 파라미터·모놀리식 라우터(중간). 시정 4개 OVERNIGHT_QUEUE.md 등록. 세부 내용: clavier-hq/DECISIONS.md 2026-04-30.
+
 framer-sync는 외부 Framer 인터페이스를 동결 운영 — **프레이머가 변화를 알 수 없게** `addFields`/`createCollection` 등 스키마 변경 RPC 호출 금지, `getFields()` read-only만 사용. 새 Airtable 필드 시 Framer 슬롯 없으면 graceful skip + 경고 (clavier-hq DECISIONS 2026-04-28 참조).
 
 `webExporter/webSiteExporter.py` 의 `webSiteExporter discover_pages` 함수는 인덱스 페이지네이션 1~3p × detail 3개 모델로 사이트 백업 누락을 줄임(2026-04-28).
