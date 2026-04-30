@@ -27,6 +27,10 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
 import { execSync } from "child_process"
 import { join } from "path"
 
+// alias 의존 금지 — zsh 환경 없는 /bin/sh에서 claude를 직접 경로로 호출
+const CLAUDE_BIN = "/Users/clavier/.local/bin/claude"
+const SCRIPTS_DIR = "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts"
+
 const HQ = (() => {
     const candidates = [
         join(process.env.HOME ?? "", "Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq"),
@@ -144,9 +148,9 @@ async function main() {
     log.push(`# 비서 야간 처리 — ${new Date().toISOString()}`)
     log.push("")
 
-    // 1. watchman: worker-ctl conduct
-    log.push("## 1. watchman: worker-ctl conduct")
-    const conductPath = join(process.env.HOME ?? "", "Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/worker-ctl.mjs")
+    // 1. watchman: workerCtl conduct
+    log.push("## 1. watchman: workerCtl conduct")
+    const conductPath = join(process.env.HOME ?? "", "Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/workerCtl.mjs")
     const watchmanResult = runCmd(`node "${conductPath}" conduct`)
     log.push(watchmanResult.ok ? "✅ 성공" : "❌ 실패")
     log.push("```")
@@ -154,14 +158,24 @@ async function main() {
     log.push("```")
     log.push("")
 
+    let failCount = 0
+
+    // claude 바이너리 존재 확인 — 없으면 즉시 중단
+    if (!existsSync(CLAUDE_BIN)) {
+        log.push(`❌ claude 바이너리 없음: ${CLAUDE_BIN}`)
+        log.push("overnight 전체 중단 — claude 경로 확인 필요")
+        failCount++
+    } else {
+
     // 2. info-arch: Notion IA 점검 + 모바일 큐 이식
     log.push("## 2. info-arch: Notion IA 점검")
     const infoArchPromptPath = join(HQ, "info-arch-prompt.md")
     if (existsSync(infoArchPromptPath)) {
         const infoArchResult = runCmd(
-            `claude --dangerously-skip-permissions -p "$(cat '${infoArchPromptPath}')"`,
+            `cd "${SCRIPTS_DIR}" && "${CLAUDE_BIN}" --dangerously-skip-permissions -p "$(cat '${infoArchPromptPath}')"`,
             300000
         )
+        if (!infoArchResult.ok) failCount++
         log.push(infoArchResult.ok ? "✅ 성공" : "❌ 실패")
         log.push("```")
         log.push(infoArchResult.output)
@@ -176,9 +190,10 @@ async function main() {
     const notionMirrorPromptPath = join(HQ, "notion-mirror-prompt.md")
     if (existsSync(notionMirrorPromptPath)) {
         const scribeResult = runCmd(
-            `claude --dangerously-skip-permissions -p "$(cat '${notionMirrorPromptPath}')"`,
+            `cd "${SCRIPTS_DIR}" && "${CLAUDE_BIN}" --dangerously-skip-permissions -p "$(cat '${notionMirrorPromptPath}')"`,
             600000
         )
+        if (!scribeResult.ok) failCount++
         log.push(scribeResult.ok ? "✅ 성공" : "❌ 실패")
         log.push("```")
         log.push(scribeResult.output)
@@ -193,9 +208,10 @@ async function main() {
     const efficiencyPromptPath = join(HQ, "efficiency-minister-prompt.md")
     if (existsSync(efficiencyPromptPath)) {
         const auditorResult = runCmd(
-            `claude --dangerously-skip-permissions -p "$(cat '${efficiencyPromptPath}')"`,
+            `cd "${SCRIPTS_DIR}" && "${CLAUDE_BIN}" --dangerously-skip-permissions -p "$(cat '${efficiencyPromptPath}')"`,
             300000
         )
+        if (!auditorResult.ok) failCount++
         log.push(auditorResult.ok ? "✅ 성공" : "❌ 실패")
         log.push("```")
         log.push(auditorResult.output)
@@ -204,6 +220,8 @@ async function main() {
         log.push("⚠️ efficiency-minister-prompt.md 없음 — 건너뜀")
     }
     log.push("")
+
+    } // end claude guard
 
     // 5. queue: OVERNIGHT_QUEUE.md 처리 (최대 20개)
     let text = readFileSync(QUEUE_FILE, "utf8")
@@ -256,6 +274,13 @@ async function main() {
     console.log(log.join("\n"))
     console.log("")
     console.log(DRY ? "[DRY RUN] 파일 변경 없음" : `로그: ${logFile}`)
+
+    // 실패 있으면 macOS 알림
+    if (failCount > 0 && !DRY) {
+        try {
+            execSync(`osascript -e 'display notification "overnight ${failCount}개 실패 — briefings 확인" with title "⚠️ 비서 야간 처리"'`)
+        } catch (_) { /* 알림 실패는 무시 */ }
+    }
 }
 
 main().catch(e => {
