@@ -203,21 +203,21 @@ async function main() {
     }
     log.push("")
 
-    // 4. auditor: 직전 24h 작업 효율 감사
-    log.push("## 4. auditor: 효율 감사")
-    const efficiencyPromptPath = join(HQ, "efficiency-minister-prompt.md")
-    if (existsSync(efficiencyPromptPath)) {
-        const auditorResult = runCmd(
-            `cd "${SCRIPTS_DIR}" && "${CLAUDE_BIN}" --dangerously-skip-permissions -p "$(cat '${efficiencyPromptPath}')"`,
+    // 4. Ray: Pain Button 감사 (Ray Dalio)
+    log.push("## 4. Ray: Pain 감사")
+    const rayPromptPath = join(HQ, "ray-prompt.md")
+    if (existsSync(rayPromptPath)) {
+        const rayResult = runCmd(
+            `cd "${SCRIPTS_DIR}" && "${CLAUDE_BIN}" --dangerously-skip-permissions -p "$(cat '${rayPromptPath}')"`,
             300000
         )
-        if (!auditorResult.ok) failCount++
-        log.push(auditorResult.ok ? "✅ 성공" : "❌ 실패")
+        if (!rayResult.ok) failCount++
+        log.push(rayResult.ok ? "✅ 성공" : "❌ 실패")
         log.push("```")
-        log.push(auditorResult.output)
+        log.push(rayResult.output)
         log.push("```")
     } else {
-        log.push("⚠️ efficiency-minister-prompt.md 없음 — 건너뜀")
+        log.push("⚠️ ray-prompt.md 없음 — 건너뜀")
     }
     log.push("")
 
