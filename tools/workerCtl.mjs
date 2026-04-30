@@ -23,12 +23,11 @@ const FRAMER_SYNC_DIR = process.env.FRAMER_SYNC_DIR
 // 워커 URL 패턴 — Cloudflare account subdomain
 const WORKER_SUBDOMAIN = process.env.WORKER_SUBDOMAIN ?? "hyuk439.workers.dev"
 
-// wrangler shell 실행 — CLOUDFLARE_API_TOKEN="" 강제 (Doppler OAuth 우회, 저장된 wrangler login 사용)
+// wrangler shell 실행 — Doppler로 cfat 토큰 주입 (DECISIONS 2026-04-30)
 function shellWrangler(cmd) {
-    return execSync(cmd, {
+    return execSync(`doppler run --project clavier --config prd -- ${cmd}`, {
         cwd: FRAMER_SYNC_DIR,
         encoding: "utf8",
-        env: { ...process.env, CLOUDFLARE_API_TOKEN: "" },
         stdio: ["pipe", "pipe", "pipe"],
     })
 }
@@ -216,88 +215,8 @@ async function pollUntilComplete(workerUrl, triggerTimeMs, statusPath = "/status
     return null
 }
 
-// ── NDJSON 스트리밍 함수 실행 (sync-full 전용) ───────────────────────────
-async function runFunctionStreaming(workerUrl, fn) {
-    const url = `${workerUrl}${fn.path}`
-    const method = fn.method ?? "POST"
-
-    console.log()
-    console.log(gray(`  ${method} ${url}`))
-    console.log()
-
-    const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(180_000), // 3분 — Framer connect(90s) + 처리 버퍼
-    }).catch(err => { throw new Error(`요청 실패: ${err.message}`) })
-
-    if (!res.ok) {
-        let errBody
-        try { errBody = await res.text() } catch { errBody = "" }
-        console.log(red(`  ✗ HTTP ${res.status}`))
-        if (errBody) console.log(gray(`  ${errBody}`))
-        return false
-    }
-
-    // NDJSON 라인별 파싱 + 실시간 출력
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ""
-    let success = true
-
-    while (true) {
-        const { value, done } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split("\n")
-        buffer = lines.pop() ?? ""
-
-        for (const line of lines) {
-            if (!line.trim()) continue
-            let obj
-            try { obj = JSON.parse(line) }
-            catch { console.log(gray(`  ${line}`)); continue }
-
-            const ts = obj.ts ? gray(` (${new Date(obj.ts).toLocaleTimeString("ko-KR")})`) : ""
-
-            if (obj.step === "stage1") {
-                console.log(cyan(`  ▸ Stage 1 완료${ts}`))
-                for (const s of obj.summaries ?? []) {
-                    console.log(`    ${bold(s.collection.padEnd(14))} upserted=${s.upserted} skipped=${s.skippedNoSlug}`)
-                }
-                console.log()
-            } else if (obj.step === "stage2") {
-                if ("error" in obj) {
-                    console.log(red(`  ▸ Stage 2 [${obj.collection}] ✗ ${obj.error}${ts}`))
-                    success = false
-                } else {
-                    const parts = [`added=${obj.added}`, `updated=${obj.updated}`, `skipped=${obj.skipped}`]
-                    console.log(green(`  ▸ Stage 2 [${obj.collection}] ${parts.join(" ")}${ts}`))
-                }
-            } else if (obj.step === "done") {
-                console.log()
-                console.log(green(`  ✅ Full Sync 완료${ts}`))
-            } else if (obj.step === "error") {
-                console.log()
-                console.log(red(`  ✗ 오류: ${obj.message}${ts}`))
-                success = false
-            } else {
-                console.log(gray(`  ${JSON.stringify(obj)}`))
-            }
-        }
-    }
-
-    console.log()
-    return success
-}
-
 // ── 일반 함수 실행 ────────────────────────────────────────────────────────
 async function runFunction(workerUrl, fn, body = null) {
-    // streaming: true 플래그 → NDJSON 스트리밍 모드
-    if (fn.streaming) {
-        return runFunctionStreaming(workerUrl, fn)
-    }
-
     const url = `${workerUrl}${fn.path}`
     const method = fn.method ?? "POST"
 
@@ -402,14 +321,14 @@ function showHelp(workers) {
     console.log()
 
     const exampleFns = [
-        ["push-managed",    "POST",  "Layer 1+2: Airtable → ManagedCollection",          "⚠ 새 컬렉션 생성 전용 · 갱신 여부 검증 예정"],
-        ["managed-status",  "GET ",  "push-managed 진행 상태 확인",                        ""],
-        ["sync-full",       "POST",  "Native 전체 — NDJSON 스트리밍 (레거시)",              ""],
-        ["sync-stage1",     "POST",  "Layer 1만 — Airtable → D1",                         ""],
-        ["sync-stage2",     "POST",  "D1 → Framer Native (레거시)",                        "⚠ 기존 필드값 변경만"],
-        ["sync-to-airtable","POST",  "Framer → Airtable 역동기화",                         ""],
-        ["status",          "GET ",  "상태, 설정값, 마지막 실행 결과 확인",                   ""],
-        ["configure",       "POST",  "연결 설정 변경 (Airtable ID, Framer 토큰 등)",         ""],
+        ["push-managed",      "POST",  "Layer 1+2: Airtable → D1 → ManagedCollection",     ""],
+        ["managed-status",    "GET ",  "push-managed 진행 상태 확인",                        ""],
+        ["sync-stage1",       "POST",  "Layer 1만 — Airtable → D1",                         ""],
+        ["delete-managed",    "POST",  "ManagedCollection 삭제 (?filter= 패턴)",             ""],
+        ["duplicate-managed", "POST",  "ManagedCollection cloneNode로 Native 복제",         ""],
+        ["convert-images",    "POST",  "Airtable 첨부 → WebP 일괄 변환",                     ""],
+        ["status",            "GET ",  "상태, 설정값, 마지막 실행 결과 확인",                  ""],
+        ["configure",         "POST",  "연결 설정 변경 (Airtable ID, Framer 토큰 등)",         ""],
     ]
     console.log(`  ${bold("ID".padEnd(20))} ${"METHOD".padEnd(6)} 설명`)
     console.log(`  ${dim("─".repeat(70))}`)
@@ -429,8 +348,6 @@ function showHelp(workers) {
     console.log(`    ${dim("workerCtl sisoso push-managed")}      ${dim("→ Layer 1+2 ManagedCollection 전체 푸시")}`)
     console.log(`    ${dim("workerCtl sisoso managed-status")}    ${dim("→ push-managed 진행 상태 확인")}`)
     console.log(`    ${dim("workerCtl sisoso sync-stage1")}       ${dim("→ Layer 1만 실행 (Airtable → D1)")}`)
-    console.log(`    ${dim("workerCtl sisoso sync-full")}         ${dim("→ Native 전체 sync (레거시, 스트리밍)")}`)
-
     console.log(`    ${dim("workerCtl sisoso configure")}         ${dim("→ Airtable/Framer 연결 설정 변경")}`)
     console.log(`    ${dim("workerCtl register")}                ${dim("→ 새 프로젝트 대화형 프로비저닝")}`)
     console.log(`    ${dim("workerCtl register myproject")}      ${dim("→ 이름 지정해서 바로 시작")}`)
@@ -793,7 +710,7 @@ crons = ["0 0 */5 * *"]
     console.log(`  ${bold("D1")}     ${gray(d1Name)} ${dim(`(${d1Id?.slice(0, 8)}...)`)}}`)
     console.log(`  ${bold("KV")}     ${gray(kvId?.slice(0, 8) + "...")}`)
     console.log()
-    console.log(dim(`  초기 sync: workerCtl.mjs ${name} sync-full`))
+    console.log(dim(`  초기 sync: workerCtl.mjs ${name} push-managed`))
     console.log()
 }
 
