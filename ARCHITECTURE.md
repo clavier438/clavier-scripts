@@ -173,6 +173,6 @@ Claude Code가 추가 컨텍스트로 자동 주입
 
 ## 워커 데이터 레이어 (2026-04-28 추가)
 
-framer-sync, control-tower 등 platform-workers는 **D1을 단일 진실 소스**로 운영. KV write 일일 한도가 계정 단위(1000회)인 위험을 D1(100K/일)로 회피. 자세한 워커별 D1 ID는 clavier-hq/SYSTEM_ENV.md 참조. framer-sync 표준 4 테이블: `worker_state`, `collection_items`, `collection_fields`, **`airtable_cache`** (2026-04-28 airtable_cache 도입으로 data:{table} 이전). 예외: `webp-cache` 임시 바이너리는 KV 유지, health-check-worker는 Airtable이 SSOT라 KV/D1 둘 다 미사용.
+framer-sync, control-tower 등 platform-workers는 **D1을 단일 진실 소스**로 운영. KV write 일일 한도가 계정 단위(1000회)인 위험을 D1(100K/일)로 회피. 자세한 워커별 D1 ID는 clavier-hq/SYSTEM_ENV.md 참조. framer-sync 표준 4 테이블: `worker_state`, `collection_items`, `collection_fields`, **`airtable_cache`** (2026-04-28 airtable_cache 도입으로 data:{table} 이전). **webp-cache KV→R2 이전 완료 (2026-04-30)**: `webp-cache` 바이너리는 R2 버킷(`framer-sync-webp-cache`)으로 이전 — KV에 바이너리 write 없음. health-check-worker는 Airtable이 SSOT라 KV/D1 둘 다 미사용.
 
 보조 유틸: `webExporter/webSiteExporter.py` 의 `webSiteExporter discover_pages` 가 인덱스 페이지네이션 1~3p × detail 3개 모델로 진화(2026-04-28).

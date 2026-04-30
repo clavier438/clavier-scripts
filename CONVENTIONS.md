@@ -229,6 +229,6 @@ clavier-hq `DECISIONS.md`에 새 ADR 추가 시 **즉시** `doc-coverage <개념
 - KV write가 새로 추가되면 즉시 DECISIONS.md ADR로 정당성 기록.
 - 이유: KV write 일일 한도가 계정 단위라 한 워커 소진 시 모든 워커 동시 마비 (2026-04-28 사건 참조).
 - framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection_fields`, **`airtable_cache`** (data:{table} 캐시 — 2026-04-28 airtable_cache 도입으로 KV 이전).
-- 예외 분류: `webp-cache:{id}`는 2시간 TTL+수동 트리거라 KV 유지, health-check-worker는 Airtable system_registry가 SSOT라 KV/D1 둘 다 미사용.
+- 예외 분류: **webp-cache KV→R2 이전 완료 (2026-04-30)** — `webp-cache:{id}` 바이너리는 R2(`framer-sync-webp-cache`)로 이전. KV 바이너리 write 없음. health-check-worker는 Airtable system_registry가 SSOT라 KV/D1 둘 다 미사용.
 - 보조 유틸: 사이트 백업 도구 `webSiteExporter discover_pages` 는 인덱스 페이지네이션 1~3p × detail 3개 모델 사용(2026-04-28).
 - **외부 시스템 통합 — 인터페이스 동결**: framer-sync는 **프레이머가 변화를 알 수 없게** Framer 측 스키마 변경 RPC(`addFields`/`createCollection`/`removeFields`)를 호출하지 않음. `getFields()` read-only만. 새 워커가 외부 SaaS와 통합할 때도 같은 원칙 적용 — 외부에 무엇을 시키지 말고 외부가 가진 능력만 사용. 호환성 종속 회피 (clavier-hq/DECISIONS 2026-04-28 + CONCEPTS "외부 인터페이스 동결" 참조).

@@ -253,7 +253,7 @@ scriptable-gdrive-sync restart
 
 Cloudflare Workers의 상태는 **D1을 단일 진실 소스**로 운영. KV는 바이너리 캐시 외 사용 안 함 (계정 단위 일일 한도 1000회 → 다중 워커 동시 마비 위험).
 
-framer-sync는 D1에 4 테이블 보유: `worker_state`, `collection_items`, `collection_fields`, **`airtable_cache`** (data:{table} REST API 캐시 — 2026-04-28 airtable_cache 도입으로 KV 이전). 예외: `webp-cache:{id}`는 2시간 TTL+수동 트리거라 KV 유지, health-check-worker는 KV 미사용(Airtable system_registry SSOT).
+framer-sync는 D1에 4 테이블 보유: `worker_state`, `collection_items`, `collection_fields`, **`airtable_cache`** (data:{table} REST API 캐시 — 2026-04-28 airtable_cache 도입으로 KV 이전). **webp-cache KV→R2 이전 완료 (2026-04-30)**: `webp-cache:{id}` 바이너리는 R2 버킷(`framer-sync-webp-cache`)으로 완전 이전. KV 바이너리 write 없음. health-check-worker는 KV 미사용(Airtable system_registry SSOT).
 
 framer-sync는 외부 Framer 인터페이스를 동결 운영 — **프레이머가 변화를 알 수 없게** `addFields`/`createCollection` 등 스키마 변경 RPC 호출 금지, `getFields()` read-only만 사용. 새 Airtable 필드 시 Framer 슬롯 없으면 graceful skip + 경고 (clavier-hq DECISIONS 2026-04-28 참조).
 
