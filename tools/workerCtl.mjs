@@ -11,7 +11,7 @@
 
 import { createInterface } from "readline"
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
-import { execSync } from "child_process"
+import { execSync, spawnSync } from "child_process"
 import { fileURLToPath } from "url"
 import { dirname, join } from "path"
 import { homedir } from "os"
@@ -32,7 +32,22 @@ function shellWrangler(cmd) {
     })
 }
 
-// ~/.clavier/env 자동 로드 — 터미널 밖 실행 시에도 동작
+// === 시크릿 단일 진실 소스 = Doppler (CLAUDE.md 2026-04-28~) ===
+// doppler 사용 가능하면 self-relaunch 로 정확한 env 주입.
+// 실패 시(오프라인·login 안 됨) ~/.clavier/env 폴백.
+if (!process.env.WORKERCTL_DOPPLER_INJECTED) {
+    let dopplerOk = false
+    try { execSync("doppler --version", { stdio: "ignore", timeout: 2000 }); dopplerOk = true }
+    catch { /* doppler 없음 → 폴백 */ }
+    if (dopplerOk) {
+        const r = spawnSync("doppler",
+            ["run", "--project", "clavier", "--config", "prd", "--", process.execPath, ...process.argv.slice(1)],
+            { stdio: "inherit", env: { ...process.env, WORKERCTL_DOPPLER_INJECTED: "1" } })
+        if (!r.error) process.exit(r.status ?? 0)
+    }
+}
+
+// ~/.clavier/env 폴백 — Doppler 미사용 시
 try {
     const envFile = join(homedir(), ".clavier", "env")
     readFileSync(envFile, "utf8").split("\n").forEach(line => {
@@ -40,7 +55,11 @@ try {
         if (!line || line.startsWith("#") || !line.includes("=")) return
         const [k, ...rest] = line.split("=")
         const key = k.trim()
-        if (!process.env[key]) process.env[key] = rest.join("=").trim()
+        let val = rest.join("=").trim()
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+            val = val.slice(1, -1)
+        }
+        if (!process.env[key]) process.env[key] = val
     })
 } catch { /* ~/.clavier/env 없으면 shell env 사용 */ }
 
