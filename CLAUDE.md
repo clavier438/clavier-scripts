@@ -30,6 +30,23 @@ GitHub: https://github.com/clavier0/clavier-hq
 - **대형 변경(D1 마이그레이션·파이프라인 재설계 등) 직후**: cold-start 세션에서 SOLID 감사 실시 — CONCEPTS.md #13 "구조 점검" + DECISIONS.md 2026-04-30 "framer-sync / control-tower 구조 점검" 참조
 - 자세한 가이드는 CONVENTIONS.md 참조
 
+## framer-sync 로컬 운영 (2026-05-01~)
+
+framer-sync 가 platform-agnostic 으로 추상화됨 — Cloudflare/Mac/OCI 동일 코드. 사용자 일상 운영은 **Mac 의 `framer` 명령** 한 단어:
+
+```bash
+framer push          # Layer 1+2 한방 (Airtable → SQLite → Framer)
+framer status        # 한눈 확인
+framer rows <col>    # SQLite 들여다보기 (디버그)
+framer help          # 전체 명령
+```
+
+`framer` 는 `~/bin/framer` symlink → `scripts/tools/framer.mjs` (canonical iCloud). workerCtl(Cloudflare 측) 의 Mac-local 짝.
+
+**대형 변경 시 하지 말 것**: `framer` 가 호출하는 코드는 Cloudflare worker 와 단 한 줄도 안 다름 (use case 동일, store 인터페이스만 D1 ↔ SQLite). 한쪽만 고치면 동등성이 깨짐. 동등성 검증 = `framer push` 실행 후 stage1_cache hash 비교 (Tier 2). DECISIONS 2026-05-01 "framer-sync = platform-agnostic" 참조.
+
+새 Mac 자동 복구: `bash setup.sh` 한 번 + `doppler login` 1번. setup.sh 가 node·jq·doppler·framer·npm install 까지 자동.
+
 ## 시크릿 사용 규칙 (2026-04-28~)
 
 **단일 진실 소스 = Doppler** (project: `clavier`, config: `prd`).
