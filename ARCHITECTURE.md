@@ -22,7 +22,11 @@ Doppler (시크릿 단일 진실 소스, 외부 SaaS) ─┐
 
 Airtable (데이터 원천)
   │
-  └─(webhook / REST)──► platform-workers (Cloudflare) ──► Framer (UI)
+  ├─(webhook / REST)──► platform-workers (Cloudflare) ──► Framer (UI)   ← 운영 본진
+  │
+  └─(REST)──► Mac `framer push` (로컬 SQLite, framer-sync 동일 코드) ──► Framer (UI)
+       └─ Cloudflare 가 죽어도 Mac 한 줄로 그 자리 대체. DR 5분.
+       └─ DECISIONS 2026-05-01 platform-agnostic 참조.
                               │
                          health-check-worker (30분 cron)
                               │
