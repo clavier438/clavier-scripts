@@ -30,7 +30,9 @@ echo "[ 2/5 ] 패키지 설치..."
 # fswatch, rsync: sync 데몬 필수
 # webp: img2web (cwebp 명령어)
 # imagemagick, ghostscript: pdf2img
-BREW_PKGS=(fswatch rsync webp imagemagick ghostscript tag)
+# node: framer-sync 로컬 실행 + tsx + npm
+# jq: JSON inspect (fsCtl, doc-coverage 등)
+BREW_PKGS=(fswatch rsync webp imagemagick ghostscript tag node jq)
 for pkg in "${BREW_PKGS[@]}"; do
     if brew list "$pkg" &>/dev/null; then
         printf "  [skip] %s (이미 설치됨)\n" "$pkg"
@@ -140,6 +142,32 @@ echo ""
 
 # 시스템 설정 바로 열기
 open "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles" 2>/dev/null || true
+
+# ── 7. installScripts.sh — tools/*.mjs 자동 symlink (fsCtl 포함) ────────
+echo ""
+echo "[ 7/8 ] installScripts.sh 실행 (tools/ → ~/bin symlink + Doppler 설치) ..."
+if [ -x "$SCRIPTS_DIR/installScripts.sh" ]; then
+    bash "$SCRIPTS_DIR/installScripts.sh"
+else
+    echo "  ⚠️  installScripts.sh 없음 — 수동 설치 필요"
+fi
+
+# ── 8. framer-sync npm install ─────────────────────────────────────────
+echo ""
+echo "[ 8/8 ] framer-sync 의존성 설치 (Mac 로컬 Node 실행에 필요) ..."
+FRAMER_SYNC_DIR="$(dirname "$SCRIPTS_DIR")/code/projects/platform-workers/framer-sync"
+if [ -d "$FRAMER_SYNC_DIR" ]; then
+    if [ -d "$FRAMER_SYNC_DIR/node_modules" ]; then
+        echo "  [skip] node_modules 이미 있음"
+    else
+        echo "  [설치] $FRAMER_SYNC_DIR (수 분 소요 — better-sqlite3 native compile)"
+        (cd "$FRAMER_SYNC_DIR" && npm install 2>&1 | tail -5) || echo "  ⚠️  npm install 실패 — 수동 재시도 필요"
+    fi
+else
+    echo "  ⚠️  framer-sync 폴더 없음: $FRAMER_SYNC_DIR"
+    echo "      iCloud 동기화가 끝났는지 확인하거나, GitHub 에서 직접 clone:"
+    echo "      git clone https://github.com/clavier0/platform-workers \"$(dirname "$FRAMER_SYNC_DIR" | sed 's|/projects$||')\""
+fi
 
 echo ""
 echo "======================================"
