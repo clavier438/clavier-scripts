@@ -132,6 +132,23 @@ function loadFramerProjects() {
 
 function saveFramerProjects(projects) {
     setDopplerSecret(FRAMER_PROJECTS_KEY, JSON.stringify(projects))
+    // Doppler 갱신 후 자동으로 wrangler secrets 도 동기화 — desync 방지 (Doppler-only SSOT 정신)
+    syncDopplerToWrangler("framer-sync")
+}
+
+// Doppler → wrangler secrets 동기화 (별도 스크립트 호출). 실패해도 throw 안 함.
+function syncDopplerToWrangler(workerDir) {
+    try {
+        const r = spawnSync("doppler-sync-wrangler", [workerDir],
+            { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 })
+        if (r.status === 0) {
+            console.log(dim("  ↳ doppler-sync-wrangler: 워커 secrets 자동 갱신 완료"))
+        } else {
+            console.log(yellow(`  ⚠️  wrangler 자동 sync 실패 — 수동 'doppler-sync-wrangler ${workerDir}' 필요`))
+        }
+    } catch (e) {
+        console.log(yellow(`  ⚠️  wrangler 자동 sync 스킵: ${e.message}`))
+    }
 }
 
 // ── readline 유틸 ──────────────────────────────────────────────────────────

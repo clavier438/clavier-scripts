@@ -5,7 +5,8 @@
  * 사용법:
  *   framer                       # 대화형 메뉴
  *   framer status                # 로컬 SQLite 직접 read (서버 안 띄워도 됨)
- *   framer configure [baseId]    # Airtable 스키마 자동 감지 + 저장 (기본: sisoso)
+ *   framer configure [baseId]    # 인터랙티브 설정 (Base ID, Framer URL+Token).
+ *                                  Framer URL+Token 은 쌍 — URL 변경 시 Token 도 같이 입력
  *   framer stage1                # Airtable → SQLite 변환
  *   framer push                  # stage1 + ManagedCollection push
  *   framer reset                 # .local/ 통째로 정리 → 처음부터
@@ -118,7 +119,18 @@ const commands = {
     },
 
     configure(args) {
-        const baseId = args[0] ?? DEFAULT_BASE
+        // Doppler-only: 모든 설정은 Doppler 에서 읽음. configure 는 schema 캐시 갱신 트리거만.
+        // 변경: doppler secrets set FRAMER_CONFIG='{"projectUrl":"...","apiKey":"..."}'
+        //       doppler secrets set AIRTABLE_BASE_ID=app...
+        const baseIdEnv = process.env.AIRTABLE_BASE_ID
+        const baseId = args[0] ?? baseIdEnv ?? DEFAULT_BASE
+        if (!process.env.AIRTABLE_API_KEY) {
+            console.log(red("✗ AIRTABLE_API_KEY env 없음 — 'doppler run -- framer configure' 형태로 실행"))
+            process.exit(1)
+        }
+        if (!process.env.FRAMER_CONFIG) {
+            console.log(yellow("FRAMER_CONFIG env 없음 — Framer 미설정 상태로 진행 (push 불가)"))
+        }
         console.log(dim(`AIRTABLE_BASE_ID=${baseId}`))
         dop(`configure`, { env: { AIRTABLE_BASE_ID: baseId } })
     },
@@ -254,7 +266,7 @@ function showHelp() {
     console.log()
     console.log(bold("기본 use case 실행"))
     console.log(`  ${cyan("status")}                  로컬 SQLite 직접 read (서버 X)`)
-    console.log(`  ${cyan("configure")} ${dim("[baseId]")}      Airtable 스키마 자동 감지 (기본: sisoso)`)
+    console.log(`  ${cyan("configure")} ${dim("[baseId]")}      인터랙티브 설정 (Base ID, Framer URL+Token 쌍)`)
     console.log(`  ${cyan("stage1")}                  Airtable → SQLite 변환`)
     console.log(`  ${cyan("push")}                    stage1 + ManagedCollection push`)
     console.log(`  ${cyan("reset")}                   .local/ 통째 정리`)
@@ -278,7 +290,7 @@ function showHelp() {
 async function interactive() {
     const items = [
         ["status",       "로컬 상태 확인"],
-        ["configure",    "Airtable 스키마 자동 감지"],
+        ["configure",    "설정 변경 (Base ID, Framer URL+Token 쌍)"],
         ["stage1",       "Airtable → SQLite 변환"],
         ["push",         "stage1 + ManagedCollection push"],
         ["tables",       "SQLite 테이블 + 행수"],
@@ -305,7 +317,7 @@ async function interactive() {
     if (!(n >= 1 && n <= items.length)) { console.log(red("잘못된 선택")); process.exit(2) }
     const [cmdLine] = items[n-1]
     const [cmd, ...rest] = cmdLine.split(" ")
-    if (typeof commands[cmd] === "function") commands[cmd](rest)
+    if (typeof commands[cmd] === "function") await commands[cmd](rest)
 }
 
 // ── dispatch ───────────────────────────────────────────────────────────
@@ -317,11 +329,9 @@ if (!cmd) {
 } else if (cmd === "--help" || cmd === "-h") {
     showHelp()
 } else if (commands[cmd]) {
-    try { commands[cmd](args) }
-    catch (e) {
-        console.error(red(`✗ ${e.message}`))
-        process.exit(1)
-    }
+    Promise.resolve()
+        .then(() => commands[cmd](args))
+        .catch(e => { console.error(red(`✗ ${e.message}`)); process.exit(1) })
 } else {
     console.log(red(`알 수 없는 명령: ${cmd}`))
     showHelp()

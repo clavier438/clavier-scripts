@@ -34,6 +34,9 @@ done
 # 신규 워커 코드가 platform-workers에 추가되면 여기 행 추가.
 SYNC_MAP=(
     "framer-sync|sisoso|AIRTABLE_API_KEY|AIRTABLE_API_KEY"
+    "framer-sync|sisoso|AIRTABLE_BASE_ID|AIRTABLE_BASE_ID"
+    "framer-sync|sisoso|FRAMER_PROJECTS|FRAMER_PROJECTS"
+    "framer-sync|sisoso|FRAMER_PROJECT_ID|FRAMER_PROJECT_ID"
     "framer-sync|hotelAgencyOps|AIRTABLE_API_KEY|AIRTABLE_API_KEY"
     "health-check|-|AIRTABLE_PAT|AIRTABLE_PAT"
 )
