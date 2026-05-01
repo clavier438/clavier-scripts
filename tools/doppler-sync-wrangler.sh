@@ -33,12 +33,10 @@ done
 # 매핑 정의: "워커디렉터리|env이름(없으면 -)|Doppler키|Wrangler키"
 # 신규 워커 코드가 platform-workers에 추가되면 여기 행 추가.
 SYNC_MAP=(
-    "framer-sync|sisoso|AIRTABLE_API_KEY|AIRTABLE_API_KEY"
-    "framer-sync|sisoso|AIRTABLE_BASE_ID|AIRTABLE_BASE_ID"
-    "framer-sync|sisoso|FRAMER_PROJECTS|FRAMER_PROJECTS"
-    "framer-sync|sisoso|FRAMER_PROJECT_ID|FRAMER_PROJECT_ID"
-    "framer-sync|hotelAgencyOps|AIRTABLE_API_KEY|AIRTABLE_API_KEY"
-    "health-check|-|AIRTABLE_PAT|AIRTABLE_PAT"
+    "framer-sync|-|AIRTABLE_API_KEY|AIRTABLE_API_KEY"
+    "framer-sync|-|AIRTABLE_BASE_ID|AIRTABLE_BASE_ID"
+    "framer-sync|-|FRAMER_PROJECTS|FRAMER_PROJECTS"
+    "framer-sync|-|FRAMER_PROJECT_ID|FRAMER_PROJECT_ID"
 )
 
 # 2026-04-28: canonical 클론은 iCloud 경로 (DECISIONS.md 참조)
@@ -82,8 +80,9 @@ for entry in "${SYNC_MAP[@]}"; do
         env_arg=()
         [[ "$env_name" != "-" ]] && env_arg=(--env "$env_name")
         # CLOUDFLARE_API_TOKEN 언셋 — wrangler는 OAuth 토큰 사용 (clavier.env L13 주의사항)
+        # set -u 환경에서 빈 배열 expansion 보호 (${arr[@]:+...})
         if (cd "$PLATFORM_WORKERS_DIR/$worker_dir" && \
-            CLOUDFLARE_API_TOKEN= echo "$value" | npx wrangler secret put "$wrangler_key" "${env_arg[@]}" >/dev/null 2>&1); then
+            CLOUDFLARE_API_TOKEN= echo "$value" | npx wrangler secret put "$wrangler_key" ${env_arg[@]+"${env_arg[@]}"} >/dev/null 2>&1); then
             echo "  ✅ $label ← $wrangler_key"
             ((synced++))
         else

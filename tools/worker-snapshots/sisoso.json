@@ -9,63 +9,77 @@
   "gtmContainerId": null,
   "tables": [
     {
-      "name": "tag0",
-      "fields": 16,
+      "name": "pages",
+      "fields": 7,
+      "slugField": "slug"
+    },
+    {
+      "name": "section",
+      "fields": 14,
       "slugField": "slug"
     },
     {
       "name": "tags",
-      "fields": 12,
-      "slugField": "name"
+      "fields": 6,
+      "slugField": "slug"
     },
     {
       "name": "items",
-      "fields": 28,
-      "slugField": "name"
+      "fields": 17,
+      "slugField": "slug"
     },
     {
       "name": "subitems",
-      "fields": 10,
-      "slugField": "id"
+      "fields": 5,
+      "slugField": "slug"
     },
     {
       "name": "stories",
-      "fields": 18,
-      "slugField": "name"
+      "fields": 14,
+      "slugField": "slug"
     }
   ],
   "sync": {
-    "lastSync": "2026-04-27T06:32:45.801Z",
-    "status": "ok",
-    "mode": "native",
-    "results": {
-      "tag0": {
-        "added": 0,
-        "updated": 0,
-        "skipped": 9
+    "lastStage1": "2026-04-30T13:24:15.145Z",
+    "status": "stage1-ok",
+    "summaries": [
+      {
+        "collection": "pages",
+        "upserted": 8,
+        "skippedNoSlug": 0
       },
-      "tags": {
-        "added": 0,
-        "updated": 0,
-        "skipped": 10
+      {
+        "collection": "section",
+        "upserted": 24,
+        "skippedNoSlug": 0
       },
-      "items": {
-        "added": 0,
-        "updated": 1,
-        "skipped": 71
+      {
+        "collection": "tags",
+        "upserted": 10,
+        "skippedNoSlug": 0
       },
-      "subitems": {
-        "added": 0,
-        "updated": 0,
-        "skipped": 15
+      {
+        "collection": "items",
+        "upserted": 52,
+        "skippedNoSlug": 1
       },
-      "stories": {
-        "added": 0,
-        "updated": 0,
-        "skipped": 5
+      {
+        "collection": "subitems",
+        "upserted": 12,
+        "skippedNoSlug": 0
+      },
+      {
+        "collection": "stories",
+        "upserted": 5,
+        "skippedNoSlug": 0
       }
-    }
+    ]
   },
-  "conversion": null,
-  "snapshotAt": "2026-04-27T09:02:41.507Z"
+  "conversion": {
+    "status": "error",
+    "startedAt": "2026-04-30T00:46:30.896Z",
+    "finishedAt": "2026-04-30T00:46:30.896Z",
+    "error": "Error: Airtable PATCH 실패: 429 {\"errors\":[{\"error\":\"RATE_LIMIT_REACHED\",\"message\":\"Rate limit exceeded. Please try again later\"}]}"
+  },
+  "snapshotAt": "2026-04-30T18:06:31.247Z"
 }

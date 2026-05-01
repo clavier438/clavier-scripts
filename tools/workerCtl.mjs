@@ -171,19 +171,12 @@ async function selectFromList(rl, items, labelFn) {
 }
 
 // ── 워커 레지스트리 로드 ───────────────────────────────────────────────────
-const REGISTRY_URL = process.env.REGISTRY_URL ?? "https://clavier-registry.hyuk439.workers.dev"
-
+// 2026-05-01: clavier-registry 워커 폐기 → workers.json 만 사용 (단일 진실 소스).
 async function loadWorkers() {
-    try {
-        const res = await fetch(`${REGISTRY_URL}/workers`, { signal: AbortSignal.timeout(5_000) })
-        if (res.ok) return await res.json()
-    } catch {
-        // 오프라인 또는 레지스트리 오류 → 로컬 fallback
-    }
     try {
         return JSON.parse(readFileSync(WORKERS_JSON, "utf8"))
     } catch {
-        console.error(red("✗ workers.json 읽기 실패 (레지스트리도 오프라인): ") + WORKERS_JSON)
+        console.error(red("✗ workers.json 읽기 실패: ") + WORKERS_JSON)
         process.exit(1)
     }
 }

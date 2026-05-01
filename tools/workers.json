@@ -3,15 +3,5 @@
     "name": "sisoso",
     "label": "sisoso (Framer ↔ Airtable)",
     "url": "https://framer-sync-sisoso.hyuk439.workers.dev"
-  },
-  {
-    "name": "hotelAgency",
-    "label": "hotelAgency (Hotel Agency API)",
-    "url": "https://hotel-agency-ops-api.hyuk439.workers.dev"
-  },
-  {
-    "name": "controlTower",
-    "label": "control-tower (에러 모니터링)",
-    "url": "https://control-tower-worker.hyuk439.workers.dev"
   }
 ]
