@@ -171,6 +171,18 @@ async function selectFromList(rl, items, labelFn) {
 }
 
 // ── 워커 레지스트리 로드 ───────────────────────────────────────────────────
+// 응답 출력 — transformChain 같은 멀티라인 string 필드는 raw 로 분리 표시 (JSON escape 회피)
+function printResponseBody(body) {
+    if (body && typeof body === "object") {
+        if (typeof body.transformChain === "string") {
+            console.log(body.transformChain)
+            const { transformChain, ...rest } = body
+            body = rest
+        }
+    }
+    console.log(JSON.stringify(body, null, 2).split("\n").map(l => `  ${l}`).join("\n"))
+}
+
 // 2026-05-01: clavier-registry 워커 폐기 → workers.json 만 사용 (단일 진실 소스).
 async function loadWorkers() {
     try {
@@ -317,7 +329,7 @@ async function runFunction(workerUrl, fn, body = null) {
     }
 
     console.log()
-    console.log(JSON.stringify(responseBody, null, 2).split("\n").map(l => `  ${l}`).join("\n"))
+    printResponseBody(responseBody)
     console.log()
 
     // 비동기 작업 감지: 응답 메시지에 "시작됨"/"started" → status polling
@@ -334,7 +346,7 @@ async function runFunction(workerUrl, fn, body = null) {
                     ? green(`  ✅ 백그라운드 작업 완료 (총 ${totalElapsed}s)`)
                     : red(`  ✗ 백그라운드 작업 실패 (총 ${totalElapsed}s)`))
                 console.log()
-                console.log(JSON.stringify(finalStatus, null, 2).split("\n").map(l => `  ${l}`).join("\n"))
+                printResponseBody(finalStatus)
                 console.log()
                 return ok
             } else {
