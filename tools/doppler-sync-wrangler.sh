@@ -36,6 +36,10 @@ SYNC_MAP=(
     "framer-sync|sisoso|AIRTABLE_API_KEY|AIRTABLE_API_KEY"
     "framer-sync|hotelAgencyOps|AIRTABLE_API_KEY|AIRTABLE_API_KEY"
     "health-check|-|AIRTABLE_PAT|AIRTABLE_PAT"
+    "airtable-gdrive-sync|prod|AIRTABLE_PAT|AIRTABLE_PAT"
+    "airtable-gdrive-sync|prod|GDRIVE_CLIENT_ID|GDRIVE_CLIENT_ID"
+    "airtable-gdrive-sync|prod|GDRIVE_CLIENT_SECRET|GDRIVE_CLIENT_SECRET"
+    "airtable-gdrive-sync|prod|GDRIVE_REFRESH_TOKEN|GDRIVE_REFRESH_TOKEN"
 )
 
 # 2026-04-28: canonical 클론은 iCloud 경로 (DECISIONS.md 참조)

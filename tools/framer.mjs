@@ -1,26 +1,26 @@
 #!/usr/bin/env node
 /**
- * framerSyncCtl — framer-sync 로컬 Node 디버그 CLI
+ * framer — framer-sync 로컬 Node 디버그 CLI
  *
  * 사용법:
- *   fsCtl                       # 대화형 메뉴
- *   fsCtl status                # 로컬 SQLite 직접 read (서버 안 띄워도 됨)
- *   fsCtl configure [baseId]    # Airtable 스키마 자동 감지 + 저장 (기본: sisoso)
- *   fsCtl stage1                # Airtable → SQLite 변환
- *   fsCtl push                  # stage1 + ManagedCollection push
- *   fsCtl reset                 # .local/ 통째로 정리 → 처음부터
+ *   framer                       # 대화형 메뉴
+ *   framer status                # 로컬 SQLite 직접 read (서버 안 띄워도 됨)
+ *   framer configure [baseId]    # Airtable 스키마 자동 감지 + 저장 (기본: sisoso)
+ *   framer stage1                # Airtable → SQLite 변환
+ *   framer push                  # stage1 + ManagedCollection push
+ *   framer reset                 # .local/ 통째로 정리 → 처음부터
  *
- *   fsCtl tables                # SQLite 테이블 + 행수
- *   fsCtl rows <collection>     # stage1_cache 의 한 컬렉션 dump
- *   fsCtl state [<key>]         # worker_state 키/값 (key 없으면 목록)
- *   fsCtl sql "<query>"         # raw SQLite query
+ *   framer tables                # SQLite 테이블 + 행수
+ *   framer rows <collection>     # stage1_cache 의 한 컬렉션 dump
+ *   framer state [<key>]         # worker_state 키/값 (key 없으면 목록)
+ *   framer sql "<query>"         # raw SQLite query
  *
- *   fsCtl server start          # background daemon 으로 Hono 서버 띄우기
- *   fsCtl server stop
- *   fsCtl server logs [-f]      # tail (-f 면 follow)
- *   fsCtl server status         # 살아있나 / pid / port / health
+ *   framer server start          # background daemon 으로 Hono 서버 띄우기
+ *   framer server stop
+ *   framer server logs [-f]      # tail (-f 면 follow)
+ *   framer server status         # 살아있나 / pid / port / health
  *
- *   fsCtl deploy                # Cloudflare 로 배포 (sisoso)
+ *   framer deploy                # Cloudflare 로 배포 (sisoso)
  *
  * 환경변수:
  *   FRAMER_SYNC_DIR    framer-sync repo 경로 (기본: iCloud canonical 경로)
@@ -63,7 +63,7 @@ function dop(args, opts = {}) {
 function sql(query) {
     if (!existsSync(DB_PATH)) {
         console.log(yellow(`DB 없음: ${DB_PATH}`))
-        console.log(dim(`  먼저 'fsCtl configure' 실행`))
+        console.log(dim(`  먼저 'framer configure' 실행`))
         process.exit(1)
     }
     return execSync(`sqlite3 -header -column "${DB_PATH}" "${query.replace(/"/g, '\\"')}"`,
@@ -92,12 +92,12 @@ const commands = {
         if (!existsSync(DB_PATH)) {
             console.log(yellow(`DB 없음 (unconfigured)`))
             console.log(dim(`  ${DB_PATH}`))
-            console.log(`  → ${cyan("fsCtl configure")} 실행`)
+            console.log(`  → ${cyan("framer configure")} 실행`)
             return
         }
         const cfgRaw = sqlRaw(`SELECT value FROM worker_state WHERE key='config'`)
         if (!cfgRaw) {
-            console.log(yellow("config 없음 — 'fsCtl configure' 필요"))
+            console.log(yellow("config 없음 — 'framer configure' 필요"))
             return
         }
         const cfg = JSON.parse(cfgRaw)
@@ -164,7 +164,7 @@ const commands = {
 
     rows(args) {
         const col = args[0]
-        if (!col) { console.log(red("사용: fsCtl rows <collection>")); process.exit(2) }
+        if (!col) { console.log(red("사용: framer rows <collection>")); process.exit(2) }
         console.log(sql(`SELECT slug, hash, length(fields_json) AS json_bytes FROM stage1_cache WHERE collection='${col}' ORDER BY slug`))
     },
 
@@ -182,7 +182,7 @@ const commands = {
 
     sql(args) {
         const q = args.join(" ")
-        if (!q) { console.log(red('사용: fsCtl sql "SELECT ..."')); process.exit(2) }
+        if (!q) { console.log(red('사용: framer sql "SELECT ..."')); process.exit(2) }
         console.log(sql(q))
     },
 
@@ -234,7 +234,7 @@ const commands = {
             },
         }
         if (!sub || !subs[sub]) {
-            console.log(`사용: fsCtl server <${Object.keys(subs).join("|")}>`)
+            console.log(`사용: framer server <${Object.keys(subs).join("|")}>`)
             return
         }
         subs[sub]()
@@ -250,7 +250,7 @@ const commands = {
 }
 
 function showHelp() {
-    console.log(bold("framerSyncCtl") + dim(" — framer-sync 로컬 Node 디버그 CLI"))
+    console.log(bold("framer") + dim(" — framer-sync 로컬 Node 디버그 CLI"))
     console.log()
     console.log(bold("기본 use case 실행"))
     console.log(`  ${cyan("status")}                  로컬 SQLite 직접 read (서버 X)`)
