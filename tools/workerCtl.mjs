@@ -92,6 +92,48 @@ const yellow = s => `${c.yellow}${s}${c.reset}`
 const red    = s => `${c.red}${s}${c.reset}`
 const gray   = s => `${c.gray}${s}${c.reset}`
 
+// ── Framer 프로젝트 ↔ 토큰 매핑 (Doppler FRAMER_PROJECTS JSON) ─────────────
+// 한 Framer 프로젝트는 (projectUrl, apiToken) 쌍을 항상 함께 가진다.
+// Doppler 단일 키 FRAMER_PROJECTS 에 객체로 저장: { <projectId>: { url, token } }
+const FRAMER_PROJECTS_KEY = "FRAMER_PROJECTS"
+
+function getDopplerSecret(key) {
+    const r = spawnSync("doppler",
+        ["secrets", "get", key, "--project", "clavier", "--config", "prd",
+         "--plain", "--no-exit-on-missing-secret"],
+        { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] })
+    if (r.status !== 0) return null
+    const out = (r.stdout ?? "").toString().trim()
+    return out || null
+}
+
+function setDopplerSecret(key, value) {
+    const r = spawnSync("doppler",
+        ["secrets", "set", key, "--project", "clavier", "--config", "prd", "--silent"],
+        { input: value, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] })
+    if (r.status !== 0) {
+        throw new Error(`Doppler 저장 실패: ${(r.stderr ?? "").toString().trim() || "unknown"}`)
+    }
+}
+
+function extractFramerProjectId(url) {
+    const m = String(url).match(/projects\/[^?#]*--([A-Za-z0-9]{20})/)
+    return m ? m[1] : null
+}
+
+function loadFramerProjects() {
+    const raw = getDopplerSecret(FRAMER_PROJECTS_KEY)
+    if (!raw) return {}
+    try {
+        const obj = JSON.parse(raw)
+        return obj && typeof obj === "object" ? obj : {}
+    } catch { return {} }
+}
+
+function saveFramerProjects(projects) {
+    setDopplerSecret(FRAMER_PROJECTS_KEY, JSON.stringify(projects))
+}
+
 // ── readline 유틸 ──────────────────────────────────────────────────────────
 function prompt(rl, question) {
     return new Promise(resolve => rl.question(question, resolve))
@@ -1031,7 +1073,51 @@ async function main() {
                 if (res.ok) current = await res.json()
             } catch { /* 조회 실패 → current = {} */ }
         }
-        body = await collectParams(rl, fn.params, current)
+
+        // configure: framerToken 은 (url, token) 쌍 단위로 별도 처리 — 일반 envKey 자동 주입 비활성화
+        const isConfigure = fn.id === "configure"
+        const paramsForCollect = isConfigure
+            ? fn.params.filter(p => p.key !== "framerToken")
+            : fn.params
+
+        body = await collectParams(rl, paramsForCollect, current)
+
+        // configure 후처리: 새 projectUrl 입력 시 (url, token) 매핑 조회/등록
+        if (isConfigure && body.framerProjectUrl) {
+            const projectId = extractFramerProjectId(body.framerProjectUrl)
+            if (!projectId) {
+                console.error(red(`  ✗ Framer URL 에서 project ID(20자) 추출 실패`))
+                console.error(dim(`    형식: https://framer.com/projects/<slug>--<projectId>(-<viewId>)`))
+                rl.close()
+                process.exit(1)
+            }
+            const projects = loadFramerProjects()
+            let entry = projects[projectId]
+            if (entry?.token) {
+                console.log(dim(`  ✓ Framer API 토큰 자동 적용 — Doppler ${FRAMER_PROJECTS_KEY}.${projectId}`))
+                entry.url = body.framerProjectUrl   // 입력 URL이 더 최신 (viewId 등) — 갱신
+                projects[projectId] = entry
+                try { saveFramerProjects(projects) }
+                catch (e) { console.log(yellow(`  ⚠️  ${FRAMER_PROJECTS_KEY} 갱신 실패 (무시 가능): ${e.message}`)) }
+            } else {
+                console.log()
+                console.log(yellow(`  ⚠️  처음 보는 Framer 프로젝트 (id: ${projectId})`))
+                console.log(`     이 프로젝트의 ${bold("Framer API 토큰")} 을 입력해주세요.`)
+                console.log(dim(`     Doppler ${FRAMER_PROJECTS_KEY}.${projectId} 에 (url, token) 쌍으로 저장됩니다.`))
+                const token = (await prompt(rl, `  ${bold("Framer API 토큰")}: `)).trim()
+                if (!token) {
+                    console.error(red("  ✗ 토큰 필수 — 중단"))
+                    rl.close()
+                    process.exit(1)
+                }
+                entry = { url: body.framerProjectUrl, token }
+                projects[projectId] = entry
+                saveFramerProjects(projects)
+                console.log(green(`  ✓ Doppler 저장: ${FRAMER_PROJECTS_KEY}.${projectId}`))
+            }
+            body.framerToken = entry.token
+        }
+
         rl.close()
     }
 
