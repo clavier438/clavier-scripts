@@ -171,6 +171,63 @@ async function selectFromList(rl, items, labelFn) {
 }
 
 // ── 워커 레지스트리 로드 ───────────────────────────────────────────────────
+// streamingStep loop — done=true 까지 step 호출 + 진행 표시 (time-budget streaming)
+async function loopStreamingSteps(workerUrl, stepPath) {
+    console.log()
+    console.log(dim("  step 진행 — workerCtl 가 done 까지 자동 호출 (cron 매분 백업도 동작 중):"))
+    console.log()
+
+    const seen = new Map() // collection → 누적 진행
+    let stepNum = 0
+    const maxSteps = 50  // 안전 한도 (records 100,000+ 까지)
+
+    // 초기 stage1 끝나길 약간 대기 (init 백그라운드)
+    await new Promise(r => setTimeout(r, 3000))
+
+    while (stepNum < maxSteps) {
+        stepNum++
+        let res, data
+        try {
+            res = await fetch(`${workerUrl}${stepPath}`, { method: "POST", signal: AbortSignal.timeout(40_000) })
+            data = await res.json()
+        } catch (e) {
+            console.log(yellow(`    [step ${stepNum}] 연결 오류 — 재시도 (${e.message})`))
+            await new Promise(r => setTimeout(r, 3000))
+            continue
+        }
+        if (!res.ok) {
+            console.log(red(`    [step ${stepNum}] HTTP ${res.status}`))
+            return false
+        }
+
+        const elapsed = ((data.elapsedMs ?? 0) / 1000).toFixed(1)
+        const processed = data.processed ?? []
+
+        for (const p of processed) {
+            const prev = seen.get(p.collection) ?? 0
+            const cur = prev + p.pushed
+            seen.set(p.collection, cur)
+            const tag = p.done ? green("✓") : yellow("…")
+            const tail = p.done ? dim(`(${cur}/${p.total})`) : dim(`(${cur}/${p.total} 남음)`)
+            console.log(`    ${tag}  ${p.collection.padEnd(12)} ${tail}`)
+        }
+        if (processed.length === 0 && data.remaining > 0) {
+            console.log(yellow(`    [step ${stepNum}] no progress — 큐 stuck? remaining=${data.remaining}`))
+            return false
+        }
+
+        if (data.done) {
+            console.log()
+            console.log(green(`  ✅ 큐 완료 (${stepNum} step, 총 ${[...seen.values()].reduce((a,b)=>a+b,0)} records)`))
+            console.log()
+            return true
+        }
+    }
+
+    console.log(yellow(`  ⚠️ ${maxSteps} step 도달 — 안전 한도. cron 백업이 마저 처리할 것.`))
+    return true
+}
+
 // 응답 출력 — transformChain 같은 멀티라인 string 필드는 raw 로 분리 표시 (JSON escape 회피)
 function printResponseBody(body) {
     if (body && typeof body === "object") {
@@ -332,10 +389,16 @@ async function runFunction(workerUrl, fn, body = null) {
     printResponseBody(responseBody)
     console.log()
 
+    // streamingStep 감지: capabilities 의 streamingStep 경로가 있으면 done=true 까지 자동 loop
+    if (res.ok && fn.streamingStep) {
+        await loopStreamingSteps(workerUrl, fn.streamingStep)
+        return true
+    }
+
     // 비동기 작업 감지: 응답 메시지에 "시작됨"/"started" → status polling
     if (res.ok && typeof responseBody === "object" && responseBody !== null) {
         const noteText = String(responseBody.note ?? responseBody.message ?? "")
-        const isAsync = /시작됨|started/i.test(noteText)
+        const isAsync = /시작됨|started|시작/i.test(noteText)
         if (isAsync) {
             const statusPath = fn.asyncStatusPath ?? "/status"
             const finalStatus = await pollUntilComplete(workerUrl, triggerTime, statusPath)
