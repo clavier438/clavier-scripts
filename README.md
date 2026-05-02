@@ -1,18 +1,19 @@
 # iCloud/0 스크립트 컬렉션
 
-> **포맷 후 복구 한 줄 요약** (2026-05-01 갱신)
+> **포맷 후 복구 한 줄 요약** (2026-05-02 갱신)
 > ```bash
 > bash ~/Library/Mobile\ Documents/com\~apple\~CloudDocs/0/scripts/setup.sh
 > doppler login                                                # 시크릿 복구 (브라우저 인증)
-> framer push                                                  # framer-sync 로컬 운영 가동 검증
+> workerCtl sisoso                                             # framer-sync 워커 호출 (push)
 > ```
-> setup.sh 가 node·jq·doppler·framer·framer-sync npm install 까지 자동. DECISIONS 2026-05-01.
+> setup.sh 가 node·jq·doppler·workerCtl 까지 자동.
 
-**framer-sync 일상 운영 = `framer` 한 단어** (2026-05-01~):
-- `framer push` — Layer 1+2 한방 (Airtable → SQLite → Framer ManagedCollection)
-- `framer status / rows / sql / server / deploy` — 전체 명령은 `framer help`
-- canonical: `tools/framer.mjs`, 실행: `~/bin/framer` symlink
-- Cloudflare 가 죽어도 Mac 한 줄로 운영 지속 (DR 5분)
+**framer-sync 일상 운영 = `workerCtl sisoso → 2 (push)`** (2026-05-02~ 미니멀):
+- 워커 1개 (framer-sync-sisoso) — Cloudflare Worker 단일.
+- time-budget streaming — 한 번 트리거 후 함수가 끝까지 책임. records 변동성 자동 적응.
+- workerCtl 이 capabilities.streamingStep 보고 done=true 까지 자동 step loop.
+- cron 매분 백업 — Mac 닫혀도 끝까지.
+- 시스템 도면: `clavier-hq/MAP.md`. 구조 한눈에.
 
 **시크릿 단일 진실 소스 = Doppler** (project: `clavier`, config: `prd`) — 2026-04-28~.
 - 사용: `doppler run -- <명령>` 으로 환경변수 자동 주입
