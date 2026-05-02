@@ -5,14 +5,26 @@
 새 세션을 시작하면 **무조건** 아래 순서로 읽어라:
 
 ```
-1. clavier-hq/SYSTEM_ENV.md → 전체 환경변수·연결 현황 (아키텍트 지도)
-2. clavier-hq/STATUS.md     → 현재 모든 시스템 상태
-3. clavier-hq/QUEUE.md      → 지금 해야 할 것 (우선순위순)
-4. clavier-hq/MISSION.md    → 방향과 기준
+1. clavier-hq/MAP.md        → 시스템 도면 (구조 한눈에) ★
+2. clavier-hq/SYSTEM_ENV.md → 환경변수·연결 현황 (URL, KV ID 등)
+3. clavier-hq/STATUS.md     → 현재 시스템 상태
+4. clavier-hq/QUEUE.md      → 지금 해야 할 것 (우선순위순)
+5. clavier-hq/MISSION.md    → 방향과 기준
 ```
 
-> SYSTEM_ENV.md 하나로 "어떤 워커가 어떤 Airtable·Framer와 연결돼 있는가"를 즉시 파악한다.
-> 이후 대화에서 사용자가 시스템을 다시 설명하지 않아도 된다.
+> **MAP.md** 가 진짜 "한 화면 도면". 의존성 방향, 흐름, 변동성 적응 메커니즘이 전부 거기.
+> SYSTEM_ENV.md 는 데이터 (URL, KV ID, Doppler 키 목록).
+
+## 구조 변경 시 MAP.md 동시 갱신 (Defense in Depth)
+
+**구조가 바뀌면 MAP.md 도 같은 commit 에 포함**:
+- 워커 추가/삭제 → 노드 수, SSOT 박스
+- 새 layer / 폴더 → 의존성 트리
+- 새 흐름 (route, cron, queue) → 흐름 시나리오
+- 새 외부 SSOT 키 → Doppler 박스
+- 새 외부 변동성 처리 → 적응 표
+
+매 commit 메시지에 영향 받은 도면 영역 명시. 도면-코드 어긋나면 신뢰 잃음.
 
 GitHub: https://github.com/clavier0/clavier-hq
 
