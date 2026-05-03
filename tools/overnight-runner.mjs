@@ -28,16 +28,20 @@ import { execSync } from "child_process"
 import { join } from "path"
 import { REPO_ROOT, findClavierHq } from "./lib/repoPaths.mjs"
 
-// claude 바이너리 경로 — env > which 자동탐색 > Mac 관례 > Linux 관례 (sibling-first 정신)
+// claude 바이너리 경로 — env > 알려진 후보 직접 검사 > command -v 자동탐색
+// launchd / cron 의 최소 PATH 에서도 안전하도록 알려진 후보를 우선 검사.
 const CLAUDE_BIN = (() => {
     if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN
-    try {
-        return execSync("command -v claude", { encoding: "utf8" }).trim() || null
-    } catch { /* fallthrough */ }
     const home = process.env.HOME ?? ""
-    for (const p of [`${home}/.local/bin/claude`, "/usr/local/bin/claude"]) {
+    // 1순위: 알려진 설치 경로 (Mac launchd / cron 의 최소 PATH 에서도 동작)
+    for (const p of [`${home}/.local/bin/claude`, "/usr/local/bin/claude", "/opt/homebrew/bin/claude"]) {
         if (existsSync(p)) return p
     }
+    // 2순위: PATH 가 풍부한 환경 (interactive shell, systemd User)
+    try {
+        const out = execSync("command -v claude", { encoding: "utf8" }).trim()
+        if (out) return out
+    } catch { /* not found */ }
     return null
 })()
 
