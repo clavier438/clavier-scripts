@@ -64,12 +64,17 @@ OCI 서버 (168.107.63.94)
 fresh OCI VM 에 처음 들어갔을 때 1회만 실행:
 
 ```bash
-# 1) clavier-scripts clone (이 README 가 들어있는 repo)
-git clone https://github.com/clavier0/clavier-scripts ~/clavier-scripts
+# 1) clavier-scripts clone — clavier0/* 은 private 이라 GH_TOKEN 필요.
+#    GH_TOKEN 은 Doppler 의 GH_TOKEN 시크릿 값 (Mac 의 `gh auth token` 으로
+#    추출해 둔 것). Mac 에서 OCI 로 단발 호출 시:
+#      GH_TOKEN=$(doppler secrets get GH_TOKEN --plain) ssh ubuntu@... \
+#        "GH_TOKEN='$GH_TOKEN' git clone https://oauth2:\$GH_TOKEN@github.com/clavier0/clavier-scripts ~/clavier-scripts"
+#    또는 OCI 안에서 직접:
+GH_TOKEN=<paste-pat> git clone "https://oauth2:$GH_TOKEN@github.com/clavier0/clavier-scripts" ~/clavier-scripts
 
 # 2) 부트스트랩 — apt deps + Node.js LTS + Doppler CLI + Claude Code CLI +
-#    sibling repo(clavier-hq, platform-workers) 자동 clone
-bash ~/clavier-scripts/clouds/oci/bootstrap-agent.sh
+#    sibling repo(clavier-hq, platform-workers) 자동 clone (GH_TOKEN 환경변수 그대로 상속됨)
+GH_TOKEN="$GH_TOKEN" bash ~/clavier-scripts/clouds/oci/bootstrap-agent.sh
 
 # 3) Doppler 인증 (인터랙티브 — 모바일 브라우저로도 가능)
 doppler login
@@ -79,6 +84,8 @@ doppler setup --project clavier --config prd
 doppler run -- claude --version
 doppler run -- node ~/clavier-scripts/tools/workerCtl.mjs   # sibling-first 자동 탐색 검증
 ```
+
+> 재실행 시 (doppler 이미 인증됨): `bash bootstrap-agent.sh` 만으로 충분. Step 5 가 doppler 에서 GH_TOKEN 자동 조회.
 
 스크립트는 멱등 — 재실행 안전. 부트 후 `~/clavier-scripts`, `~/clavier-hq`, `~/platform-workers` 가 형제로 배치되어 Layer 1 도구(workerCtl, doc-coverage, doppler-sync-wrangler, overnight-runner) 가 zero-config 작동. 자세한 단계는 `bootstrap-agent.sh` 헤더 참조.
 

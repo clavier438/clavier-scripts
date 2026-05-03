@@ -100,22 +100,41 @@ fi
 # ── 5. Sibling repo clone (graceful) ──────────────────────────
 # Layer 1 도구(workerCtl, doc-coverage 등)가 sibling-first 탐색을 하므로
 # clavier-hq, platform-workers 를 형제로 clone 해두면 zero-config 작동.
+#
+# clavier0/* 은 private repo → GH_TOKEN 인증 필요.
+#   1순위: env GH_TOKEN (수동 주입 — 첫 부트 시 doppler 미인증 상태)
+#   2순위: doppler secrets get GH_TOKEN (재실행 — doppler 이미 인증)
+# clone URL 에 토큰 박힌 채 .git/config 에 저장되지 않도록 직후 origin URL
+# 을 토큰 없는 형태로 set-url 한다 (보안).
 log "Step 5/6 — Sibling repo (~/clavier-hq, ~/platform-workers)"
 
 PEER_REPOS=(clavier-hq platform-workers)
 PARENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 
+GH_TOKEN_VALUE="${GH_TOKEN:-}"
+if [[ -z "$GH_TOKEN_VALUE" ]] && command -v doppler >/dev/null 2>&1 && doppler me >/dev/null 2>&1; then
+    GH_TOKEN_VALUE=$(doppler secrets get GH_TOKEN --plain 2>/dev/null | tr -d '\n' || true)
+fi
+
 for repo in "${PEER_REPOS[@]}"; do
     target="$PARENT_DIR/$repo"
+    clean_url="https://github.com/clavier0/$repo"
     if [ -d "$target/.git" ]; then
         printf '  [skip] %s 이미 클론됨\n' "$repo"
-    else
-        if git clone "https://github.com/clavier0/$repo" "$target" 2>/dev/null; then
-            printf '  [clone] %s → %s\n' "$repo" "$target"
+        continue
+    fi
+    if [[ -n "$GH_TOKEN_VALUE" ]]; then
+        auth_url="https://oauth2:${GH_TOKEN_VALUE}@github.com/clavier0/$repo"
+        if git clone "$auth_url" "$target" 2>/dev/null; then
+            git -C "$target" remote set-url origin "$clean_url"
+            printf '  [clone] %s → %s (token-auth, origin scrubbed)\n' "$repo" "$target"
         else
-            warn "  $repo clone 실패 (private repo 인증 필요?). 수동 처리:"
-            warn "    gh auth login   또는   git clone git@github.com:clavier0/$repo $target"
+            warn "  $repo clone 실패 (GH_TOKEN 권한 부족?). 수동: GH_TOKEN=... git clone $clean_url $target"
         fi
+    else
+        warn "  GH_TOKEN 없음 → $repo skip. 수동:"
+        warn "    GH_TOKEN=<pat> git clone $clean_url $target"
+        warn "    또는 doppler 인증 후 bootstrap 재실행"
     fi
 done
 
