@@ -39,8 +39,21 @@ SYNC_MAP=(
     "framer-sync|-|FRAMER_PROJECT_ID|FRAMER_PROJECT_ID"
 )
 
-# 2026-04-28: canonical 클론은 iCloud 경로 (DECISIONS.md 참조)
-PLATFORM_WORKERS_DIR="${PLATFORM_WORKERS_DIR:-/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers}"
+# sibling-first 자동 탐색 (environment-peer 모델, DECISIONS 2026-05-03)
+# env > sibling (~/platform-workers) > iCloud Mac fallback
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SIBLING_PW="$(cd "$SELF_DIR/../.." && pwd)/platform-workers"
+ICLOUD_PW="$HOME/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers"
+if [ -n "${PLATFORM_WORKERS_DIR:-}" ]; then
+    : # use override
+elif [ -d "$SIBLING_PW" ]; then
+    PLATFORM_WORKERS_DIR="$SIBLING_PW"
+elif [ -d "$ICLOUD_PW" ]; then
+    PLATFORM_WORKERS_DIR="$ICLOUD_PW"
+else
+    echo "❌ platform-workers repo 못 찾음. PLATFORM_WORKERS_DIR env 설정 또는 sibling 클론 필요." >&2
+    exit 1
+fi
 
 if ! doppler me >/dev/null 2>&1; then
     echo "❌ Doppler 로그인 필요." >&2

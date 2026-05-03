@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# ociIn — OCI 서버(168.107.63.94) SSH 연결 (env.md에서 키 자동 복원)
+# ociIn — OCI 서버(168.107.63.94) SSH 연결 (Doppler 우선, env.md@iCloud 폴백)
 #
 # 동작:
-#   1) env.md에서 base64로 보관 중인 private key를 /tmp에 임시 복원
-#   2) 권한을 600으로 설정 (SSH는 키 파일 권한이 너무 열려 있으면 거부함)
+#   1) Doppler 시크릿 OCI_SSH_KEY_B64 에서 키 추출 (1순위)
+#      미설정 시 → env.md@iCloud 의 "Private Key (base64):" 블록 (Mac 폴백)
+#   2) /tmp 임시 파일로 복원, 권한 600
 #   3) SSH 연결
-#   4) 연결 종료 후 키 파일 자동 삭제 (보안)
+#   4) 종료 시 임시 키 파일 자동 삭제
 #
 # 사용법:
 #   ./connectSsh.sh          → 대화형 셸
 #   ./connectSsh.sh "명령어"  → 명령어 한 줄 실행 후 종료
+#
+# Doppler 마이그레이션 (iCloud 의존 완전 제거):
+#   doppler secrets set OCI_SSH_KEY_B64="$(cat <키파일> | base64 | tr -d '\n')"
 
 set -euo pipefail
 
@@ -17,22 +21,33 @@ set -euo pipefail
 OCI_IP="168.107.63.94"
 OCI_USER="ubuntu"
 OCI_PORT="22"
-KEY_TMP="/tmp/oci_key_$$"   # $$: 현재 프로세스 ID → 동시 실행해도 충돌 없음
+KEY_TMP="/tmp/oci_key_$$"
 
-ENV_MD="$HOME/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/env.md"
+# ── private key 추출 (Doppler 우선) ───────────────────────
+KEY_B64=""
 
-# ── private key 복원 ──────────────────────────────────────
-# env.md에서 base64 키 블록을 추출
-# 파싱 방식: "Private Key (base64):" 줄 찾기 → 여는 ``` 건너뛰기 → 내용 수집 → 닫는 ``` 에서 종료
-KEY_B64=$(awk '
-    /Private Key \(base64\):/ { found=1; next }
-    found && /^```/ && !inblock { inblock=1; next }
-    found && inblock && /^```/ { exit }
-    found && inblock { print }
-' "$ENV_MD" | tr -d '\n')
+# 1순위: Doppler
+if command -v doppler >/dev/null 2>&1; then
+    KEY_B64=$(doppler secrets get OCI_SSH_KEY_B64 --plain 2>/dev/null | tr -d '\n' || true)
+fi
+
+# 2순위 (Mac 폴백): iCloud env.md
+if [[ -z "$KEY_B64" ]]; then
+    ENV_MD="$HOME/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/env.md"
+    if [[ -f "$ENV_MD" ]]; then
+        KEY_B64=$(awk '
+            /Private Key \(base64\):/ { found=1; next }
+            found && /^```/ && !inblock { inblock=1; next }
+            found && inblock && /^```/ { exit }
+            found && inblock { print }
+        ' "$ENV_MD" | tr -d '\n')
+    fi
+fi
 
 if [[ -z "$KEY_B64" ]]; then
-    echo "❌ env.md에서 OCI private key를 찾을 수 없습니다." >&2
+    echo "❌ OCI private key 못 찾음. 다음 중 하나 필요:" >&2
+    echo "   - Doppler: OCI_SSH_KEY_B64 시크릿 설정" >&2
+    echo "   - Mac: ~/Library/Mobile Documents/.../scripts/env.md 의 Private Key (base64) 블록" >&2
     exit 1
 fi
 

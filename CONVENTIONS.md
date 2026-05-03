@@ -10,11 +10,16 @@
 
 **관리 대상 repo — 동일한 원칙 적용:**
 - `clavier-hq`: 신경 중추 (모든 세션이 먼저 읽는 곳)
-- `platform-workers`: Cloudflare Workers 모음 — **canonical 로컬 클론 1개**: `~/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/` (2026-04-28 ADR "platform-workers canonical 클론 = iCloud 경로". 다른 경로 클론 금지 — silent drift 위험. CONCEPTS.md #12 "Cache vs SSOT")
-- `clavier-scripts` (Mac): `~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/`
-- `oci-scripts` (OCI 서버): `~/oci-scripts/` on ubuntu@168.107.63.94
+- `platform-workers`: Cloudflare Workers 모음
+- `clavier-scripts`: Mac/OCI/web 공용 스크립트
+- `oci-scripts`: OCI 서버 전용
 
-**1 repo = 1 canonical 클론**: 같은 repo를 여러 경로에 클론하지 말 것. stale 클론은 "어느 게 진실인가" 모호함을 만들고 잘못된 결론(예: "코드가 어디에도 없다")으로 이어짐.
+**SSOT = GitHub(code) + Doppler(runtime config) 둘 뿐.** 로컬 클론은 모두 휘발성 peer — 어느 환경(Mac iCloud / OCI VM / Claude web 세션 / 새 노트북 / 미래의 라즈베리파이 등)에 클론되어 있든 동등. "canonical 클론 1개" 규칙은 폐기됨 (2026-05-03 ADR "environment-peer 모델"). 실용 경로(예: Mac 의 `~/Library/Mobile Documents/.../scripts/`, OCI 의 `~/oci-scripts/`)는 그 환경의 편의일 뿐 아키텍처적 진실이 아님.
+
+**silent drift 방어막** (canonical 폐기 후 대체 메커니즘):
+1. 모든 환경이 세션 시작 시 `git fetch && git status` + ahead/behind 0/0 확인 (아래 "다중 환경 커밋 위생" 섹션)
+2. 미커밋 변경 절대 환경 간 잔존 금지 — 작업 종료 시 commit + push + draft PR
+3. main 직접 push 금지, 모든 작업은 feature/`claude/...` 브랜치 → PR 머지로만 main 진입
 
 어떤 작업을 하든, 크든 작든, 각 폴더 안의 파일을 건드렸다면 **반드시 git commit을 남겨라.**
 
@@ -54,6 +59,39 @@
 - 여러 독립적 기능이 섞이면 → 분리 브랜치 제안
 
 절대 사용자가 먼저 물어보길 기다리지 말 것. git은 안전망이므로 Claude가 먼저 챙겨야 한다.
+
+---
+
+## 다중 환경 커밋 위생 (2026-05-03~)
+
+같은 repo를 여러 환경에서 동시에 작업할 때 (web 세션 / OCI 상주 에이전트 / Mac 노트북) 충돌·유실 방지 절차.
+
+**원칙: main 직접 push 금지, 작업은 항상 전용 브랜치**
+- web 세션·OCI 에이전트는 모두 `claude/...` 또는 feature 브랜치에서만 작업. main 은 PR 머지로만 진입.
+- 다른 환경에 미커밋 변경(stash, 작업 중 파일)이 남아있어도 main 이 격리되어 있으면 안전.
+
+**세션 시작 시 (1순위 — 다른 작업 전에)**
+```bash
+git status                              # 워킹트리 깨끗한가
+git fetch origin
+git rev-list --left-right --count origin/<branch>...HEAD   # ahead/behind 0/0 확인
+```
+어느 브랜치인지 / origin 과 동기인지 먼저 확인하고 작업 시작.
+
+**세션 종료 시**
+- 작업 끝나면 즉시 commit + `git push -u origin <branch>` + draft PR 생성.
+- 미커밋 변경 절대 남기지 말 것 (다른 환경에서 헷갈림).
+
+**노트북에서 다른 환경 작업 머지 (사용자 수동)**
+```bash
+git status                # 노트북 미커밋 변경 확인
+git stash -u              # 있으면 stash (untracked 포함)
+git fetch origin
+git checkout <branch> && git pull
+git stash pop             # 다시 적용 → 충돌나면 그때 해결
+```
+
+GitHub = SSOT, 토큰 = Doppler. 환경은 휘발성, 커밋만 영속. 이 순서만 지키면 환경 늘어나도 충돌 안 남.
 
 ---
 

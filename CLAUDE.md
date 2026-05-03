@@ -97,11 +97,18 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 
 부가: `webExporter/webSiteExporter.py` 의 `webSiteExporter discover_pages` 가 인덱스 페이지네이션 인지(1~3p × detail 3개) 크롤링 지원(2026-04-28).
 
-## platform-workers 클론 규칙 (2026-04-28~)
+## environment-peer 모델 (2026-05-03~, 이전 "canonical 클론" 규칙 폐기)
 
-**`platform-workers` repo의 canonical 로컬 클론은 1개**: `~/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers`. 다른 경로(`~/platform-workers`, `~/code/platform-workers`)에 새 클론 만들지 말 것. 이미 있다면 삭제 권유.
+**SSOT = GitHub(code) + Doppler(runtime config) 둘 뿐.** 어느 환경(Mac iCloud / OCI VM / Claude web / 새 노트북 / 미래 서버)에 클론되어 있든 동등한 peer. 특정 경로를 "canonical" 로 지정하지 않음.
 
-**왜**: 동일 repo 다중 클론은 silent drift의 정의적 케이스 (CONCEPTS.md #12 "Cache vs SSOT"). 도구(`doppler-sync-wrangler` 등)도 stale 클론을 가리키면 잘못된 결론을 만듦. DECISIONS.md 2026-04-28 "platform-workers canonical 클론 = iCloud 경로" 참조.
+**왜 폐기했나**: OCI 상주 에이전트 + 다중 환경 운영(CONVENTIONS "다중 환경 커밋 위생") 시 "canonical 1개" 가정이 환경 확장을 가로막음. 진짜 SSOT 는 외부(GitHub/Doppler)에 있으므로 로컬 클론은 모두 휘발성 캐시. silent drift 방어는 "canonical 강제" 가 아니라 "모든 환경이 시작 시 fetch+status, 종료 시 commit+push" 로 대체. DECISIONS.md 2026-05-03 ADR "environment-peer 모델" 참조.
+
+**실용 경로** (편의일 뿐, 강제 아님):
+- Mac: `~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/`, `.../0/code/projects/platform-workers/`
+- OCI: `~/oci-scripts/`, `~/clavier-scripts/`, `~/platform-workers/` on `ubuntu@168.107.63.94`
+- web (Claude Code on web): 세션 워크디렉토리, 휘발성
+
+**sibling-first 자동 탐색 (2026-05-03~)**: Layer 1 도구는 관련 repo 위치를 ① env override → ② sibling 디렉토리(`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 fallback 순으로 찾음. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs) / inline (.sh). OCI 부트는 `clavier-scripts`/`clavier-hq`/`platform-workers` 를 형제로 clone — zero-config. ARCHITECTURE.md "이 repo 안 파일의 Layer 분류" 표 참조.
 
 ## framer-sync 인터페이스 동결 규칙 (2026-04-28~)
 

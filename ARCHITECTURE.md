@@ -45,15 +45,63 @@ Mac overnight-runner (03:00 매일, doppler run 래핑)
 >
 > **결정 전파 자동 검증 (Defense in Depth, 2026-04-28~)**: DECISIONS.md ADR이 12개 표준 문서에 일관되게 반영됐는지 `doc-coverage` 도구가 자동 검증. 3 Layer (Claude 즉시 규칙 + clavier-hq post-commit 훅 + Conductor 주간). 모든 ADR/개념은 **Notion Architecture Archive**에 자동 미러 (overnight-runner 매일 03:00, Timeline + Concepts 이중 인덱스).
 
+---
+
+## 환경 모델 — Layer 0/1/2 (2026-05-03~)
+
+이 시스템은 **environment-peer 모델** 위에 작동한다. SSOT 는 외부에 있고, 실행 환경은 모두 휘발성 peer.
+
+```
+Layer 0 — SSOT (환경 독립, 외부)
+  ├── GitHub       : code (모든 repo 의 진실)
+  └── Doppler      : runtime config (project: clavier, config: prd)
+       │
+       │  fetch / inject
+       ▼
+Layer 1 — Peer 실행 환경 (interchangeable, 모두 동등)
+  ├── Mac 노트북     : 사용자 앞에 있을 때 / interactive
+  ├── OCI VM        : 168.107.63.94, 24/7 상주 에이전트
+  ├── Claude web    : claude.ai/code, 임시 세션 (휘발성)
+  └── Cloudflare    : Workers production 런타임
+       │
+       │  optional layer
+       ▼
+Layer 2 — Platform 확장 (opt-in per environment)
+  ├── platform/mac/ : launchd, ~/bin symlink, iCloud 절대경로, framer 명령
+  ├── platform/oci/ : systemd, n8n hooks, OCI 전용 paths
+  ├── platform/cf/  : wrangler, KV/D1 (doppler-sync-wrangler 가 다리)
+  └── platform/web/ : (없음 — pure Layer 0+1)
+```
+
+**핵심 규칙**:
+1. 어떤 환경이든 `git clone + doppler login + setup.sh` 만으로 동급 peer 부트.
+2. Layer 2 는 환경별 편의일 뿐 — Mac launchd 가 없다고 해서 OCI peer 가 덜 peer 인 건 아님.
+3. 새 환경 추가 = `platform/<env>/` 디렉토리 + setup.sh 의 환경 감지 분기. ADR 논쟁 불필요.
+
+**이 repo 안 파일의 Layer 분류**:
+
+| Layer | 파일/폴더 | 비고 |
+|-------|-----------|------|
+| Layer 1 (환경 독립, sibling-first) | `tools/lib/repoPaths.mjs`, `tools/workerCtl.mjs`, `tools/overnight-runner.mjs`, `tools/doc-coverage.sh`, `tools/doppler-sync-wrangler.sh` | env > sibling > iCloud Mac fallback 자동 탐색 — 어느 peer 든 zero-config |
+| Layer 2 / Mac | `setup.sh`, `installScripts.sh`, `daemons/`, `tools/runSafariTabsExport.sh`, `tools/scriptsList.sh`, `tools/scripts.sh`, `tools/sessionStartContext.sh`, `tools/doppler-mirror-icloud.sh`, `daemons/syncObsidian.py`, `daemons/syncMemory.sh` | Mac launchd / iCloud 의존이 본질 (Obsidian/Safari/Memory 가 거기 있음) |
+| Layer 2 / OCI | `clouds/oci/bootstrap-agent.sh`, `clouds/oci/ociIn.sh` (Doppler 우선, iCloud 폴백) | OCI-specific 또는 OCI 접속용 |
+| 메타/문서 | `CLAUDE.md`, `CONVENTIONS.md`, `ARCHITECTURE.md`, `README.md` | 모든 환경에서 읽음 |
+
+> **sibling-first 관례 (2026-05-03~)**: Layer 1 도구는 관련 repo (clavier-hq, platform-workers) 를 다음 우선순위로 자동 탐색 — ① env override (`CLAVIER_HQ`, `PLATFORM_WORKERS` 등) → ② sibling 디렉토리 (`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 경로 (`~/Library/Mobile Documents/.../code/projects/<name>`). OCI peer 는 `~/clavier-scripts`, `~/clavier-hq`, `~/platform-workers` 를 형제로 두면 zero-config. Mac peer 는 iCloud 관례로 동작. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs 도구) / inline 패턴 (.sh 도구).
+>
+> Layer 2 가 없는 환경(예: web, OCI agent)에서는 해당 도구 호출만 안 하면 됨. Mac 의존 도구가 OCI 에서 깨져도 Layer 1 은 영향 없음.
+
+---
+
 ## 모듈 목록
 
-| 모듈 | Repo | ARCHITECTURE.md 위치 |
+| 모듈 | Repo | ARCHITECTURE.md 위치 (Mac peer 기준 예시) |
 |------|------|----------------------|
 | **Mac 자동화** | `clavier0/clavier-scripts` | 이 파일 |
 | **CF Workers** | `clavier0/platform-workers` | `iCloud/0/code/projects/platform-workers/framer-sync/ARCHITECTURE.md` |
 | **시스템 상태** | `clavier0/clavier-hq` | `iCloud/0/code/projects/clavier-hq/` (MISSION/STATUS/QUEUE/DECISIONS) |
 
-> **canonical 클론 원칙 (2026-04-28~)**: 위 표의 경로는 **유일한 로컬 클론**이다. 같은 repo를 다른 경로(`~/platform-workers`, `~/code/...`)에 추가 클론하지 말 것 — silent drift 발생. `doppler-sync-wrangler`의 `PLATFORM_WORKERS_DIR` 등 도구 기본값도 이 경로 기준. DECISIONS.md "platform-workers canonical 클론 = iCloud 경로" 참조.
+> **environment-peer 모델 (2026-05-03~, 이전 "canonical 클론 원칙" 폐기)**: 위 표의 경로는 **Mac peer 의 실용 예시**일 뿐 유일 클론이 아님. OCI peer 는 `~/clavier-scripts/`, `~/platform-workers/` 등 자체 경로를 사용. silent drift 방어는 "canonical 강제" 가 아니라 "모든 환경이 시작 시 fetch+status, 종료 시 commit+push" — CONVENTIONS "다중 환경 커밋 위생" 섹션 참조. DECISIONS.md "environment-peer 모델" ADR 참조.
 
 ---
 
