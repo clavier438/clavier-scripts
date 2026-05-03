@@ -93,6 +93,8 @@ git stash pop             # 다시 적용 → 충돌나면 그때 해결
 
 GitHub = SSOT, 토큰 = Doppler. 환경은 휘발성, 커밋만 영속. 이 순서만 지키면 환경 늘어나도 충돌 안 남.
 
+> 이 섹션이 environment-peer 모델의 "위생" 측면. Layer 1 도구 자체는 **sibling-first** 자동 탐색 (env > sibling > iCloud Mac fallback) 이라 환경변수 export 없이 어느 peer 에서도 작동 — `tools/lib/repoPaths.mjs` 헬퍼 + `ARCHITECTURE.md` "이 repo 안 파일의 Layer 분류" 표 참조. 결정 본문: clavier-hq DECISIONS 2026-05-03.
+
 ---
 
 ## 메모리 원칙

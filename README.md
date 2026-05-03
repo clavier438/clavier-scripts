@@ -26,6 +26,11 @@
 - clavier-hq `hooks/post-commit` 자동 발동 — DECISIONS.md commit 시 즉시 검증
 - Notion Architecture Archive — DECISIONS/CONCEPTS 자동 미러 (overnight-runner 매일 03:00)
 
+**환경 모델 (2026-05-03~)** — **environment-peer**:
+- "1 repo = 1 canonical 클론" 폐기. Mac iCloud / OCI VM / Claude web / Cloudflare Workers 는 모두 휘발성 peer (동등). 진짜 SSOT = GitHub(code) + Doppler(config).
+- Layer 1 도구 5개 (workerCtl / overnight-runner / doc-coverage / doppler-sync-wrangler / ociIn) 가 **sibling-first** 자동 탐색 — env > sibling > iCloud Mac fallback. 어느 환경에서 호출해도 zero-config.
+- 자세한 결정: `clavier-hq/DECISIONS.md` 2026-05-03 ADR.
+
 ---
 
 ## 디렉토리 구조
