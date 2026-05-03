@@ -26,20 +26,28 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
 import { execSync } from "child_process"
 import { join } from "path"
+import { REPO_ROOT, findClavierHq } from "./lib/repoPaths.mjs"
 
-// alias 의존 금지 — zsh 환경 없는 /bin/sh에서 claude를 직접 경로로 호출
-const CLAUDE_BIN = "/Users/clavier/.local/bin/claude"
-const SCRIPTS_DIR = "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts"
-
-const HQ = (() => {
-    const candidates = [
-        join(process.env.HOME ?? "", "Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq"),
-    ]
-    return candidates.find(p => existsSync(p))
+// claude 바이너리 경로 — env > which 자동탐색 > Mac 관례 > Linux 관례 (sibling-first 정신)
+const CLAUDE_BIN = (() => {
+    if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN
+    try {
+        return execSync("command -v claude", { encoding: "utf8" }).trim() || null
+    } catch { /* fallthrough */ }
+    const home = process.env.HOME ?? ""
+    for (const p of [`${home}/.local/bin/claude`, "/usr/local/bin/claude"]) {
+        if (existsSync(p)) return p
+    }
+    return null
 })()
 
+// 이 repo 의 root — sibling 관례에 따라 자동 산출
+const SCRIPTS_DIR = REPO_ROOT
+
+const HQ = findClavierHq()
+
 if (!HQ) {
-    console.error("clavier-hq 경로 못 찾음. 종료.")
+    console.error("clavier-hq 경로 못 찾음. CLAVIER_HQ env 또는 sibling 클론 필요.")
     process.exit(1)
 }
 
@@ -150,7 +158,7 @@ async function main() {
 
     // 1. watchman: workerCtl conduct
     log.push("## 1. watchman: workerCtl conduct")
-    const conductPath = join(process.env.HOME ?? "", "Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/workerCtl.mjs")
+    const conductPath = join(SCRIPTS_DIR, "tools/workerCtl.mjs")
     const watchmanResult = runCmd(`node "${conductPath}" conduct`)
     log.push(watchmanResult.ok ? "✅ 성공" : "❌ 실패")
     log.push("```")
