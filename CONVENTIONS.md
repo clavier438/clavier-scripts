@@ -10,11 +10,16 @@
 
 **관리 대상 repo — 동일한 원칙 적용:**
 - `clavier-hq`: 신경 중추 (모든 세션이 먼저 읽는 곳)
-- `platform-workers`: Cloudflare Workers 모음 — **canonical 로컬 클론 1개**: `~/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/` (2026-04-28 ADR "platform-workers canonical 클론 = iCloud 경로". 다른 경로 클론 금지 — silent drift 위험. CONCEPTS.md #12 "Cache vs SSOT")
-- `clavier-scripts` (Mac): `~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/`
-- `oci-scripts` (OCI 서버): `~/oci-scripts/` on ubuntu@168.107.63.94
+- `platform-workers`: Cloudflare Workers 모음
+- `clavier-scripts`: Mac/OCI/web 공용 스크립트
+- `oci-scripts`: OCI 서버 전용
 
-**1 repo = 1 canonical 클론**: 같은 repo를 여러 경로에 클론하지 말 것. stale 클론은 "어느 게 진실인가" 모호함을 만들고 잘못된 결론(예: "코드가 어디에도 없다")으로 이어짐.
+**SSOT = GitHub(code) + Doppler(runtime config) 둘 뿐.** 로컬 클론은 모두 휘발성 peer — 어느 환경(Mac iCloud / OCI VM / Claude web 세션 / 새 노트북 / 미래의 라즈베리파이 등)에 클론되어 있든 동등. "canonical 클론 1개" 규칙은 폐기됨 (2026-05-03 ADR "environment-peer 모델"). 실용 경로(예: Mac 의 `~/Library/Mobile Documents/.../scripts/`, OCI 의 `~/oci-scripts/`)는 그 환경의 편의일 뿐 아키텍처적 진실이 아님.
+
+**silent drift 방어막** (canonical 폐기 후 대체 메커니즘):
+1. 모든 환경이 세션 시작 시 `git fetch && git status` + ahead/behind 0/0 확인 (아래 "다중 환경 커밋 위생" 섹션)
+2. 미커밋 변경 절대 환경 간 잔존 금지 — 작업 종료 시 commit + push + draft PR
+3. main 직접 push 금지, 모든 작업은 feature/`claude/...` 브랜치 → PR 머지로만 main 진입
 
 어떤 작업을 하든, 크든 작든, 각 폴더 안의 파일을 건드렸다면 **반드시 git commit을 남겨라.**
 
