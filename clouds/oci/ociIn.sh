@@ -2,7 +2,7 @@
 # ociIn — OCI 서버(168.107.63.94) SSH 연결 (Doppler 우선, env.md@iCloud 폴백)
 #
 # 동작:
-#   1) Doppler 시크릿 OCI_SSH_PRIVATE_KEY_B64 에서 키 추출 (1순위)
+#   1) Doppler 시크릿 OCI_SSH_KEY_B64 에서 키 추출 (1순위)
 #      미설정 시 → env.md@iCloud 의 "Private Key (base64):" 블록 (Mac 폴백)
 #   2) /tmp 임시 파일로 복원, 권한 600
 #   3) SSH 연결
@@ -13,7 +13,7 @@
 #   ./connectSsh.sh "명령어"  → 명령어 한 줄 실행 후 종료
 #
 # Doppler 마이그레이션 (iCloud 의존 완전 제거):
-#   doppler secrets set OCI_SSH_PRIVATE_KEY_B64="$(cat <키파일> | base64 | tr -d '\n')"
+#   doppler secrets set OCI_SSH_KEY_B64="$(cat <키파일> | base64 | tr -d '\n')"
 
 set -euo pipefail
 
@@ -28,7 +28,7 @@ KEY_B64=""
 
 # 1순위: Doppler
 if command -v doppler >/dev/null 2>&1; then
-    KEY_B64=$(doppler secrets get OCI_SSH_PRIVATE_KEY_B64 --plain 2>/dev/null | tr -d '\n' || true)
+    KEY_B64=$(doppler secrets get OCI_SSH_KEY_B64 --plain 2>/dev/null | tr -d '\n' || true)
 fi
 
 # 2순위 (Mac 폴백): iCloud env.md
@@ -46,7 +46,7 @@ fi
 
 if [[ -z "$KEY_B64" ]]; then
     echo "❌ OCI private key 못 찾음. 다음 중 하나 필요:" >&2
-    echo "   - Doppler: OCI_SSH_PRIVATE_KEY_B64 시크릿 설정" >&2
+    echo "   - Doppler: OCI_SSH_KEY_B64 시크릿 설정" >&2
     echo "   - Mac: ~/Library/Mobile Documents/.../scripts/env.md 의 Private Key (base64) 블록" >&2
     exit 1
 fi
