@@ -108,6 +108,8 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 - OCI: `~/oci-scripts/`, `~/clavier-scripts/`, `~/platform-workers/` on `ubuntu@168.107.63.94`
 - web (Claude Code on web): 세션 워크디렉토리, 휘발성
 
+**sibling-first 자동 탐색 (2026-05-03~)**: Layer 1 도구는 관련 repo 위치를 ① env override → ② sibling 디렉토리(`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 fallback 순으로 찾음. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs) / inline (.sh). OCI 부트는 `clavier-scripts`/`clavier-hq`/`platform-workers` 를 형제로 clone — zero-config. ARCHITECTURE.md "이 repo 안 파일의 Layer 분류" 표 참조.
+
 ## framer-sync 인터페이스 동결 규칙 (2026-04-28~)
 
 **프레이머가 변화를 알 수 없게 한다.** framer-sync 워커는 Framer 측 스키마를 수정하는 모든 RPC 호출(`addFields`, `createCollection`, `removeFields`)을 호출하지 않는다. `getFields()`로 read-only 조회만 하고, 매칭 안 되는 필드는 `[needs-manual-framer-setup]` 경고 후 graceful skip. Airtable에 새 필드를 추가했는데 Framer 슬롯이 없는 상황을 마주치면 → 워커 코드를 고치려 하지 말고, 사용자에게 "Framer 편집기에서 슬롯 생성하세요" 안내. 그 후 sync 트리거하면 자동 발견. DECISIONS.md 2026-04-28 "framer-sync = '프레이머를 속인다'" 참조.

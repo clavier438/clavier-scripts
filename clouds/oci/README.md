@@ -67,7 +67,8 @@ fresh OCI VM 에 처음 들어갔을 때 1회만 실행:
 # 1) clavier-scripts clone (이 README 가 들어있는 repo)
 git clone https://github.com/clavier0/clavier-scripts ~/clavier-scripts
 
-# 2) 부트스트랩 (apt deps + Node.js LTS + Doppler CLI + Claude Code CLI)
+# 2) 부트스트랩 — apt deps + Node.js LTS + Doppler CLI + Claude Code CLI +
+#    sibling repo(clavier-hq, platform-workers) 자동 clone
 bash ~/clavier-scripts/clouds/oci/bootstrap-agent.sh
 
 # 3) Doppler 인증 (인터랙티브 — 모바일 브라우저로도 가능)
@@ -76,9 +77,10 @@ doppler setup --project clavier --config prd
 
 # 4) 동작 확인
 doppler run -- claude --version
+doppler run -- node ~/clavier-scripts/tools/workerCtl.mjs   # sibling-first 자동 탐색 검증
 ```
 
-스크립트는 멱등 — 재실행 안전. 자세한 단계는 `bootstrap-agent.sh` 헤더 참조.
+스크립트는 멱등 — 재실행 안전. 부트 후 `~/clavier-scripts`, `~/clavier-hq`, `~/platform-workers` 가 형제로 배치되어 Layer 1 도구(workerCtl, doc-coverage, doppler-sync-wrangler, overnight-runner) 가 zero-config 작동. 자세한 단계는 `bootstrap-agent.sh` 헤더 참조.
 
 ## 모바일에서 OCI 에이전트 트리거
 
