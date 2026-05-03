@@ -52,8 +52,54 @@ show-status           전체 상태 요약
 OCI 서버 (168.107.63.94)
 ├── n8n (포트 5678)
 │    └── Cloudflare Tunnel → 외부 접근 가능 (URL은 재시작 시 변경됨)
+├── Claude 에이전트 peer (2026-05-03~)
+│    └── doppler run -- claude  (모바일 SSH 또는 cron 트리거)
 └── 자동 백업 → GitHub (clavier0/OCI_hyuk439)
 ```
+
+> **environment-peer 모델**: OCI 는 Mac 노트북·Claude web 과 동등한 peer. SSOT(GitHub+Doppler) 만 살아있으면 어떤 작업이든 OCI 에서 실행 가능. ARCHITECTURE.md "환경 모델 — Layer 0/1/2" 참조.
+
+## Claude 에이전트 부트스트랩 (2026-05-03~)
+
+fresh OCI VM 에 처음 들어갔을 때 1회만 실행:
+
+```bash
+# 1) clavier-scripts clone (이 README 가 들어있는 repo)
+git clone https://github.com/clavier0/clavier-scripts ~/clavier-scripts
+
+# 2) 부트스트랩 (apt deps + Node.js LTS + Doppler CLI + Claude Code CLI)
+bash ~/clavier-scripts/clouds/oci/bootstrap-agent.sh
+
+# 3) Doppler 인증 (인터랙티브 — 모바일 브라우저로도 가능)
+doppler login
+doppler setup --project clavier --config prd
+
+# 4) 동작 확인
+doppler run -- claude --version
+```
+
+스크립트는 멱등 — 재실행 안전. 자세한 단계는 `bootstrap-agent.sh` 헤더 참조.
+
+## 모바일에서 OCI 에이전트 트리거
+
+전제: 모바일에 SSH 클라이언트(Termius, Blink 등) + OCI private key 등록.
+
+**일회성 작업** (mobile → OCI 단발 실행):
+```bash
+ssh ubuntu@168.107.63.94 \
+  "cd ~/<repo> && doppler run -- claude -p '<task 내용>'"
+```
+
+**대화형 세션** (긴 작업, 모바일에서 직접):
+```bash
+ssh ubuntu@168.107.63.94
+cd ~/<repo>
+doppler run -- claude
+```
+
+**새벽 자동 실행** (예: cron, systemd timer):
+- bootstrap 은 단발 실행만 보장. 정기 작업은 별도 systemd timer 또는 cron 으로 `doppler run -- claude -p '<task>'` 호출.
+- 향후 별도 commit 으로 `clouds/oci/systemd/` 또는 cron 템플릿 추가 예정.
 
 ## Private Key 위치
 
