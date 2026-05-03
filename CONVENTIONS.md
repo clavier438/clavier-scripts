@@ -57,6 +57,39 @@
 
 ---
 
+## 다중 환경 커밋 위생 (2026-05-03~)
+
+같은 repo를 여러 환경에서 동시에 작업할 때 (web 세션 / OCI 상주 에이전트 / Mac 노트북) 충돌·유실 방지 절차.
+
+**원칙: main 직접 push 금지, 작업은 항상 전용 브랜치**
+- web 세션·OCI 에이전트는 모두 `claude/...` 또는 feature 브랜치에서만 작업. main 은 PR 머지로만 진입.
+- 다른 환경에 미커밋 변경(stash, 작업 중 파일)이 남아있어도 main 이 격리되어 있으면 안전.
+
+**세션 시작 시 (1순위 — 다른 작업 전에)**
+```bash
+git status                              # 워킹트리 깨끗한가
+git fetch origin
+git rev-list --left-right --count origin/<branch>...HEAD   # ahead/behind 0/0 확인
+```
+어느 브랜치인지 / origin 과 동기인지 먼저 확인하고 작업 시작.
+
+**세션 종료 시**
+- 작업 끝나면 즉시 commit + `git push -u origin <branch>` + draft PR 생성.
+- 미커밋 변경 절대 남기지 말 것 (다른 환경에서 헷갈림).
+
+**노트북에서 다른 환경 작업 머지 (사용자 수동)**
+```bash
+git status                # 노트북 미커밋 변경 확인
+git stash -u              # 있으면 stash (untracked 포함)
+git fetch origin
+git checkout <branch> && git pull
+git stash pop             # 다시 적용 → 충돌나면 그때 해결
+```
+
+GitHub = SSOT, 토큰 = Doppler. 환경은 휘발성, 커밋만 영속. 이 순서만 지키면 환경 늘어나도 충돌 안 남.
+
+---
+
 ## 메모리 원칙
 
 - 새로운 구조, 결정, 선호, 계정 정보 등을 파악하면 **즉시** `~/.claude/projects/-Users-clavier/memory/`에 저장해라
