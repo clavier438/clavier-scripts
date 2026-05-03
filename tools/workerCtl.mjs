@@ -15,10 +15,17 @@ import { execSync, spawnSync } from "child_process"
 import { fileURLToPath } from "url"
 import { dirname, join } from "path"
 import { homedir } from "os"
+import { findPlatformWorkers, findClavierHq } from "./lib/repoPaths.mjs"
 
 // framer-sync 코드 본체 경로 (wrangler 명령 실행 기준 디렉토리)
+// sibling-first 자동 탐색 (environment-peer 모델, DECISIONS 2026-05-03)
 const FRAMER_SYNC_DIR = process.env.FRAMER_SYNC_DIR
-    ?? join(process.env.HOME ?? "", "Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/framer-sync")
+    ?? (findPlatformWorkers() ? join(findPlatformWorkers(), "framer-sync") : null)
+
+if (!FRAMER_SYNC_DIR || !existsSync(FRAMER_SYNC_DIR)) {
+    console.error(`framer-sync 경로 못 찾음. FRAMER_SYNC_DIR env 설정 또는 platform-workers repo 클론 필요.`)
+    process.exit(1)
+}
 
 // 워커 URL 패턴 — Cloudflare account subdomain
 const WORKER_SUBDOMAIN = process.env.WORKER_SUBDOMAIN ?? "hyuk439.workers.dev"
@@ -65,13 +72,8 @@ try {
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 
-const WORKERS_JSON = (() => {
-    const candidates = [
-        join(__dir, "workers.json"),
-        join(process.env.HOME ?? "", "Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/workers.json"),
-    ]
-    return candidates.find(p => existsSync(p)) ?? candidates[0]
-})()
+// workers.json 은 항상 이 도구 옆에 있음 (같은 repo 안)
+const WORKERS_JSON = join(__dir, "workers.json")
 
 // ── 색상 유틸 ──────────────────────────────────────────────────────────────
 const c = {
@@ -889,13 +891,7 @@ async function runSetUrl(args) {
 }
 
 // ── conduct ───────────────────────────────────────────────────────────────
-function findClavierHq() {
-    const candidates = [
-        join(process.env.HOME ?? "", "Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq"),
-        join(__dir, "..", "..", "..", "code", "projects", "clavier-hq"),
-    ]
-    return candidates.find(p => existsSync(p))
-}
+// findClavierHq 는 lib/repoPaths.mjs 에서 import (sibling-first)
 
 async function runConduct(workers) {
     await runPanel(workers)
