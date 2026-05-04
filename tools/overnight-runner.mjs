@@ -11,10 +11,11 @@
  *   strategist        매일 08:00  — 브랜드/비즈니스 전략 + researcher (scheduled task)
  *
  * 동작:
+ *   0. police: 새벽 헬스 순찰 (precheck + 5 영역 — workers/repos/actions/framer-sync/OCI)
  *   1. watchman: worker-ctl conduct (워커 상태 스냅샷)
  *   2. info-arch: Notion IA 점검 + 모바일 큐 이식
  *   3. scribe: DECISIONS/CONCEPTS → Notion 아카이브 미러
- *   4. auditor: 직전 24h 작업 효율 감사
+ *   4. Ray: Pain Button 감사 (Ray Dalio)
  *   5. queue: OVERNIGHT_QUEUE.md 미체크 항목 실행
  *   6. 로그 저장: briefings/overnight-YYYY-MM-DD.md
  *
@@ -160,17 +161,34 @@ async function main() {
     log.push(`# 비서 야간 처리 — ${new Date().toISOString()}`)
     log.push("")
 
-    // 0. morning shield: 환경 사전 점검 (다음날 작업 시작 전 병목 미리 발견)
-    //    precheck all 이 모든 외부 도구 (airtable / github / cloudflare / doppler / framer-sync)
-    //    헬스 + 시그니처 회귀 검증. red dot 발견 시 briefing 알람 + macOS notification.
-    log.push("## 0. morning shield: 환경 사전 점검")
-    const precheckResult = runCmd(`bash "${join(SCRIPTS_DIR, "tools/precheck.sh")}" all`, 60000)
-    log.push(precheckResult.ok ? "✅ 모든 환경 OK — 다음 날 작업 차단 요소 없음" : "🔴 빨간점 발견 — 작업 시작 전 사용자 결정 필요")
-    log.push("```")
-    log.push(precheckResult.output)
-    log.push("```")
+    // 0. police: 매일 새벽 핵심 영역 순찰 + precheck 해석 (Conductor 와 SRP 분리)
+    //    police agent 가 precheck all 실행 + 5 영역 순찰 (workers/repos/actions/framer-sync/OCI)
+    //    + 분류 (🟢/🟡/🔴) + 자동 수정 가능한 건 시도 + 결정 필요는 alarm.
+    //    police-prompt.md 없으면 precheck.sh 직접 실행 fallback.
+    log.push("## 0. police: 새벽 헬스 순찰")
+    const policePromptPath = join(HQ, "police-prompt.md")
+    let shieldRedDot = false
+    if (existsSync(policePromptPath) && CLAUDE_BIN && existsSync(CLAUDE_BIN)) {
+        const policeResult = runCmd(
+            `cd "${SCRIPTS_DIR}" && "${CLAUDE_BIN}" --dangerously-skip-permissions -p "$(cat '${policePromptPath}')"`,
+            300000
+        )
+        if (!policeResult.ok) { failCount++; shieldRedDot = true }
+        log.push(policeResult.ok ? "✅ 순찰 완료" : "🔴 순찰 실패 또는 빨간점 발견")
+        log.push("```")
+        log.push(policeResult.output)
+        log.push("```")
+    } else {
+        // fallback: precheck.sh 직접 실행 (claude 바이너리 없거나 prompt 없을 때)
+        log.push("⚠️ police-prompt.md 또는 claude 바이너리 부재 — precheck.sh 직접 실행")
+        const precheckResult = runCmd(`bash "${join(SCRIPTS_DIR, "tools/precheck.sh")}" all`, 60000)
+        log.push(precheckResult.ok ? "✅ 모든 환경 OK" : "🔴 빨간점 발견")
+        log.push("```")
+        log.push(precheckResult.output)
+        log.push("```")
+        if (!precheckResult.ok) shieldRedDot = true
+    }
     log.push("")
-    let shieldRedDot = !precheckResult.ok
 
     // 1. watchman: workerCtl conduct
     log.push("## 1. watchman: workerCtl conduct")
