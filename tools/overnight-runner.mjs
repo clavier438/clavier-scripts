@@ -10,14 +10,16 @@
  *   architect         매주 월요일 — 클린아키텍처 주간 감사 (scheduled task)
  *   strategist        매일 08:00  — 브랜드/비즈니스 전략 + researcher (scheduled task)
  *
- * 동작:
- *   0. police: 새벽 헬스 순찰 (precheck + 5 영역 — workers/repos/actions/framer-sync/OCI)
- *   1. watchman: worker-ctl conduct (워커 상태 스냅샷)
- *   2. info-arch: Notion IA 점검 + 모바일 큐 이식
- *   3. scribe: DECISIONS/CONCEPTS → Notion 아카이브 미러
- *   4. Ray: Pain Button 감사 (Ray Dalio)
- *   5. queue: OVERNIGHT_QUEUE.md 미체크 항목 실행
- *   6. 로그 저장: briefings/overnight-YYYY-MM-DD.md
+ * 동작 (STL 원칙 — DECISIONS.md 2026-05-04 ADR):
+ *   새벽루틴 (overnight) = 매일 03:00 영역의 단일 책임자, 사용자에 직접 보고.
+ *   부하 3명을 임명·감독:
+ *     부하 1: police   — 5 영역 헬스 순찰 (precheck all)
+ *     부하 2: watchman — 워커 KV 스냅샷 (workerCtl conduct)
+ *     부하 3: queue    — OVERNIGHT_QUEUE.md 사용자 박은 명령 실행
+ *   통합: overnight-prompt.md (새벽루틴 entity) 가 부하 raw 3개 → 단일 briefing 작성
+ *   저장: briefings/overnight-YYYY-MM-DD.md (사용자가 보는 유일한 보고)
+ *
+ *   info-arch / scribe / Ray = clavier-hq/archive/ 로 이동 (STL 위반 — 무소속).
  *
  * 수동 실행:
  *   node tools/overnight-runner.mjs        # 정상 실행
@@ -165,7 +167,7 @@ async function main() {
     //    police agent 가 precheck all 실행 + 5 영역 순찰 (workers/repos/actions/framer-sync/OCI)
     //    + 분류 (🟢/🟡/🔴) + 자동 수정 가능한 건 시도 + 결정 필요는 alarm.
     //    police-prompt.md 없으면 precheck.sh 직접 실행 fallback.
-    log.push("## 0. police: 새벽 헬스 순찰")
+    log.push("## 부하 1: police (새벽 헬스 순찰)")
     const policePromptPath = join(HQ, "police-prompt.md")
     let shieldRedDot = false
     if (existsSync(policePromptPath) && CLAUDE_BIN && existsSync(CLAUDE_BIN)) {
@@ -190,8 +192,8 @@ async function main() {
     }
     log.push("")
 
-    // 1. watchman: workerCtl conduct
-    log.push("## 1. watchman: workerCtl conduct")
+    // 부하 2: watchman — workerCtl conduct
+    log.push("## 부하 2: watchman (워커 KV 스냅샷)")
     const conductPath = join(SCRIPTS_DIR, "tools/workerCtl.mjs")
     const watchmanResult = runCmd(`node "${conductPath}" conduct`)
     log.push(watchmanResult.ok ? "✅ 성공" : "❌ 실패")
@@ -209,66 +211,17 @@ async function main() {
         failCount++
     } else {
 
-    // 2. info-arch: Notion IA 점검 + 모바일 큐 이식
-    log.push("## 2. info-arch: Notion IA 점검")
-    const infoArchPromptPath = join(HQ, "info-arch-prompt.md")
-    if (existsSync(infoArchPromptPath)) {
-        const infoArchResult = runCmd(
-            `cd "${SCRIPTS_DIR}" && "${CLAUDE_BIN}" --dangerously-skip-permissions -p "$(cat '${infoArchPromptPath}')"`,
-            300000
-        )
-        if (!infoArchResult.ok) failCount++
-        log.push(infoArchResult.ok ? "✅ 성공" : "❌ 실패")
-        log.push("```")
-        log.push(infoArchResult.output)
-        log.push("```")
-    } else {
-        log.push("⚠️ info-arch-prompt.md 없음 — 건너뜀")
-    }
-    log.push("")
-
-    // 3. scribe: DECISIONS/CONCEPTS → Notion 아카이브 미러
-    log.push("## 3. scribe: Notion 아키텍처 미러")
-    const notionMirrorPromptPath = join(HQ, "notion-mirror-prompt.md")
-    if (existsSync(notionMirrorPromptPath)) {
-        const scribeResult = runCmd(
-            `cd "${SCRIPTS_DIR}" && "${CLAUDE_BIN}" --dangerously-skip-permissions -p "$(cat '${notionMirrorPromptPath}')"`,
-            600000
-        )
-        if (!scribeResult.ok) failCount++
-        log.push(scribeResult.ok ? "✅ 성공" : "❌ 실패")
-        log.push("```")
-        log.push(scribeResult.output)
-        log.push("```")
-    } else {
-        log.push("⚠️ notion-mirror-prompt.md 없음 — 건너뜀")
-    }
-    log.push("")
-
-    // 4. Ray: Pain Button 감사 (Ray Dalio)
-    log.push("## 4. Ray: Pain 감사")
-    const rayPromptPath = join(HQ, "ray-prompt.md")
-    if (existsSync(rayPromptPath)) {
-        const rayResult = runCmd(
-            `cd "${SCRIPTS_DIR}" && "${CLAUDE_BIN}" --dangerously-skip-permissions -p "$(cat '${rayPromptPath}')"`,
-            300000
-        )
-        if (!rayResult.ok) failCount++
-        log.push(rayResult.ok ? "✅ 성공" : "❌ 실패")
-        log.push("```")
-        log.push(rayResult.output)
-        log.push("```")
-    } else {
-        log.push("⚠️ ray-prompt.md 없음 — 건너뜀")
-    }
-    log.push("")
+    // STL 원칙: step 2 (info-arch) / step 3 (scribe) / step 4 (Ray) 폐기.
+    // info-arch / notion-mirror / ray prompt 는 archive/ 로 이동됨.
+    // 새벽루틴의 부하는 police (부하 1) + watchman (부하 2) + queue (부하 3) 3명만.
+    // 통합 briefing 은 마지막에 overnight-prompt.md (새벽루틴 = 사용자 직접 보고 entity) 가 작성.
 
     } // end claude guard
 
-    // 5. queue: OVERNIGHT_QUEUE.md 처리 (최대 20개)
+    // 부하 3: queue — OVERNIGHT_QUEUE.md 사용자 명령 실행 (최대 20개)
     let text = readFileSync(QUEUE_FILE, "utf8")
     const initialTasks = parseQueue(text).tasks
-    log.push(`## 5. queue: 대기 작업 (${initialTasks.length}개)`)
+    log.push(`## 부하 3: queue (사용자 박은 명령, ${initialTasks.length}개)`)
     log.push("")
 
     if (initialTasks.length === 0) {
@@ -307,13 +260,33 @@ async function main() {
         writeFileSync(QUEUE_FILE, text)
     }
 
-    // 로그 저장
+    // 부하 3명 raw 수집 완료. 통합 → overnight-prompt (새벽루틴) 가 단일 briefing 작성.
+    // STL 원칙: 부하는 사용자에 직접 메시지 X. 새벽루틴이 통합 → 사용자 1 보고.
     mkdirSync(BRIEFINGS_DIR, { recursive: true })
     const logFile = join(BRIEFINGS_DIR, `overnight-${today()}.md`)
-    if (!DRY) {
-        writeFileSync(logFile, log.join("\n"))
+    const rawCollected = log.join("\n")
+    const overnightPromptPath = join(HQ, "overnight-prompt.md")
+    let finalBriefing = rawCollected
+    if (existsSync(overnightPromptPath) && CLAUDE_BIN && existsSync(CLAUDE_BIN)) {
+        const tmpRaw = `/tmp/overnight-raw-${today()}.md`
+        if (!DRY) writeFileSync(tmpRaw, `## 부하 raw 결과 (overnight-runner 가 수집)\n\n${rawCollected}\n`)
+        const integration = runCmd(
+            `"${CLAUDE_BIN}" --dangerously-skip-permissions -p "$(cat '${overnightPromptPath}' '${tmpRaw}')"`,
+            300000
+        )
+        if (integration.ok) {
+            finalBriefing = integration.output
+        } else {
+            finalBriefing = `[overnight-prompt 통합 실패 — raw 그대로 저장]\n\n${rawCollected}\n\n## 통합 실패\n${integration.output}`
+            failCount++
+        }
+    } else {
+        finalBriefing = `[overnight-prompt 또는 claude 바이너리 부재 — raw fallback]\n\n${rawCollected}`
     }
-    console.log(log.join("\n"))
+    if (!DRY) {
+        writeFileSync(logFile, finalBriefing)
+    }
+    console.log(finalBriefing)
     console.log("")
     console.log(DRY ? "[DRY RUN] 파일 변경 없음" : `로그: ${logFile}`)
 

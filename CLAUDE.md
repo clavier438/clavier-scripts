@@ -110,6 +110,23 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 
 **sibling-first 자동 탐색 (2026-05-03~)**: Layer 1 도구는 관련 repo 위치를 ① env override → ② sibling 디렉토리(`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 fallback 순으로 찾음. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs) / inline (.sh). OCI 부트는 `clavier-scripts`/`clavier-hq`/`platform-workers` 를 형제로 clone — zero-config. ARCHITECTURE.md "이 repo 안 파일의 Layer 분류" 표 참조.
 
+## STL 원칙 (Single-Threaded Leader, 2026-05-04~) ★ 절대 원칙
+
+**모든 자동화 = 단일 책임 루틴 + 익명 부하** 구조. 어떤 자동화도 *책임지는 루틴 없이* 떠돌면 안 됨.
+
+규칙:
+1. **루틴** (overnight / Conductor / Architect / Strategist) = 한 영역 단일 책임자. 사용자가 이름을 안다.
+2. **부하** = 루틴이 임명. 한 루틴 종속. 사용자에 직접 메시지 X.
+3. 사용자와 직접 대화하는 entity = 오직 루틴. 부하 결과는 루틴이 통합 → 1 briefing.
+4. 무소속 자동화 금지 — 새 prompt 작성 시 어느 루틴의 부하인지 먼저 명시.
+
+**Claude 행동 규칙**:
+- 새 자동화·prompt 추가 시 → 헤더에 *소속 루틴* 명시. 없으면 작성 금지 (사용자에 어느 루틴 부하인지 합의 받기).
+- 부하 prompt 작성 시 → "사용자 직접 메시지 금지. raw 보고만 → 루틴이 통합" 헤더에 박음.
+- 무소속 prompt 발견 시 → archive 권고 또는 새 루틴 합의 제안.
+
+위반 시 사용자 폭발 (2026-05-04 인용): "*책임지는 새끼 없이 오합지졸로 떠돌아다녀서 잘하고있는지 확인조차 있는지없는지도몰랐다*". DECISIONS.md 2026-05-04 ADR "STL 원칙 + 새벽루틴 신설" 참조.
+
 ## 능력 떠넘기기 전 self-check (2026-05-04~, B1 병목 차단)
 
 **"사용자가 직접 하셔야 합니다" 발화 전 반드시 self-check.** 어제 이 패턴으로 사용자가 폭발 — 사실 Claude 가 직접 가능했던 것을 떠넘김.
