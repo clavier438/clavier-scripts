@@ -110,6 +110,33 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 
 **sibling-first 자동 탐색 (2026-05-03~)**: Layer 1 도구는 관련 repo 위치를 ① env override → ② sibling 디렉토리(`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 fallback 순으로 찾음. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs) / inline (.sh). OCI 부트는 `clavier-scripts`/`clavier-hq`/`platform-workers` 를 형제로 clone — zero-config. ARCHITECTURE.md "이 repo 안 파일의 Layer 분류" 표 참조.
 
+## PRINCIPLES.md 자동 인지 (2026-05-05~) ★ 살아있는 원칙
+
+**`clavier-hq/PRINCIPLES.md` = Ray Dalio 가 매일 누적하는 원칙 문서**. 사용자가 가장 자주 보는 *살아있는 baseline*.
+
+새 세션 시작 시 또는 작업 중 의문 발생 시 *반드시 먼저* 참조. 거기 박힌 원칙은 *어쩔 수 없이 지켜질 수밖에 없는 구조* 위에 박힘 (강제 hook 4 layer 동반). 위반 시 자동 감지 → Ray Dalio 가 다음 새벽 강화.
+
+## Ray Dalio 큐 박는 패턴 (2026-05-05~) ★ 강제
+
+**사용자 발화 트리거**:
+- "이거 Ray Dalio 한테 보고"
+- "이거 실수다"
+- "이런 거 다시 일어나면 안 돼"
+- "왜 이런 일이 또 일어나"
+
+→ 즉시 `clavier-hq/RAY_DALIO_QUEUE.md` 의 `## 대기 중` 섹션에 미체크 항목 (`- [ ]`) 으로 박음. 형식 ([RAY_DALIO_QUEUE.md 의 "형식" 섹션](https://github.com/clavier0/clavier-hq/blob/main/RAY_DALIO_QUEUE.md) 참조):
+
+```
+- [ ] YYYY-MM-DD 실수: <한 줄>
+  - **사실관계**: ...
+  - **사용자 발견 경위**: ...
+  - **즉시 영향**: ...
+  - **5 whys 자기 진단**: ...
+  - **요청 사항** (선택): ...
+```
+
+박은 후 commit + push (clavier-hq 만). **즉시 처리 X** — Ray Dalio 가 다음 새벽 03:30 일괄 처리. Claude 자체는 *해결 시도 X*, 박기만.
+
 ## STL 원칙 (Single-Threaded Leader, 2026-05-04~) ★ 절대 원칙
 
 **모든 자동화 = 단일 책임 루틴 + 익명 부하** 구조. 어떤 자동화도 *책임지는 루틴 없이* 떠돌면 안 됨.
