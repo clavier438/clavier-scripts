@@ -110,6 +110,29 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 
 **sibling-first 자동 탐색 (2026-05-03~)**: Layer 1 도구는 관련 repo 위치를 ① env override → ② sibling 디렉토리(`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 fallback 순으로 찾음. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs) / inline (.sh). OCI 부트는 `clavier-scripts`/`clavier-hq`/`platform-workers` 를 형제로 clone — zero-config. ARCHITECTURE.md "이 repo 안 파일의 Layer 분류" 표 참조.
 
+## 능력 떠넘기기 전 self-check (2026-05-04~, B1 병목 차단)
+
+**"사용자가 직접 하셔야 합니다" 발화 전 반드시 self-check.** 어제 이 패턴으로 사용자가 폭발 — 사실 Claude 가 직접 가능했던 것을 떠넘김.
+
+체크 순서:
+1. `tools/capabilities/{도구}.md` 가 자동 주입됐는지 (UserPromptSubmit hook). 안 됐으면 키워드 매칭 안 된 것 — Read 직접.
+2. 그 파일의 "잘못 알기 쉬운 것" + "가능 ✅" 표 확인.
+3. 가능한데 시도 안 한 것 있으면 **먼저 시도** 후 실패해야 떠넘김.
+
+특히 자주 *거짓 떠넘김*:
+- "GH Actions secret 은 web UI 에서만" → `gh secret set NAME --body ... --repo o/r` 한 줄
+- "wrangler 로만 가능" → Cloudflare MCP 도 됨
+- "Cloudflare token IP 검증 못함" → `curl /user/tokens/verify` 자동
+- "Doppler·wrangler·GH secret 동기화는 사용자가" → 3 곳 자동 sync 가능
+
+**Defense in Depth (B1~B5 병목 차단)**:
+- L1 인식 — `tools/capabilities/*.md` (airtable/github/cloudflare/framer/doppler) + UserPromptSubmit auto-inject
+- L2 차단 — `tools/precheck.sh <tool>` 작업 시작 전 1회
+- L3 회귀 — framer-sync push idempotency self-test
+- L4 새벽 감독 — overnight-runner Step 0 = morning shield (매일 03:00 `precheck all` → red dot 시 macOS 알림)
+
+DECISIONS.md 2026-05-04 "B1~B5 병목 4 layer 차단" 참조.
+
 ## framer-sync 인터페이스 동결 규칙 (2026-04-28~)
 
 **프레이머가 변화를 알 수 없게 한다.** framer-sync 워커는 Framer 측 스키마를 수정하는 모든 RPC 호출(`addFields`, `createCollection`, `removeFields`)을 호출하지 않는다. `getFields()`로 read-only 조회만 하고, 매칭 안 되는 필드는 `[needs-manual-framer-setup]` 경고 후 graceful skip. Airtable에 새 필드를 추가했는데 Framer 슬롯이 없는 상황을 마주치면 → 워커 코드를 고치려 하지 말고, 사용자에게 "Framer 편집기에서 슬롯 생성하세요" 안내. 그 후 sync 트리거하면 자동 발견. DECISIONS.md 2026-04-28 "framer-sync = '프레이머를 속인다'" 참조.

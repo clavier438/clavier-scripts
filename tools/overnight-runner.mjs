@@ -160,6 +160,18 @@ async function main() {
     log.push(`# 비서 야간 처리 — ${new Date().toISOString()}`)
     log.push("")
 
+    // 0. morning shield: 환경 사전 점검 (다음날 작업 시작 전 병목 미리 발견)
+    //    precheck all 이 모든 외부 도구 (airtable / github / cloudflare / doppler / framer-sync)
+    //    헬스 + 시그니처 회귀 검증. red dot 발견 시 briefing 알람 + macOS notification.
+    log.push("## 0. morning shield: 환경 사전 점검")
+    const precheckResult = runCmd(`bash "${join(SCRIPTS_DIR, "tools/precheck.sh")}" all`, 60000)
+    log.push(precheckResult.ok ? "✅ 모든 환경 OK — 다음 날 작업 차단 요소 없음" : "🔴 빨간점 발견 — 작업 시작 전 사용자 결정 필요")
+    log.push("```")
+    log.push(precheckResult.output)
+    log.push("```")
+    log.push("")
+    let shieldRedDot = !precheckResult.ok
+
     // 1. watchman: workerCtl conduct
     log.push("## 1. watchman: workerCtl conduct")
     const conductPath = join(SCRIPTS_DIR, "tools/workerCtl.mjs")
@@ -287,7 +299,12 @@ async function main() {
     console.log("")
     console.log(DRY ? "[DRY RUN] 파일 변경 없음" : `로그: ${logFile}`)
 
-    // 실패 있으면 macOS 알림
+    // 실패 있으면 macOS 알림 — morning shield 빨간점은 별도 알림 (사용자 결정 필요)
+    if (shieldRedDot && !DRY) {
+        try {
+            execSync(`osascript -e 'display notification "환경 사전 점검 실패 — 작업 시작 전 ${logFile} 확인" with title "🔴 morning shield"'`)
+        } catch (_) { /* 알림 실패는 무시 */ }
+    }
     if (failCount > 0 && !DRY) {
         try {
             execSync(`osascript -e 'display notification "overnight ${failCount}개 실패 — briefings 확인" with title "⚠️ 비서 야간 처리"'`)

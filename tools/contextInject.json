@@ -8,5 +8,40 @@
       "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/WORKER_STATUS.md",
       "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/QUEUE.md"
     ]
+  },
+  {
+    "domain": "airtable",
+    "keywords": ["airtable", "에어테이블", "9\\.0\\.", "mukayu", "sisoso", "hotelAgency", "atCreate", "AIRTABLE_PAT", "doppler.*airtable"],
+    "files": [
+      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/airtable.md"
+    ]
+  },
+  {
+    "domain": "github",
+    "keywords": ["github", "깃허브", "gh secret", "gh pr", "gh workflow", "gh api", "gh release", "github.*action", "pull request", "workflow.*run"],
+    "files": [
+      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/github.md"
+    ]
+  },
+  {
+    "domain": "cloudflare",
+    "keywords": ["cloudflare", "클라우드플레어", "wrangler", "worker.*deploy", "d1 database", "kv namespace", "r2 bucket", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "hyperdrive", "cf token"],
+    "files": [
+      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/cloudflare.md"
+    ]
+  },
+  {
+    "domain": "framer",
+    "keywords": ["ManagedCollection", "mc\\.add", "mc\\.get", "mc\\.remove", "setFields", "getItemIds", "addItems", "removeItems", "framer.*plugin", "framer code component"],
+    "files": [
+      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/framer.md"
+    ]
+  },
+  {
+    "domain": "doppler",
+    "keywords": ["doppler", "doppler.*config", "doppler.*secret", "doppler run", "DOPPLER_TOKEN"],
+    "files": [
+      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/doppler.md"
+    ]
   }
 ]
