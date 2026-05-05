@@ -175,6 +175,51 @@ EOF
     echo "  [overnight] ~/Library/LaunchAgents/com.clavier.closer.plist 등록 (매일 03:00 실행)"
 fi
 
+# ── Engineer LaunchAgent 등록 — 매주 일요일 03:30 tools/ 카탈로그 정리 ────────
+ENGINEER_PLIST="$LAUNCH_AGENTS_DIR/com.clavier.engineer.plist"
+ENGINEER_RUNNER="$SCRIPT_DIR/tools/engineer-runner.mjs"
+if [[ -f "$ENGINEER_RUNNER" ]] && [[ -x "$NODE_BIN" ]]; then
+    cat > "$ENGINEER_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.clavier.engineer</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/homebrew/bin/doppler</string>
+        <string>run</string>
+        <string>--project</string>
+        <string>clavier</string>
+        <string>--config</string>
+        <string>prd</string>
+        <string>--silent</string>
+        <string>--</string>
+        <string>${NODE_BIN}</string>
+        <string>${ENGINEER_RUNNER}</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key><integer>0</integer>
+        <key>Hour</key><integer>3</integer>
+        <key>Minute</key><integer>30</integer>
+    </dict>
+    <key>RunAtLoad</key><false/>
+    <key>StandardOutPath</key><string>${HOME}/Library/Logs/engineer.log</string>
+    <key>StandardErrorPath</key><string>${HOME}/Library/Logs/engineer_error.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key><string>${HOME}</string>
+    </dict>
+</dict>
+</plist>
+EOF
+    launchctl unload "$ENGINEER_PLIST" 2>/dev/null
+    launchctl load "$ENGINEER_PLIST" 2>/dev/null
+    echo "  [engineer] ~/Library/LaunchAgents/com.clavier.engineer.plist 등록 (매주 일 03:30 실행)"
+fi
+
 # ── ~/.clavier/env 심링크 — iCloud 파일을 백업 미러로 유지 ───────────────────
 # 단일 진실 소스는 Doppler (2026-04-28 이전). 이 심링크는 레거시·과도기 호환용.
 CLAVIER_ENV_SRC="$SCRIPT_DIR/clavier.env"
