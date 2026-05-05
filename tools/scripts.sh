@@ -1,127 +1,109 @@
 #!/usr/bin/env zsh
-# scripts — 전역 명령어 목록을 트리+설명 형태로 출력
+# scripts — eza 스타일 grid 명령어 카탈로그 (빠름, 색별, 자동 컬럼)
 
-BOLD=$'\033[1m'; DIM=$'\033[2m'; RESET=$'\033[0m'
-CYAN=$'\033[36m'; YELLOW=$'\033[33m'; RESET_ALL=$'\033[0m'
+setopt nullglob
 
 SRC="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/0/scripts"
+COLS="${COLUMNS:-$(tput cols 2>/dev/null || echo 100)}"
 
-# ── 파일 설명 추출 ─────────────────────────────────────────
-_desc() {
-    local f="$1" d=""
-    [[ -f "$f" ]] || { echo "-"; return }
-    case "$f" in
-        *.mjs|*.js)
-            d=$(grep -m1 -E "^\s*(//|\*)\s.+—" "$f" 2>/dev/null \
-                | sed 's/.*—[[:space:]]*//' | sed 's/[[:space:]]*\*\/$//' | tr -d '\n')
-            [[ -z "$d" ]] && d=$(grep -m5 -E "^\s*(\*[^/]|//)" "$f" 2>/dev/null \
-                | grep -v "^\s*\*\s*$\|@\|usage\|Usage\|사용법" | head -1 \
-                | sed 's|^\s*\*[[:space:]]*||;s|^\s*//[[:space:]]*||' | tr -d '\n')
-            ;;
-        *)
-            d=$(grep -m1 -E "^#\s.+—" "$f" 2>/dev/null \
-                | awk -F'—' '{print $NF}' | sed 's/^[[:space:]]*//' | tr -d '\n')
-            [[ -z "$d" ]] && d=$(grep -m8 "^#" "$f" 2>/dev/null \
-                | grep -v "^#!/\|^#[[:space:]]*$" \
-                | grep -v "^#[[:space:]]*[=─\-]\{3,\}" \
-                | head -1 | sed 's/^#[[:space:]]*//' | tr -d '\n')
-            ;;
+# 색감 (eza 차용)
+B=$'\033[1m'; D=$'\033[2m'; R=$'\033[0m'
+SH=$'\033[38;5;46m'       # .sh   bright green
+MJS=$'\033[38;5;220m'     # .mjs  gold
+PY=$'\033[38;5;39m'       # .py   cyan-blue
+RB=$'\033[38;5;203m'      # .rb   coral
+HEAD=$'\033[38;5;141m'    # 섹션 헤더 purple
+TITLE=$'\033[1;38;5;33m'  # 타이틀 blue
+
+color_for() {
+    case "$1" in
+        sh) print $SH ;;
+        mjs|js) print $MJS ;;
+        py) print $PY ;;
+        rb) print $RB ;;
+        *) print "" ;;
     esac
-    echo "${d:--}"
 }
 
-# ── 한 줄 출력 ─────────────────────────────────────────────
-_row() {
-    local last="$1" prefix="$2" stem="$3" desc="$4" clr="${5:-$YELLOW}"
-    local br; [[ "$last" == 1 ]] && br="└──" || br="├──"
-    printf "%s${DIM}%s${RESET} ${clr}%-26s${RESET} ${DIM}%s${RESET}\n" \
-        "$prefix" "$br" "$stem" "$desc"
-}
+# 한 섹션 grid 렌더 — plain 폭으로 패딩, colored 로 출력
+render_section() {
+    local label="$1"; shift
+    local -a paths=("$@")
+    [[ ${#paths} -eq 0 ]] && return
 
-# ── 섹션 출력 ─────────────────────────────────────────────
-_section() {
-    local label="$1" dir="$2" is_last="$3"
-    local br; [[ "$is_last" == 1 ]] && br="└──" || br="├──"
-
-    local -a entries=()
-    local ext f
-    for ext in sh mjs py js rb; do
-        for f in "$dir"/*.$ext(N); do
-            [[ -f "$f" ]] && entries+=("$f")
-        done
-    done
-    [[ ${#entries} -eq 0 ]] && return
-
-    echo "${DIM}│${RESET}"
-    echo "${DIM}${br}${RESET} ${BOLD}${CYAN}[ ${label} ]${RESET}"
-
-    local total=${#entries} idx=0
-    local stem d last  # 루프 밖에서 한 번만 선언
-    for f in "${entries[@]}"; do
-        ((idx++))
-        stem="${${f:t}%.*}"; d=""; last=0
-        [[ "$idx" == "$total" ]] && last=1
-        d=$(_desc "$f")
-        _row "$last" "│   " "$stem" "$d"
-    done
-}
-
-# ── 메인 ───────────────────────────────────────────────────
-_main() {
-    echo ""
-    echo "${BOLD}${CYAN}clavier-scripts${RESET}  ${DIM}(전역 명령어 목록 / ~/bin)${RESET}"
-    echo "${DIM}│${RESET}"
-
-    # [ scripts ] — 루트 + tools/ 합산
-    echo "${DIM}├──${RESET} ${BOLD}${CYAN}[ scripts ]${RESET}  ${DIM}(루트 + tools/)${RESET}"
-    local -a root_entries=()
-    local ext f
-    for ext in sh mjs py js; do
-        for f in "$SRC"/*.$ext(N) "$SRC"/tools/*.$ext(N); do
-            [[ -f "$f" ]] && root_entries+=("$f")
-        done
-    done
-    local total_root=${#root_entries} idx_root=0
-    local stem d last_r  # 루프 밖 선언
-    for f in "${root_entries[@]}"; do
-        ((idx_root++))
-        stem="${${f:t}%.*}"; d=""; last_r=0
-        [[ "$idx_root" == "$total_root" ]] && last_r=1
-        d=$(_desc "$f")
-        _row "$last_r" "│   " "$stem" "$d"
+    local -a plains=() colored=()
+    local f stem ext c
+    for f in "${paths[@]}"; do
+        stem="${${f:t}%.*}"
+        ext="${f:e}"
+        c=$(color_for "$ext")
+        plains+=("$stem")
+        colored+=("${c}${stem}${R}")
     done
 
-    # 하위 섹션
-    local skip_dirs=(tools memory memory-backup backup .git .claude webExporter Markdown2ID)
-    local -a sections=()
-    local dname skip sd
-    for d in "$SRC"/*(N/); do
-        dname="${d:t}"; skip=0
-        for s in "${skip_dirs[@]}"; do [[ "$dname" == "$s" ]] && skip=1 && break; done
-        [[ $skip == 1 ]] && continue
-        [[ "$dname" == "PDF to"* ]] && continue
-        sections+=("$d")
+    local maxlen=0 i
+    for ((i=1; i<=${#plains}; i++)); do
+        (( ${#plains[i]} > maxlen )) && maxlen=${#plains[i]}
     done
+    local cell=$((maxlen + 2))
+    local ncols=$((COLS / cell))
+    (( ncols < 1 )) && ncols=1
 
-    local total_sec=${#sections} idx_sec=0
-    local is_last
-    for d in "${sections[@]}"; do
-        ((idx_sec++))
-        dname="${d:t}"; is_last=0
-        [[ "$idx_sec" == "$total_sec" ]] && is_last=1
+    print
+    printf "${B}${HEAD}%s${R}  ${D}%d${R}\n" "$label" ${#plains}
 
-        if [[ "$dname" == clouds ]]; then
-            for sd in "$d"/*(N/); do
-                _section "clouds/${sd:t}" "$sd" "$is_last"
-            done
-        else
-            _section "$dname" "$d" "$is_last"
+    local col=0 fill
+    for ((i=1; i<=${#plains}; i++)); do
+        fill=$((cell - ${#plains[i]}))
+        printf "%s%*s" "${colored[i]}" $fill ""
+        ((col++))
+        if (( col >= ncols )); then
+            print
+            col=0
         fi
     done
-
-    echo ""
-    echo "${DIM}  tip: workerCtl <워커> <함수>   예) workerCtl sisoso sync-full${RESET}"
-    echo ""
+    (( col > 0 )) && print
 }
 
-_main
+# 메인 ────────────────────────────────────────────────
+print
+printf "${TITLE}clavier-scripts${R}  ${D}canonical: ${SRC/#$HOME/~}${R}\n"
+
+# [scripts] = 루트 + tools/ (~/bin 에서 둘 다 flat 배포돼 사용자 관점에서 동일)
+typeset -a TOP=()
+for f in "$SRC"/*.{sh,mjs,py,js,rb}(N) "$SRC/tools"/*.{sh,mjs,py,js,rb}(N); do
+    [[ -f "$f" ]] && TOP+=("$f")
+done
+render_section "scripts" "${TOP[@]}"
+
+# 서브폴더 자동 감지 (installScripts.sh SKIP_DIRS 미러)
+SKIP=(tools memory memory-backup backup .git .claude .wrangler webExporter Markdown2ID docs framer-components)
+
+for d in "$SRC"/*(N/); do
+    dn="${d:t}"
+    [[ "$dn" == "PDF to"* ]] && continue
+    skipped=0
+    for s in "${SKIP[@]}"; do [[ "$dn" == "$s" ]] && skipped=1 && break; done
+    (( skipped )) && continue
+
+    if [[ "$dn" == "clouds" ]]; then
+        for sd in "$d"/*(N/); do
+            typeset -a items=()
+            for f in "$sd"/*.{sh,mjs,py,js,rb}(N); do
+                [[ -f "$f" ]] && items+=("$f")
+            done
+            render_section "clouds/${sd:t}" "${items[@]}"
+        done
+        continue
+    fi
+
+    typeset -a items=()
+    for f in "$d"/*.{sh,mjs,py,js,rb}(N); do
+        [[ -f "$f" ]] && items+=("$f")
+    done
+    render_section "$dn" "${items[@]}"
+done
+
+print
+printf "${D}  tip: ${R}${B}<cmd>${R}${D} 만 쳐도 보통 usage 가 뜬다  •  source: ${R}${B}cat \$(which <cmd>)${R}\n"
+print
