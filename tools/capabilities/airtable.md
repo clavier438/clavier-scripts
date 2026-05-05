@@ -2,7 +2,7 @@
 
 > 이 파일은 UserPromptSubmit hook 으로 자동 주입됨.
 > 에어테이블 관련 작업 시작 전 자동으로 Claude 컨텍스트에 들어옴.
-> 마지막 갱신: 2026-05-02
+> 마지막 갱신: 2026-05-05
 
 ---
 
@@ -48,6 +48,7 @@
 | 작업 | 우회 방법 |
 |---|---|
 | **field 삭제** | web UI 에서 column header → Delete field |
+| **field type 변경 (in-place)** ★ 2026-05-05 확정 | web UI 에서 column header → "Customize field type" → 새 type 선택. 또는 새 필드 생성 + 데이터 복사 + rename swap (`mukayu-fields-to-richtext` 패턴) |
 | **computed field 신규 생성** (formula / rollup / lookup / count / autoNumber 등) | web UI 에서 + 버튼 → Add field → Type 선택 |
 | **table 삭제** | web UI 에서 |
 | **base 이름 변경 / 삭제** | web UI 에서 |
@@ -73,6 +74,8 @@
 ## 잘못 알기 쉬운 것
 
 - ❌ "field 삭제도 PAT 로 된다" → **거짓**. endpoint 자체 없음. web UI 만.
+- ❌ "field type 도 PAT PATCH 로 바꾼다" (`{type: "richText"}`) → **거짓**. 2026-05-05 확정 — `INVALID_REQUEST_UNKNOWN` 422. PATCH 는 `name` / `description` 만 받음. 변형 4가지 (`{type, options:null}`, `{type, options:{}}`, `{config:{type,options}}`, `{fieldType}`) 모두 422.
+- ❌ "Scripting Extension 의 `_sdk.__mutations` 직접 호출로 type 변경" → **거짓**. 2026-05-05 확정 — `f._sdk` undefined (Scripting 런타임이 internal property 노출 차단). `createFieldAsync` 같은 공개 메서드만 작동.
 - ❌ "formula / rollup / lookup field 도 PAT 로 만든다" → **거짓**. computed type 은 `UNSUPPORTED_FIELD_TYPE_FOR_CREATE`. web UI 만.
   - 단 *formula expression 변경* (PATCH) 은 가능 (이미 있는 formula field 의 식 수정).
 - ❌ "OSS 가 필요하다" → **불필요**. PAT + 직접 fetch 로 충분. (참고 OSS: `pyairtable`, `airtable.js`, `airtable-blocks-sdk` — 단순 wrapper 일 뿐)
