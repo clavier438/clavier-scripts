@@ -11,9 +11,10 @@
   },
   {
     "domain": "airtable",
-    "keywords": ["airtable", "에어테이블", "9\\.0\\.", "mukayu", "sisoso", "hotelAgency", "atCreate", "AIRTABLE_PAT", "doppler.*airtable"],
+    "keywords": ["airtable", "에어테이블", "9\\.0\\.", "9\\.1\\.", "mukayu", "sisoso", "hotelAgency", "atCreate", "AIRTABLE_PAT", "scripting", "createFieldAsync", "doppler.*airtable"],
     "files": [
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/airtable.md"
+      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/airtable.md",
+      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/airtable-scripting.md"
     ]
   },
   {

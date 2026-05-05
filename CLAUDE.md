@@ -110,6 +110,18 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 
 **sibling-first 자동 탐색 (2026-05-03~)**: Layer 1 도구는 관련 repo 위치를 ① env override → ② sibling 디렉토리(`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 fallback 순으로 찾음. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs) / inline (.sh). OCI 부트는 `clavier-scripts`/`clavier-hq`/`platform-workers` 를 형제로 clone — zero-config. ARCHITECTURE.md "이 repo 안 파일의 Layer 분류" 표 참조.
 
+## Airtable Scripting 작업 시작 전 (2026-05-05~) ★ 강제
+
+Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.md` 자동 주입**됨 (UserPromptSubmit hook). 거기에 Table 클래스 / Field options / createFieldAsync 의 정확한 시그니처 (Airtable/blocks SDK source 매일 mirror).
+
+원본 source 위치: **`docs/airtable-blocks-sdk/`** (매일 03:00 새벽루틴 fetch — `OVERNIGHT_QUEUE.md` "매일 자동 실행 (영구)" 항목, 스크립트 = `tools/airtable-scripting-docs-fetch.sh`).
+
+규칙:
+- 새 메서드 사용 전 → `docs/airtable-blocks-sdk/src/models/table.ts` 등 raw 파일 grep. 추측 금지.
+- `getFieldByNameIfExists` 같은 SDK 메서드도 *Scripting 환경 노출 안 됨* 가능성. 안전 패턴 = `tbl.fields.find(f => f.name === ...)`
+- 사용자 시도 결과 = truth (community 답변·docs 와 충돌 시 사용자 시도 우선)
+- 추측 단정 발생 → RAY_DALIO_QUEUE 큐에 박음 (다음 새벽 강제 hook 추가)
+
 ## PRINCIPLES.md 자동 인지 (2026-05-05~) ★ 살아있는 원칙
 
 **`clavier-hq/PRINCIPLES.md` = Ray Dalio 가 매일 누적하는 원칙 문서**. 사용자가 가장 자주 보는 *살아있는 baseline*.
