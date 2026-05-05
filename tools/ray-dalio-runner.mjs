@@ -27,7 +27,7 @@ import { execSync } from "child_process"
 import { join } from "path"
 import { findClavierHq } from "./lib/repoPaths.mjs"
 
-// claude 바이너리 경로 (overnight-runner 와 동일 패턴)
+// claude 바이너리 경로 (closer-runner 와 동일 패턴)
 const CLAUDE_BIN = (() => {
     if (process.env.CLAUDE_BIN) return process.env.CLAUDE_BIN
     const home = process.env.HOME ?? ""

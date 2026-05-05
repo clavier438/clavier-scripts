@@ -132,17 +132,17 @@ fi
 
 # ── overnight LaunchAgent 등록 — 매일 03:00 새벽 큐 처리 ────────────────────
 LAUNCH_AGENTS_DIR="$HOME/Library/LaunchAgents"
-OVERNIGHT_PLIST="$LAUNCH_AGENTS_DIR/com.clavier.overnight.plist"
-OVERNIGHT_RUNNER="$SCRIPT_DIR/tools/overnight-runner.mjs"
+CLOSER_PLIST="$LAUNCH_AGENTS_DIR/com.clavier.closer.plist"
+CLOSER_RUNNER="$SCRIPT_DIR/tools/closer-runner.mjs"
 NODE_BIN="$(command -v node 2>/dev/null || echo /opt/homebrew/bin/node)"
-if [[ -f "$OVERNIGHT_RUNNER" ]] && [[ -x "$NODE_BIN" ]]; then
+if [[ -f "$CLOSER_RUNNER" ]] && [[ -x "$NODE_BIN" ]]; then
     mkdir -p "$LAUNCH_AGENTS_DIR" "$HOME/Library/Logs"
-    cat > "$OVERNIGHT_PLIST" <<EOF
+    cat > "$CLOSER_PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>Label</key><string>com.clavier.overnight</string>
+    <key>Label</key><string>com.clavier.closer</string>
     <key>ProgramArguments</key>
     <array>
         <string>/opt/homebrew/bin/doppler</string>
@@ -154,13 +154,13 @@ if [[ -f "$OVERNIGHT_RUNNER" ]] && [[ -x "$NODE_BIN" ]]; then
         <string>--silent</string>
         <string>--</string>
         <string>${NODE_BIN}</string>
-        <string>${OVERNIGHT_RUNNER}</string>
+        <string>${CLOSER_RUNNER}</string>
     </array>
     <key>StartCalendarInterval</key>
     <dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
     <key>RunAtLoad</key><false/>
-    <key>StandardOutPath</key><string>${HOME}/Library/Logs/overnight.log</string>
-    <key>StandardErrorPath</key><string>${HOME}/Library/Logs/overnight_error.log</string>
+    <key>StandardOutPath</key><string>${HOME}/Library/Logs/closer.log</string>
+    <key>StandardErrorPath</key><string>${HOME}/Library/Logs/closer_error.log</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
@@ -169,10 +169,10 @@ if [[ -f "$OVERNIGHT_RUNNER" ]] && [[ -x "$NODE_BIN" ]]; then
 </dict>
 </plist>
 EOF
-    launchctl unload "$OVERNIGHT_PLIST" 2>/dev/null
-    launchctl load "$OVERNIGHT_PLIST" 2>/dev/null
+    launchctl unload "$CLOSER_PLIST" 2>/dev/null
+    launchctl load "$CLOSER_PLIST" 2>/dev/null
     echo ""
-    echo "  [overnight] ~/Library/LaunchAgents/com.clavier.overnight.plist 등록 (매일 03:00 실행)"
+    echo "  [overnight] ~/Library/LaunchAgents/com.clavier.closer.plist 등록 (매일 03:00 실행)"
 fi
 
 # ── ~/.clavier/env 심링크 — iCloud 파일을 백업 미러로 유지 ───────────────────

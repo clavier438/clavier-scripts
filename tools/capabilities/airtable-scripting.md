@@ -2,7 +2,7 @@
 
 > 자동 주입: UserPromptSubmit hook (`tools/contextInject.json` domain=airtable)
 > 마지막 갱신: 2026-05-05 (Airtable/blocks SDK source 기준)
-> 원본 mirror: `docs/airtable-blocks-sdk/` — 매일 03:00 새벽루틴 fetch (OVERNIGHT_QUEUE 영구 항목)
+> 원본 mirror: `docs/airtable-blocks-sdk/` — 매일 03:00 Closer fetch (CLOSER_QUEUE 영구 항목)
 > 추가 source 필요 시: `docs/airtable-blocks-sdk/` 의 raw 파일 직접 grep
 
 ---
@@ -162,7 +162,7 @@ source: [`docs/airtable-blocks-sdk/src/types/field.ts`](../../docs/airtable-bloc
 
 ## 자동 mirror 시스템
 
-`docs/airtable-blocks-sdk/` 가 매일 03:00 새벽루틴 (queue 부하) 가 fetch:
+`docs/airtable-blocks-sdk/` 가 매일 03:00 Closer (queue 부하) 가 fetch:
 - CHANGELOG.md
 - README.md
 - src/types/field.ts
@@ -174,7 +174,7 @@ source: [`docs/airtable-blocks-sdk/src/types/field.ts`](../../docs/airtable-bloc
 variation 시 `git diff` 로 변경 감지 → commit + push. 즉 *Airtable SDK 변경* 이 다음 날 새벽 자동 인지.
 
 스크립트: `tools/airtable-scripting-docs-fetch.sh`
-영구 항목: `clavier-hq/OVERNIGHT_QUEUE.md` "매일 자동 실행 (영구)" 섹션
+영구 항목: `clavier-hq/CLOSER_QUEUE.md` "매일 자동 실행 (영구)" 섹션
 
 ---
 

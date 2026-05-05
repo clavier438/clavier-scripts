@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * 비서 (overnight-runner) — 매일 새벽 03:00 기계적 처리
+ * 비서 (closer-runner) — 매일 새벽 03:00 기계적 처리
  *
- * 역할: 각 전문가 에이전트를 순서대로 호출하고, OVERNIGHT_QUEUE.md 실행.
+ * 역할: 각 전문가 에이전트를 순서대로 호출하고, CLOSER_QUEUE.md 실행.
  *       직접 결정하지 않고, 각 전문가가 자기 영역에 직접 씁니다.
  *
  * 에이전트 체계:
@@ -11,19 +11,19 @@
  *   strategist        매일 08:00  — 브랜드/비즈니스 전략 + researcher (scheduled task)
  *
  * 동작 (STL 원칙 — DECISIONS.md 2026-05-04 ADR):
- *   새벽루틴 (overnight) = 매일 03:00 영역의 단일 책임자, 사용자에 직접 보고.
+ *   Closer (overnight) = 매일 03:00 영역의 단일 책임자, 사용자에 직접 보고.
  *   부하 3명을 임명·감독:
  *     부하 1: police   — 5 영역 헬스 순찰 (precheck all)
  *     부하 2: watchman — 워커 KV 스냅샷 (workerCtl conduct)
- *     부하 3: queue    — OVERNIGHT_QUEUE.md 사용자 박은 명령 실행
- *   통합: overnight-prompt.md (새벽루틴 entity) 가 부하 raw 3개 → 단일 briefing 작성
+ *     부하 3: queue    — CLOSER_QUEUE.md 사용자 박은 명령 실행
+ *   통합: overnight-prompt.md (Closer entity) 가 부하 raw 3개 → 단일 briefing 작성
  *   저장: briefings/overnight-YYYY-MM-DD.md (사용자가 보는 유일한 보고)
  *
  *   info-arch / scribe / Ray = clavier-hq/archive/ 로 이동 (STL 위반 — 무소속).
  *
  * 수동 실행:
- *   node tools/overnight-runner.mjs        # 정상 실행
- *   node tools/overnight-runner.mjs --dry  # dry-run
+ *   node tools/closer-runner.mjs        # 정상 실행
+ *   node tools/closer-runner.mjs --dry  # dry-run
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
@@ -58,7 +58,7 @@ if (!HQ) {
     process.exit(1)
 }
 
-const QUEUE_FILE = join(HQ, "OVERNIGHT_QUEUE.md")
+const QUEUE_FILE = join(HQ, "CLOSER_QUEUE.md")
 const BRIEFINGS_DIR = join(HQ, "briefings")
 const DRY = process.argv.includes("--dry")
 
@@ -213,12 +213,12 @@ async function main() {
 
     // STL 원칙: step 2 (info-arch) / step 3 (scribe) / step 4 (Ray) 폐기.
     // info-arch / notion-mirror / ray prompt 는 archive/ 로 이동됨.
-    // 새벽루틴의 부하는 police (부하 1) + watchman (부하 2) + queue (부하 3) 3명만.
-    // 통합 briefing 은 마지막에 overnight-prompt.md (새벽루틴 = 사용자 직접 보고 entity) 가 작성.
+    // Closer의 부하는 police (부하 1) + watchman (부하 2) + queue (부하 3) 3명만.
+    // 통합 briefing 은 마지막에 overnight-prompt.md (Closer = 사용자 직접 보고 entity) 가 작성.
 
     } // end claude guard
 
-    // 부하 3: queue — OVERNIGHT_QUEUE.md 사용자 명령 실행 (최대 20개)
+    // 부하 3: queue — CLOSER_QUEUE.md 사용자 명령 실행 (최대 20개)
     let text = readFileSync(QUEUE_FILE, "utf8")
     const initialTasks = parseQueue(text).tasks
     log.push(`## 부하 3: queue (사용자 박은 명령, ${initialTasks.length}개)`)
@@ -260,8 +260,8 @@ async function main() {
         writeFileSync(QUEUE_FILE, text)
     }
 
-    // 부하 3명 raw 수집 완료. 통합 → overnight-prompt (새벽루틴) 가 단일 briefing 작성.
-    // STL 원칙: 부하는 사용자에 직접 메시지 X. 새벽루틴이 통합 → 사용자 1 보고.
+    // 부하 3명 raw 수집 완료. 통합 → overnight-prompt (Closer) 가 단일 briefing 작성.
+    // STL 원칙: 부하는 사용자에 직접 메시지 X. Closer이 통합 → 사용자 1 보고.
     mkdirSync(BRIEFINGS_DIR, { recursive: true })
     const logFile = join(BRIEFINGS_DIR, `overnight-${today()}.md`)
     const rawCollected = log.join("\n")
@@ -269,7 +269,7 @@ async function main() {
     let finalBriefing = rawCollected
     if (existsSync(overnightPromptPath) && CLAUDE_BIN && existsSync(CLAUDE_BIN)) {
         const tmpRaw = `/tmp/overnight-raw-${today()}.md`
-        if (!DRY) writeFileSync(tmpRaw, `## 부하 raw 결과 (overnight-runner 가 수집)\n\n${rawCollected}\n`)
+        if (!DRY) writeFileSync(tmpRaw, `## 부하 raw 결과 (closer-runner 가 수집)\n\n${rawCollected}\n`)
         const integration = runCmd(
             `"${CLAUDE_BIN}" --dangerously-skip-permissions -p "$(cat '${overnightPromptPath}' '${tmpRaw}')"`,
             300000

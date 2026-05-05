@@ -2,7 +2,7 @@
 # airtable-scripting-docs-fetch.sh
 #
 # Airtable/blocks SDK 의 핵심 source 를 docs/airtable-blocks-sdk/ 에 mirror.
-# 새벽루틴 queue 부하가 매일 03:00 호출 (OVERNIGHT_QUEUE.md "매일 자동 실행" 영구 항목).
+# Closer queue 부하가 매일 03:00 호출 (CLOSER_QUEUE.md "매일 자동 실행" 영구 항목).
 # 변경 있으면 commit + push, 없으면 silent.
 #
 # 목적:
@@ -68,7 +68,7 @@ cd "$REPO_ROOT"
 if [ ${#changed_files[@]} -gt 0 ]; then
     git add "$DOCS_DIR/"
     git commit -m "docs(airtable-blocks-sdk): mirror $(date +%Y-%m-%d) — ${changed_files[*]}" \
-        -m "Airtable/blocks SDK 핵심 source 자동 동기화 (새벽루틴 queue 부하)." \
+        -m "Airtable/blocks SDK 핵심 source 자동 동기화 (Closer queue 부하)." \
         -m "" \
         -m "Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
     git push

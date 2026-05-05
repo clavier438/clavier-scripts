@@ -146,7 +146,7 @@ clavier-hq `DECISIONS.md`에 새 ADR 추가 시 **즉시** `doc-coverage <개념
 - **Layer 2** — clavier-hq `hooks/post-commit` (자동 발동, 구조적 강제)
 - **Layer 3** — Conductor 주간 책무 #4 (마지막 그물)
 
-추가로 모든 ADR/개념은 **Notion Architecture Archive**에 자동 미러 (overnight-runner Step 2.5, 매일 03:00). master = GitHub. 노션 직접 편집 금지.
+추가로 모든 ADR/개념은 **Notion Architecture Archive**에 자동 미러 (closer-runner Step 2.5, 매일 03:00). master = GitHub. 노션 직접 편집 금지.
 
 ---
 

@@ -85,7 +85,7 @@ iCloud `clavier.env`는 **백업 미러**. 값 다르면 Doppler가 정답.
 
 **왜 이 규칙인가**: ADR을 추가하고 다른 문서를 빠뜨리면 의존 작업이 잘못된 가정 위에서 돌아감. 사용자 자리에 없을 때도 자동 보장돼야 함. (CONCEPTS.md "SSOT" + "Defense in Depth" 항목 참조)
 
-추가로, 모든 ADR/개념은 **Notion Architecture Archive**에 매일 03:00 자동 미러됨 (overnight-runner Step 2.5). 사용자가 노션에서 학습용으로 읽음 — Notion 직접 편집 금지.
+추가로, 모든 ADR/개념은 **Notion Architecture Archive**에 매일 03:00 자동 미러됨 (closer-runner Step 2.5). 사용자가 노션에서 학습용으로 읽음 — Notion 직접 편집 금지.
 
 ## 데이터 저장소 규칙 (2026-04-28~)
 
@@ -114,7 +114,7 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 
 Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.md` 자동 주입**됨 (UserPromptSubmit hook). 거기에 Table 클래스 / Field options / createFieldAsync 의 정확한 시그니처 (Airtable/blocks SDK source 매일 mirror).
 
-원본 source 위치: **`docs/airtable-blocks-sdk/`** (매일 03:00 새벽루틴 fetch — `OVERNIGHT_QUEUE.md` "매일 자동 실행 (영구)" 항목, 스크립트 = `tools/airtable-scripting-docs-fetch.sh`).
+원본 source 위치: **`docs/airtable-blocks-sdk/`** (매일 03:00 Closer fetch — `CLOSER_QUEUE.md` "매일 자동 실행 (영구)" 항목, 스크립트 = `tools/airtable-scripting-docs-fetch.sh`).
 
 규칙:
 - 새 메서드 사용 전 → `docs/airtable-blocks-sdk/src/models/table.ts` 등 raw 파일 grep. 추측 금지.
@@ -164,7 +164,7 @@ Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.m
 - 부하 prompt 작성 시 → "사용자 직접 메시지 금지. raw 보고만 → 루틴이 통합" 헤더에 박음.
 - 무소속 prompt 발견 시 → archive 권고 또는 새 루틴 합의 제안.
 
-위반 시 사용자 폭발 (2026-05-04 인용): "*책임지는 새끼 없이 오합지졸로 떠돌아다녀서 잘하고있는지 확인조차 있는지없는지도몰랐다*". DECISIONS.md 2026-05-04 ADR "STL 원칙 + 새벽루틴 신설" 참조.
+위반 시 사용자 폭발 (2026-05-04 인용): "*책임지는 새끼 없이 오합지졸로 떠돌아다녀서 잘하고있는지 확인조차 있는지없는지도몰랐다*". DECISIONS.md 2026-05-04 ADR "STL 원칙 + Closer 신설" 참조.
 
 ## 능력 떠넘기기 전 self-check (2026-05-04~, B1 병목 차단)
 
@@ -185,7 +185,7 @@ Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.m
 - L1 인식 — `tools/capabilities/*.md` (airtable/github/cloudflare/framer/doppler) + UserPromptSubmit auto-inject
 - L2 차단 — `tools/precheck.sh <tool>` 작업 시작 전 1회
 - L3 회귀 — framer-sync push idempotency self-test
-- L4 새벽 감독 — overnight-runner Step 0 = morning shield (매일 03:00 `precheck all` → red dot 시 macOS 알림)
+- L4 새벽 감독 — closer-runner Step 0 = morning shield (매일 03:00 `precheck all` → red dot 시 macOS 알림)
 
 DECISIONS.md 2026-05-04 "B1~B5 병목 4 layer 차단" 참조.
 

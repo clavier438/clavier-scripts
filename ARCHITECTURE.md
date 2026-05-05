@@ -35,7 +35,7 @@ Airtable (데이터 원천)
 iCloud (Obsidian / Scriptable)
   └─(Mac LaunchAgent + doppler run)──► syncObsidian.py ──► GDrive: icloudSync/
 
-Mac overnight-runner (03:00 매일, doppler run 래핑)
+Mac closer-runner (03:00 매일, doppler run 래핑)
   ├─ worker-ctl conduct   (워커 스냅샷)
   ├─ info-arch            (Notion 점검, 매일)
   └─ Conductor            (클린아키텍처 감사, 월요일만)
@@ -43,7 +43,7 @@ Mac overnight-runner (03:00 매일, doppler run 래핑)
 
 > **시크릿 흐름**: 진실 소스는 항상 Doppler. 다른 위치는 모두 자동 동기화되는 종속 레이어 (DECISIONS.md 2026-04-28 ADR 참조).
 >
-> **결정 전파 자동 검증 (Defense in Depth, 2026-04-28~)**: DECISIONS.md ADR이 12개 표준 문서에 일관되게 반영됐는지 `doc-coverage` 도구가 자동 검증. 3 Layer (Claude 즉시 규칙 + clavier-hq post-commit 훅 + Conductor 주간). 모든 ADR/개념은 **Notion Architecture Archive**에 자동 미러 (overnight-runner 매일 03:00, Timeline + Concepts 이중 인덱스).
+> **결정 전파 자동 검증 (Defense in Depth, 2026-04-28~)**: DECISIONS.md ADR이 12개 표준 문서에 일관되게 반영됐는지 `doc-coverage` 도구가 자동 검증. 3 Layer (Claude 즉시 규칙 + clavier-hq post-commit 훅 + Conductor 주간). 모든 ADR/개념은 **Notion Architecture Archive**에 자동 미러 (closer-runner 매일 03:00, Timeline + Concepts 이중 인덱스).
 
 ---
 
@@ -82,7 +82,7 @@ Layer 2 — Platform 확장 (opt-in per environment)
 
 | Layer | 파일/폴더 | 비고 |
 |-------|-----------|------|
-| Layer 1 (환경 독립, sibling-first) | `tools/lib/repoPaths.mjs`, `tools/workerCtl.mjs`, `tools/overnight-runner.mjs`, `tools/doc-coverage.sh`, `tools/doppler-sync-wrangler.sh` | env > sibling > iCloud Mac fallback 자동 탐색 — 어느 peer 든 zero-config |
+| Layer 1 (환경 독립, sibling-first) | `tools/lib/repoPaths.mjs`, `tools/workerCtl.mjs`, `tools/closer-runner.mjs`, `tools/doc-coverage.sh`, `tools/doppler-sync-wrangler.sh` | env > sibling > iCloud Mac fallback 자동 탐색 — 어느 peer 든 zero-config |
 | Layer 2 / Mac | `setup.sh`, `installScripts.sh`, `daemons/`, `tools/runSafariTabsExport.sh`, `tools/scriptsList.sh`, `tools/scripts.sh`, `tools/sessionStartContext.sh`, `tools/doppler-mirror-icloud.sh`, `daemons/syncObsidian.py`, `daemons/syncMemory.sh` | Mac launchd / iCloud 의존이 본질 (Obsidian/Safari/Memory 가 거기 있음) |
 | Layer 2 / OCI | `clouds/oci/bootstrap-agent.sh`, `clouds/oci/ociIn.sh` (Doppler 우선, iCloud 폴백) | OCI-specific 또는 OCI 접속용 |
 | 메타/문서 | `CLAUDE.md`, `CONVENTIONS.md`, `ARCHITECTURE.md`, `README.md` | 모든 환경에서 읽음 |
@@ -152,7 +152,7 @@ Layer 2 — Platform 확장 (opt-in per environment)
 | `com.clavier.watcherCal` | Scriptable data/cal WatchPaths | syncObsidian.py (--src cal) |
 | `com.clavier.watcherScreenshots` | Screenshots WatchPaths | 스크린샷 처리 |
 | `com.clavier.workerPdf` | WatchPaths | pdfToImg 처리 |
-| `com.clavier.overnight` | 매일 03:00 (StartCalendarInterval) | overnight-runner.mjs (conduct + info-arch + Conductor) |
+| `com.clavier.closer` | 매일 03:00 (StartCalendarInterval) | closer-runner.mjs (conduct + info-arch + Conductor) |
 
 ### bin 명령어
 
@@ -206,11 +206,11 @@ Claude Code가 추가 컨텍스트로 자동 주입
 
 | 날짜 | 변경 내용 |
 |------|-----------|
-| 2026-04-30 | **framer-sync / control-tower 구조 점검**: D1 SSOT 마이그레이션 직후 cold-start SOLID 감사. 발견 8개: `syncCollectionNative ↔ syncCollectionFromD1` 코드 중복(높음), `syncAllNative` KV 사망 파라미터·`index.ts` 모놀리식 라우터(중간). 시정 4개 OVERNIGHT_QUEUE.md 등록. ADR: clavier-hq/DECISIONS.md 2026-04-30. CONCEPTS.md #13 "구조 점검 — SOLID 감사" 신설. |
+| 2026-04-30 | **framer-sync / control-tower 구조 점검**: D1 SSOT 마이그레이션 직후 cold-start SOLID 감사. 발견 8개: `syncCollectionNative ↔ syncCollectionFromD1` 코드 중복(높음), `syncAllNative` KV 사망 파라미터·`index.ts` 모놀리식 라우터(중간). 시정 4개 CLOSER_QUEUE.md 등록. ADR: clavier-hq/DECISIONS.md 2026-04-30. CONCEPTS.md #13 "구조 점검 — SOLID 감사" 신설. |
 | 2026-04-28 | **framer-sync 인터페이스 동결**: "프레이머가 변화를 알 수 없게 한다" — `addFields`/`createCollection` 등 Framer 측 스키마 변경 RPC 호출 전면 제거, `getFields()` read-only만 사용. 매칭 안 되는 필드는 `[needs-manual-framer-setup]` 경고 후 graceful skip. 4중 양파 디버깅 (typia/fldXXX/Connection error/D1 chicken-egg) 모두 호환성 종속에서 발생 → 호환성 영구 보장. 브랜치 `framer-immutable-refactor` (commit 68a8ce1, sisoso production deployed). clavier-hq/DECISIONS.md 2026-04-28 + CONCEPTS.md "외부 인터페이스 동결" 항목 |
 | 2026-04-28 | **시크릿 SSOT 이전**: iCloud `clavier.env` → Doppler `clavier/prd`. ~/.zshrc 하이브리드 전환, 4개 LaunchAgent (overnight/Git/Obsidian/Cal) doppler run 래핑, clavier-config Doppler 래퍼화, 신규 도구 `tools/doppler-mirror-icloud`/`tools/doppler-sync-wrangler`. iCloud는 백업 미러로 강등. DECISIONS.md 2026-04-28 ADR + clavier-hq/CONCEPTS.md 신설 |
 | 2026-04-28 | 전체 시스템 개요 + 모듈 표 최신화 (OCI/framer-sync-worker/base-template-server-api 제거 → platform-workers/clavier-hq 반영). SessionStart hook 3종 문서 명시. overnight LaunchAgent 추가 |
-| 2026-04-27 | `tools/overnight-runner.mjs` 신설 + `com.clavier.overnight` LaunchAgent (매일 03:00). conduct + info-arch + Conductor(월) 통합 실행 |
+| 2026-04-27 | `tools/closer-runner.mjs` 신설 + `com.clavier.closer` LaunchAgent (매일 03:00). conduct + info-arch + Conductor(월) 통합 실행 |
 | 2026-04-27 | `tools/workerContextInject.sh` + UserPromptSubmit hook — 워커 키워드 감지 시 ARCHITECTURE.md 자동 주입 |
 | 2026-04-26 | SessionStart hook 7종 → 3종 축소 (한도 초과 방지) |
 | 2026-04-25 | `tools/sessionStartContext.sh` 신설 + `~/.claude/settings.json` SessionStart hook을 인라인 → 스크립트 호출로 단순화. clavier-hq 4종(MISSION/MANUAL/STATUS/QUEUE)을 강제 주입 대상에 추가. 모델 의지 의존을 시스템 강제로 격상 |
