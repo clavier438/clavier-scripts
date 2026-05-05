@@ -72,8 +72,15 @@ try {
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 
-// workers.json 은 항상 이 도구 옆에 있음 (같은 repo 안)
-const WORKERS_JSON = join(__dir, "workers.json")
+// SSOT 변경 (DECISIONS 2026-05-05): tools/workers.json 폐기 → Cloudflare API live.
+// 워커 목록은 매번 Cloudflare 에서 조회 (~/.cache/clavier/workers.json 60s TTL).
+// 이유: workers.json 수동 갱신은 *deploy 와 separated* 되어 drift 발생.
+//       (예: framer-sync-mukayu deploy 했는데 workers.json 등록 잊어 workerCtl 못 봄.)
+// 따라서 *deploy 자체가 곧 등록*. URL 도 name 에서 derive — 사람 손으로 박을 게 없음.
+const WORKER_PREFIX = "framer-sync-"
+const WORKERS_CACHE_DIR = join(homedir(), ".cache", "clavier")
+const WORKERS_CACHE_FILE = join(WORKERS_CACHE_DIR, "workers.json")
+const WORKERS_CACHE_TTL_MS = 60_000
 
 // ── 색상 유틸 ──────────────────────────────────────────────────────────────
 const c = {
@@ -242,14 +249,58 @@ function printResponseBody(body) {
     console.log(JSON.stringify(body, null, 2).split("\n").map(l => `  ${l}`).join("\n"))
 }
 
-// 2026-05-01: clavier-registry 워커 폐기 → workers.json 만 사용 (단일 진실 소스).
-async function loadWorkers() {
-    try {
-        return JSON.parse(readFileSync(WORKERS_JSON, "utf8"))
-    } catch {
-        console.error(red("✗ workers.json 읽기 실패: ") + WORKERS_JSON)
+// 2026-05-05: workers.json 폐기 → Cloudflare API live (SSOT). 60s TTL cache.
+// drift 자체가 구조적으로 불가능 — deploy === 등록.
+async function loadWorkers({ noCache = false } = {}) {
+    if (!noCache) {
+        try {
+            const raw = readFileSync(WORKERS_CACHE_FILE, "utf8")
+            const cached = JSON.parse(raw)
+            if (Date.now() - cached.fetchedAt < WORKERS_CACHE_TTL_MS) {
+                return cached.workers
+            }
+        } catch { /* miss */ }
+    }
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID
+    const token = process.env.CLOUDFLARE_API_TOKEN
+    if (!accountId || !token) {
+        console.error(red("✗ CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN env 없음"))
+        console.error(dim("  doppler run --project clavier --config prd -- workerCtl …"))
         process.exit(1)
     }
+    let scripts
+    try {
+        const res = await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/scripts`,
+            { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(10_000) }
+        )
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        scripts = data.result ?? []
+    } catch (e) {
+        console.error(red(`✗ Cloudflare API 조회 실패: ${e.message}`))
+        process.exit(1)
+    }
+    const workers = scripts
+        .filter(s => s.id.startsWith(WORKER_PREFIX))
+        .map(s => {
+            const name = s.id.slice(WORKER_PREFIX.length)
+            return {
+                name,
+                label: `${name} (Framer ↔ Airtable)`,
+                url: `https://${s.id}.${WORKER_SUBDOMAIN}`,
+            }
+        })
+        .sort((a, b) => a.name.localeCompare(b.name))
+    try {
+        if (!existsSync(WORKERS_CACHE_DIR)) mkdirSync(WORKERS_CACHE_DIR, { recursive: true })
+        writeFileSync(WORKERS_CACHE_FILE, JSON.stringify({ fetchedAt: Date.now(), workers }, null, 2))
+    } catch { /* cache write best-effort */ }
+    return workers
+}
+
+function bustWorkersCache() {
+    try { writeFileSync(WORKERS_CACHE_FILE, JSON.stringify({ fetchedAt: 0, workers: [] })) } catch {}
 }
 
 // ── /capabilities 호출 ────────────────────────────────────────────────────
@@ -444,14 +495,13 @@ function showHelp(workers) {
     console.log(`    ${cyan("workerCtl conduct")}                  ${dim("panel + WORKER_STATUS.md 자동 갱신")}`)
     console.log(`    ${cyan("workerCtl backup")}                   ${dim("모든 워커 상태 → Airtable system_snapshots 저장")}`)
     console.log(`    ${cyan("workerCtl register [이름]")}           ${dim("새 프로젝트 전체 프로비저닝 (KV·D1·배포·configure 자동)")}`)
-    console.log(`    ${cyan("workerCtl set-url <워커> <URL>")}     ${dim("workers.json의 워커 URL 변경")}`)
     console.log(`    ${cyan("workerCtl <워커>")}                   ${dim("워커 지정 → 함수 선택")}`)
     console.log(`    ${cyan("workerCtl <워커> <함수>")}            ${dim("바로 실행")}`)
     console.log()
     console.log(hr)
     console.log()
 
-    console.log(bold("  등록된 워커  ") + dim(`(${WORKERS_JSON})`))
+    console.log(bold("  등록된 워커  ") + dim(`(Cloudflare API live, prefix=${WORKER_PREFIX})`))
     console.log()
     workers.forEach(w => {
         console.log(`    ${bold(cyan(w.name.padEnd(16)))} ${w.label ?? ""}`)
@@ -499,7 +549,6 @@ function showHelp(workers) {
     console.log(`    ${dim("workerCtl sisoso configure")}         ${dim("→ Airtable/Framer 연결 설정 변경")}`)
     console.log(`    ${dim("workerCtl register")}                ${dim("→ 새 프로젝트 대화형 프로비저닝")}`)
     console.log(`    ${dim("workerCtl register myproject")}      ${dim("→ 이름 지정해서 바로 시작")}`)
-    console.log(`    ${dim("workerCtl set-url sisoso https://...")} ${dim("→ 워커 URL 변경")}`)
     console.log()
     console.log(hr)
     console.log()
@@ -663,20 +712,10 @@ async function runBackup(workers) {
     console.log()
 }
 
-// ── workers.json 로컬 편집 유틸 ──────────────────────────────────────────
-
-function loadWorkersJson() {
-    try { return JSON.parse(readFileSync(WORKERS_JSON, "utf8")) }
-    catch { return [] }
-}
-
-function saveWorkersJson(workers) {
-    writeFileSync(WORKERS_JSON, JSON.stringify(workers, null, 2) + "\n")
-}
-
 // register: 새 프로젝트 전체 프로비저닝
 // 사용자 결정: 이름, Airtable Base ID/Token, Framer URL/Key
-// 자동: KV생성 → D1생성 → wrangler.toml 추가 → 마이그레이션 → 배포 → workers.json 등록 → configure → sync
+// 자동: KV생성 → D1생성 → wrangler.toml 추가 → 마이그레이션 → 배포 → configure → sync
+// (2026-05-05~: deploy === Cloudflare 등록. workers.json 단계 폐기.)
 async function runRegister(args) {
     const rl = createInterface({ input: process.stdin, output: process.stdout })
 
@@ -813,24 +852,12 @@ crons = ["0 0 */5 * *"]
         process.exit(1)
     }
 
-    // ── Step 6: workers.json 등록 ────────────────────────────────────────
-    process.stdout.write(`  ${bold("6/7")} workers.json 등록...`)
-    try {
-        const list = loadWorkersJson()
-        if (!list.find(w => w.name === name)) {
-            list.push({ name, label: `${name} (Framer ↔ Airtable)`, url: workerUrl })
-            saveWorkersJson(list)
-        }
-        console.log(green(`  ✅`))
-    } catch (e) {
-        console.log(yellow(`  ⚠️ ${e.message}`))
-    }
-
-    // ── Step 7: configure + 초기 sync ───────────────────────────────────
-    process.stdout.write(`  ${bold("7/7")} configure 실행... (배포 반영 대기 중)`)
+    // ── Step 6: cache bust (Cloudflare 가 SSOT — deploy 자체가 등록) + configure ─────
+    bustWorkersCache()
+    process.stdout.write(`  ${bold("6/6")} configure 실행... (배포 반영 대기 중)`)
     await new Promise(r => setTimeout(r, 3000))
     process.stdout.write("\r" + " ".repeat(60) + "\r")
-    process.stdout.write(`  ${bold("7/7")} configure 실행...`)
+    process.stdout.write(`  ${bold("6/6")} configure 실행...`)
     try {
         const res = await fetch(`${workerUrl}/configure`, {
             method: "POST",
@@ -859,34 +886,6 @@ crons = ["0 0 */5 * *"]
     console.log(`  ${bold("KV")}     ${gray(kvId?.slice(0, 8) + "...")}`)
     console.log()
     console.log(dim(`  초기 sync: workerCtl.mjs ${name} push-managed`))
-    console.log()
-}
-
-// set-url: workers.json의 기존 워커 URL 변경
-async function runSetUrl(args) {
-    const [name, newUrl] = args
-    if (!name || !newUrl) {
-        console.error(red("  사용법: workerCtl set-url <워커이름> <새URL>"))
-        process.exit(1)
-    }
-
-    const workers = loadWorkersJson()
-    const w = workers.find(w => w.name === name)
-    if (!w) {
-        console.error(red(`  ✗ "${name}" 워커를 찾을 수 없음`))
-        console.log(gray(`  등록된 워커: ${workers.map(w => w.name).join(", ")}`))
-        process.exit(1)
-    }
-
-    const oldUrl = w.url
-    w.url = newUrl
-    saveWorkersJson(workers)
-
-    console.log(green(`  ✅ URL 변경 완료`))
-    console.log(`     ${dim(oldUrl)}`)
-    console.log(`  →  ${cyan(newUrl)}`)
-    console.log()
-    console.log(dim(`  연결 설정(Airtable/Framer)도 바꾸려면: workerCtl ${name} configure`))
     console.log()
 }
 
@@ -1020,12 +1019,6 @@ async function main() {
     // register — 새 워커 등록 + configure
     if (args[0] === "register") {
         await runRegister(args.slice(1))
-        process.exit(0)
-    }
-
-    // set-url — workers.json의 URL 변경
-    if (args[0] === "set-url") {
-        await runSetUrl(args.slice(1))
         process.exit(0)
     }
 
