@@ -16,6 +16,7 @@ import { fileURLToPath } from "url"
 import { dirname, join } from "path"
 import { homedir } from "os"
 import { findPlatformWorkers, findClavierHq } from "./lib/repoPaths.mjs"
+import { DOPPLER_PROJECT, getWorkerEnv, listWorkerEnvs } from "./lib/workerEnvMap.mjs"
 
 // framer-sync 코드 본체 경로 (wrangler 명령 실행 기준 디렉토리)
 // sibling-first 자동 탐색 (environment-peer 모델, DECISIONS 2026-05-03)
@@ -30,9 +31,10 @@ if (!FRAMER_SYNC_DIR || !existsSync(FRAMER_SYNC_DIR)) {
 // 워커 URL 패턴 — Cloudflare account subdomain
 const WORKER_SUBDOMAIN = process.env.WORKER_SUBDOMAIN ?? "hyuk439.workers.dev"
 
-// wrangler shell 실행 — Doppler로 cfat 토큰 주입 (DECISIONS 2026-04-30)
-function shellWrangler(cmd) {
-    return execSync(`doppler run --project clavier --config prd -- ${cmd}`, {
+// wrangler shell 실행 — Doppler로 cfat 토큰 주입 (DECISIONS 2026-04-30).
+// config 인자 생략 시 prd (sisoso) 기본 — register 등 신규 워커 부트스트랩이 이걸 쓴다.
+function shellWrangler(cmd, config = "prd") {
+    return execSync(`doppler run --project ${DOPPLER_PROJECT} --config ${config} -- ${cmd}`, {
         cwd: FRAMER_SYNC_DIR,
         encoding: "utf8",
         stdio: ["pipe", "pipe", "pipe"],
@@ -106,9 +108,9 @@ const gray   = s => `${c.gray}${s}${c.reset}`
 // Doppler 단일 키 FRAMER_PROJECTS 에 객체로 저장: { <projectId>: { url, token } }
 const FRAMER_PROJECTS_KEY = "FRAMER_PROJECTS"
 
-function getDopplerSecret(key) {
+function getDopplerSecret(key, config = "prd") {
     const r = spawnSync("doppler",
-        ["secrets", "get", key, "--project", "clavier", "--config", "prd",
+        ["secrets", "get", key, "--project", DOPPLER_PROJECT, "--config", config,
          "--plain", "--no-exit-on-missing-secret"],
         { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] })
     if (r.status !== 0) return null
@@ -116,12 +118,12 @@ function getDopplerSecret(key) {
     return out || null
 }
 
-function setDopplerSecret(key, value) {
+function setDopplerSecret(key, value, config = "prd") {
     const r = spawnSync("doppler",
-        ["secrets", "set", key, "--project", "clavier", "--config", "prd", "--silent"],
+        ["secrets", "set", key, "--project", DOPPLER_PROJECT, "--config", config, "--silent"],
         { input: value, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] })
     if (r.status !== 0) {
-        throw new Error(`Doppler 저장 실패: ${(r.stderr ?? "").toString().trim() || "unknown"}`)
+        throw new Error(`Doppler 저장 실패 (${config}): ${(r.stderr ?? "").toString().trim() || "unknown"}`)
     }
 }
 
@@ -130,8 +132,8 @@ function extractFramerProjectId(url) {
     return m ? m[1] : null
 }
 
-function loadFramerProjects() {
-    const raw = getDopplerSecret(FRAMER_PROJECTS_KEY)
+function loadFramerProjects(config = "prd") {
+    const raw = getDopplerSecret(FRAMER_PROJECTS_KEY, config)
     if (!raw) return {}
     try {
         const obj = JSON.parse(raw)
@@ -139,21 +141,26 @@ function loadFramerProjects() {
     } catch { return {} }
 }
 
-function saveFramerProjects(projects) {
-    setDopplerSecret(FRAMER_PROJECTS_KEY, JSON.stringify(projects))
+function saveFramerProjects(projects, config = "prd", workerName = null) {
+    setDopplerSecret(FRAMER_PROJECTS_KEY, JSON.stringify(projects), config)
     // Doppler 갱신 후 자동으로 wrangler secrets 도 동기화 — desync 방지 (Doppler-only SSOT 정신)
-    syncDopplerToWrangler("framer-sync")
+    // workerName 주면 그 워커만, null 이면 전체 sync
+    syncDopplerToWrangler(workerName)
 }
 
 // Doppler → wrangler secrets 동기화 (별도 스크립트 호출). 실패해도 throw 안 함.
-function syncDopplerToWrangler(workerDir) {
+// workerName 주면 그 워커만 (예: "mukayu"), null 이면 모든 워커 일괄 sync.
+function syncDopplerToWrangler(workerName = null) {
+    const args = workerName ? [workerName] : []
     try {
-        const r = spawnSync("doppler-sync-wrangler", [workerDir],
+        const r = spawnSync("doppler-sync-wrangler", args,
             { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 })
         if (r.status === 0) {
-            console.log(dim("  ↳ doppler-sync-wrangler: 워커 secrets 자동 갱신 완료"))
+            const target = workerName ?? "전체"
+            console.log(dim(`  ↳ doppler-sync-wrangler: ${target} secrets 자동 갱신 완료`))
         } else {
-            console.log(yellow(`  ⚠️  wrangler 자동 sync 실패 — 수동 'doppler-sync-wrangler ${workerDir}' 필요`))
+            const hint = workerName ? `doppler-sync-wrangler ${workerName}` : "doppler-sync-wrangler"
+            console.log(yellow(`  ⚠️  wrangler 자동 sync 실패 — 수동 '${hint}' 필요`))
         }
     } catch (e) {
         console.log(yellow(`  ⚠️  wrangler 자동 sync 스킵: ${e.message}`))
@@ -1137,6 +1144,10 @@ async function main() {
     }
 
     // ④ params 수집 (필요한 경우)
+    // 워커별 Doppler config 라우팅 — sisoso=prd, mukayu=prd_mukayu (workerEnvMap.mjs SSOT)
+    const wenv = getWorkerEnv(worker.name)
+    const dopplerConfig = wenv?.dopplerConfig ?? "prd"
+
     let body = null
     if (fn.params?.length) {
         const rl = createInterface({ input: process.stdin, output: process.stdout })
@@ -1165,19 +1176,19 @@ async function main() {
                 rl.close()
                 process.exit(1)
             }
-            const projects = loadFramerProjects()
+            const projects = loadFramerProjects(dopplerConfig)
             let entry = projects[projectId]
             if (entry?.token) {
-                console.log(dim(`  ✓ Framer API 토큰 자동 적용 — Doppler ${FRAMER_PROJECTS_KEY}.${projectId}`))
+                console.log(dim(`  ✓ Framer API 토큰 자동 적용 — Doppler[${dopplerConfig}] ${FRAMER_PROJECTS_KEY}.${projectId}`))
                 entry.url = body.framerProjectUrl   // 입력 URL이 더 최신 (viewId 등) — 갱신
                 projects[projectId] = entry
-                try { saveFramerProjects(projects) }
+                try { saveFramerProjects(projects, dopplerConfig, worker.name) }
                 catch (e) { console.log(yellow(`  ⚠️  ${FRAMER_PROJECTS_KEY} 갱신 실패 (무시 가능): ${e.message}`)) }
             } else {
                 console.log()
                 console.log(yellow(`  ⚠️  처음 보는 Framer 프로젝트 (id: ${projectId})`))
                 console.log(`     이 프로젝트의 ${bold("Framer API 토큰")} 을 입력해주세요.`)
-                console.log(dim(`     Doppler ${FRAMER_PROJECTS_KEY}.${projectId} 에 (url, token) 쌍으로 저장됩니다.`))
+                console.log(dim(`     Doppler[${dopplerConfig}] ${FRAMER_PROJECTS_KEY}.${projectId} 에 (url, token) 쌍으로 저장됩니다.`))
                 const token = (await prompt(rl, `  ${bold("Framer API 토큰")}: `)).trim()
                 if (!token) {
                     console.error(red("  ✗ 토큰 필수 — 중단"))
@@ -1186,10 +1197,25 @@ async function main() {
                 }
                 entry = { url: body.framerProjectUrl, token }
                 projects[projectId] = entry
-                saveFramerProjects(projects)
-                console.log(green(`  ✓ Doppler 저장: ${FRAMER_PROJECTS_KEY}.${projectId}`))
+                saveFramerProjects(projects, dopplerConfig, worker.name)
+                console.log(green(`  ✓ Doppler[${dopplerConfig}] 저장: ${FRAMER_PROJECTS_KEY}.${projectId}`))
             }
             body.framerToken = entry.token
+
+            // FRAMER_PROJECT_ID 도 Doppler 에 set — 워커는 env-first SSOT 라 D1 만 갱신해도 무시됨 (config.ts:40)
+            try {
+                setDopplerSecret("FRAMER_PROJECT_ID", projectId, dopplerConfig)
+                console.log(dim(`  ↳ Doppler[${dopplerConfig}] FRAMER_PROJECT_ID = ${projectId}`))
+            } catch (e) { console.log(yellow(`  ⚠️  FRAMER_PROJECT_ID 저장 실패: ${e.message}`)) }
+        }
+
+        // configure 후처리: airtableBaseId 변경 시 Doppler 에도 저장 (env-first SSOT — D1 만 갱신하면 무시됨)
+        if (isConfigure && body.airtableBaseId && body.airtableBaseId !== current.airtableBaseId) {
+            try {
+                setDopplerSecret("AIRTABLE_BASE_ID", body.airtableBaseId, dopplerConfig)
+                console.log(dim(`  ↳ Doppler[${dopplerConfig}] AIRTABLE_BASE_ID = ${body.airtableBaseId}`))
+                syncDopplerToWrangler(worker.name)
+            } catch (e) { console.log(yellow(`  ⚠️  AIRTABLE_BASE_ID 저장 실패: ${e.message}`)) }
         }
 
         rl.close()
