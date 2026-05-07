@@ -638,13 +638,19 @@ async function runPanel(workers) {
 }
 
 // ── backup ────────────────────────────────────────────────────────────────
-const BACKUP_BASE  = "appfLfZUE4zVncTpY"
-const BACKUP_TABLE = "tblXSf0epaEj4JY9F"
+// 글로벌 백업 base/table — Doppler[prd] WORKERCTL_BACKUP_BASE / WORKERCTL_BACKUP_TABLE.
+// Doppler self-relaunch (line 50) 가 prd 의 env 를 주입하므로 모든 워커 실행에서 동일.
+const BACKUP_BASE  = process.env.WORKERCTL_BACKUP_BASE
+const BACKUP_TABLE = process.env.WORKERCTL_BACKUP_TABLE
 
 async function runBackup(workers) {
     const apiKey = process.env.AIRTABLE_API_KEY
     if (!apiKey) {
-        console.error(red("  ✗ AIRTABLE_API_KEY 가 설정되지 않았습니다 (~/.clavier/env 확인)"))
+        console.error(red("  ✗ AIRTABLE_API_KEY 가 설정되지 않았습니다 (Doppler/~/.clavier/env 확인)"))
+        process.exit(1)
+    }
+    if (!BACKUP_BASE || !BACKUP_TABLE) {
+        console.error(red("  ✗ WORKERCTL_BACKUP_BASE / WORKERCTL_BACKUP_TABLE 이 Doppler[prd] 에 없습니다"))
         process.exit(1)
     }
 

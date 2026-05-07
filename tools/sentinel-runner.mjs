@@ -123,6 +123,14 @@ function isLikelyOneShot(file) {
     return /^(mukayu|sisoso|hotel|airbnb|stayfolio)-/i.test(fname)
 }
 
+// 글로벌 secret 키 — 모든 워커가 공유 (Doppler[prd] 가 home, 워커 config 분기 불필요).
+// 이런 키를 다루는 코드의 `--config prd` 하드코딩은 의도된 패턴 — false positive.
+const GLOBAL_SECRET_KEYS_RE = /\b(CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|GDRIVE_REFRESH_TOKEN|GDRIVE_CLIENT_(?:ID|SECRET)|WORKERCTL_BACKUP_(?:BASE|TABLE))\b/
+
+// fallback 패턴: `process.env.X ?? "..."` 또는 `process.env.X || "..."` —
+// env 미주입 시 dev 디폴트. 의도된 fallback 으로 false positive 처리.
+const ENV_FALLBACK_RE = /process\.env\.[A-Z_]+\s*(\?\?|\|\|)\s*['"`]/
+
 // false-positive whitelist
 function isAllowedContext(file, line) {
     const fname = basename(file)
@@ -139,6 +147,10 @@ function isAllowedContext(file, line) {
     if (/^\s*(echo|printf|warn|error|info|note|console\.(log|error|warn|info)|print|process\.stdout\.write)\b/.test(line)) return true
     // doppler setup 자체 — 사용자 환경 첫 link 시 default config 명시. multi-worker drift 무관.
     if (/\bdoppler\s+setup\b/.test(line)) return true
+    // 글로벌 secret 키 — `--config prd` 하드코딩이 의도된 패턴 (모든 워커 공유)
+    if (GLOBAL_SECRET_KEYS_RE.test(line)) return true
+    // env fallback — `process.env.X ?? "..."` 는 dev 디폴트 (의도된 fallback)
+    if (ENV_FALLBACK_RE.test(line)) return true
     return false
 }
 
