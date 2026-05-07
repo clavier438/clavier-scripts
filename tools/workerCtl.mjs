@@ -227,6 +227,11 @@ async function loopStreamingSteps(workerUrl, stepPath) {
             const tail = p.done ? dim(`(${cur}/${p.total})`) : dim(`(${cur}/${p.total} 남음)`)
             console.log(`    ${tag}  ${p.collection.padEnd(12)} ${tail}`)
         }
+        if (data.phase === "stage1") {
+            console.log(dim(`    [step ${stepNum}] stage1 진행 중 (Airtable → D1) — 대기`))
+            await new Promise(r => setTimeout(r, 3000))
+            continue
+        }
         if (processed.length === 0 && data.remaining > 0) {
             console.log(yellow(`    [step ${stepNum}] no progress — 큐 stuck? remaining=${data.remaining}`))
             return false
