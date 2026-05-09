@@ -8,8 +8,11 @@
 # 인증:
 #   사용자가 Claude Code on web 설정에서 DOPPLER_TOKEN 환경변수를 한 번만
 #   추가해두면 Doppler CLI 가 자동으로 그 값을 사용 (토큰 → 영속).
-#   토큰 발급: https://dashboard.doppler.com → Access → Service Tokens
-#             (project=clavier, config=prd, read-only 권장)
+#   토큰 발급 (현재 plan = Developer Free, Service Token 미지원):
+#     dashboard.doppler.com → 우상단 프로필 → API Tokens → Generate
+#     이름은 식별 가능하게 (예: claude-code-web)
+#   ⚠️ Personal Token 은 계정 전체 권한 — 절대 평문 노출 금지.
+#     transcript / git / 노션 등에 박히면 즉시 revoke.
 #
 # Mac/OCI 는 brew/apt + keychain 으로 따로 세팅돼 있으므로 web 한정 실행.
 
@@ -47,9 +50,10 @@ if [ -z "${DOPPLER_TOKEN:-}" ]; then
 [session-start] WARN: DOPPLER_TOKEN 환경변수 미설정.
   Claude Code on web 설정에서 secret 추가:
     Name : DOPPLER_TOKEN
-    Value: <service token — dashboard.doppler.com → Access → Service Tokens>
-           (project=clavier, config=prd 스코프 권장)
+    Value: <Personal Token — dashboard.doppler.com → 프로필 → API Tokens → Generate>
+           이름 예: claude-code-web
   추가 후 새 세션부터 자동 적용.
+  ⚠️ Personal Token 은 계정 전체 권한 — 평문 노출 시 즉시 revoke.
 WARN
   exit 0
 fi
