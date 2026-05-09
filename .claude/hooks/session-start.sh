@@ -58,9 +58,16 @@ WARN
   exit 0
 fi
 
-# DOPPLER_TOKEN 있으면 doppler CLI 가 자동 사용 — whoami 로 확인만.
+# DOPPLER_TOKEN 있으면 doppler CLI 가 자동 사용 — me 로 확인.
 if doppler me >/dev/null 2>&1; then
   echo "[session-start] doppler authed: $(doppler me --json 2>/dev/null | grep -oE '"slug":"[^"]+"' | head -1 || echo 'ok')"
 else
-  echo "[session-start] WARN: DOPPLER_TOKEN set but auth failed — token expired or wrong scope"
+  # 403 가능 원인: (a) 토큰 invalid/revoked, (b) sandbox 가 api.doppler.com 차단
+  cat <<'WARN'
+[session-start] WARN: DOPPLER_TOKEN set 됐지만 doppler me 실패.
+  체크할 것:
+  1) Network access — 환경 설정 ⚙️ → Network access = Custom + Allowed domains
+     에 'api.doppler.com' 추가됐는지. 기본 Trusted 만으로는 차단됨.
+  2) 토큰 — dashboard.doppler.com 에서 revoke 안 됐는지, 만료 안 됐는지.
+WARN
 fi
