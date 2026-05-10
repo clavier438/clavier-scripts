@@ -1,25 +1,11 @@
 #!/usr/bin/env node
 /**
- * 비서 (closer-runner) — 매일 새벽 03:00 기계적 처리
+ * closer-runner — 수동 실행 채널 (DEPRECATED for cron).
  *
- * 역할: 각 전문가 에이전트를 순서대로 호출하고, CLOSER_QUEUE.md 실행.
- *       직접 결정하지 않고, 각 전문가가 자기 영역에 직접 씁니다.
- *
- * 에이전트 체계:
- *   비서 (여기)       매일 03:00  — watchman + 전문가들 호출 + queue 처리
- *   architect         매주 월요일 — 클린아키텍처 주간 감사 (scheduled task)
- *   strategist        매일 08:00  — 브랜드/비즈니스 전략 + researcher (scheduled task)
- *
- * 동작 (STL 원칙 — DECISIONS.md 2026-05-04 ADR):
- *   Closer (overnight) = 매일 03:00 영역의 단일 책임자, 사용자에 직접 보고.
- *   부하 3명을 임명·감독:
- *     부하 1: police   — 5 영역 헬스 순찰 (precheck all)
- *     부하 2: watchman — 워커 KV 스냅샷 (workerCtl conduct)
- *     부하 3: queue    — CLOSER_QUEUE.md 사용자 박은 명령 실행
- *   통합: overnight-prompt.md (Closer entity) 가 부하 raw 3개 → 단일 briefing 작성
- *   저장: briefings/overnight-YYYY-MM-DD.md (사용자가 보는 유일한 보고)
- *
- *   info-arch / scribe / Ray = clavier-hq/archive/ 로 이동 (STL 위반 — 무소속).
+ * **2026-05-10 변화 (DECISIONS.md "cron-triggered routine = Claude Code routines 단일 표준")**:
+ *   매일 03:00 LaunchAgent (com.clavier.closer) 폐기됨. cron 트리거 = Claude Code routines (`closer`).
+ *   master spec = `clavier-hq/routines/closer.md` + `~/.claude/scheduled-tasks/closer/SKILL.md`.
+ *   이 파일은 *수동 실행 채널* 로만 보존 — 사용자가 즉시 closer 동작을 셸에서 트리거하고 싶을 때.
  *
  * 수동 실행:
  *   node tools/closer-runner.mjs        # 정상 실행
@@ -163,6 +149,8 @@ async function main() {
     log.push(`# 비서 야간 처리 — ${new Date().toISOString()}`)
     log.push("")
 
+    let failCount = 0  // 함수 상단으로 끌어올림 (옛 위치 line 205 가 hoisting bug — line 178 의 failCount++ 가 ReferenceError)
+
     // 0. police: 매일 새벽 핵심 영역 순찰 + precheck 해석 (Conductor 와 SRP 분리)
     //    police agent 가 precheck all 실행 + 5 영역 순찰 (workers/repos/actions/framer-sync/OCI)
     //    + 분류 (🟢/🟡/🔴) + 자동 수정 가능한 건 시도 + 결정 필요는 alarm.
@@ -201,8 +189,6 @@ async function main() {
     log.push(watchmanResult.output)
     log.push("```")
     log.push("")
-
-    let failCount = 0
 
     // claude 바이너리 존재 확인 — 없으면 즉시 중단
     if (!existsSync(CLAUDE_BIN)) {
