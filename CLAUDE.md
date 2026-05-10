@@ -15,7 +15,37 @@
 > **MAP.md** 가 진짜 "한 화면 도면". 의존성 방향, 흐름, 변동성 적응 메커니즘이 전부 거기.
 > SYSTEM_ENV.md 는 데이터 (URL, KV ID, Doppler 키 목록).
 
-## 구조 변경 시 MAP.md 동시 갱신 (Defense in Depth)
+## 살아있는 도면 우선 원칙 (2026-05-10~) ★ 절대 원칙
+
+**현상태를 알려주는 도면 = 항상 최신**. 어긋남 발견 시 *그 즉시* 갱신.
+
+사용자 발화 (2026-05-10): *"현상태를 알려주는 도면을 항상 최신버전으로 가지고 있도록 하고, 그게 틀린거 발견했으면 매번 최신화"*
+
+### 살아있는 도면 (clavier-hq)
+
+| 도면 | 갱신 방식 | 어긋남 시 |
+|---|---|---|
+| MAP.md | 수동 — 구조 변경한 사람 | 즉시 같은 commit |
+| STATUS.md | 수동 — 상태 변경한 사람 | 즉시 |
+| SYSTEM_ENV.md | 수동 — 환경 변경한 사람 | 즉시 |
+| routines/*.md | 수동 — routine 책임자 | 즉시 |
+| WORKER_STATUS.md | 자동 (workerCtl conduct) | 다음 conduct |
+| CATALOG.md | 자동 (Engineer 일요일) | 다음 일요일 |
+| SENTINEL_AUDIT.md | 자동 (Sentinel 매일) | 다음 새벽 |
+| PRINCIPLES.md | 수동 (Ray Dalio 매일) | 다음 새벽 |
+
+분류 표 master = `clavier-hq/MAP.md` "살아있는 도면 — 원칙 + 책임 분류" 섹션.
+
+### Claude 행동 규칙
+
+작업 중 도면과 실제가 어긋남을 발견하면:
+1. **현재 작업 멈춤**.
+2. 도면 먼저 갱신 + commit (1줄이라도).
+3. 그 다음 원래 작업 재개.
+
+이유: 도면 갱신 미루면 그 commit 에 어긋남이 묻혀 다음 사람/Claude 가 거짓 위에서 추리 → cascading drift.
+
+### 구조 변경 시 동시 갱신 (Defense in Depth)
 
 **구조가 바뀌면 MAP.md 도 같은 commit 에 포함**:
 - 워커 추가/삭제 → 노드 수, SSOT 박스
@@ -23,8 +53,9 @@
 - 새 흐름 (route, cron, queue) → 흐름 시나리오
 - 새 외부 SSOT 키 → Doppler 박스
 - 새 외부 변동성 처리 → 적응 표
+- 새 routine / 시간 슬롯 변경 → "정기 자동화 — 루틴도면" 섹션
 
-매 commit 메시지에 영향 받은 도면 영역 명시. 도면-코드 어긋나면 신뢰 잃음.
+매 commit 메시지에 영향 받은 도면 영역 명시.
 
 GitHub: https://github.com/clavier0/clavier-hq
 
@@ -135,6 +166,7 @@ Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.m
 - "이거 실수다"
 - "이런 거 다시 일어나면 안 돼"
 - "왜 이런 일이 또 일어나"
+- "도면이랑 다른데" / "이거 도면이랑 어긋나" / "왜 도면 안 박혔어" (→ 살아있는 도면 우선 원칙 위반)
 
 → 즉시 `clavier-hq/RAY_DALIO_QUEUE.md` 의 `## 대기 중` 섹션에 미체크 항목 (`- [ ]`) 으로 박음. 형식 ([RAY_DALIO_QUEUE.md 의 "형식" 섹션](https://github.com/clavier0/clavier-hq/blob/main/RAY_DALIO_QUEUE.md) 참조):
 
