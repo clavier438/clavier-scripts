@@ -233,7 +233,11 @@ async function loopStreamingSteps(workerUrl, stepPath) {
             continue
         }
         if (processed.length === 0 && data.remaining > 0) {
-            console.log(yellow(`    [step ${stepNum}] no progress — 큐 stuck? remaining=${data.remaining}`))
+            // workerCtl polling 한도 도달 — 워커는 백그라운드에서 계속 진행 중 (cron 매분 백업이 이어받음).
+            // 진짜 stuck 아님. /managed-status 로 done 확인 가능.
+            console.log(yellow(`    [step ${stepNum}] workerCtl polling 한도 도달 (큐 remaining=${data.remaining}) — 워커는 계속 진행 중`))
+            console.log(dim(`               · cron 매분 백업이 이어받아 완료시킴 (Mac 닫혀도 OK)`))
+            console.log(dim(`               · 확인: curl ${workerUrl}/managed-status`))
             return false
         }
 
