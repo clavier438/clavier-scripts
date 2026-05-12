@@ -233,11 +233,42 @@ async function loopStreamingSteps(workerUrl, stepPath) {
             continue
         }
         if (processed.length === 0 && data.remaining > 0) {
-            // workerCtl polling 한도 도달 — 워커는 백그라운드에서 계속 진행 중 (cron 매분 백업이 이어받음).
-            // 진짜 stuck 아님. /managed-status 로 done 확인 가능.
-            console.log(yellow(`    [step ${stepNum}] workerCtl polling 한도 도달 (큐 remaining=${data.remaining}) — 워커는 계속 진행 중`))
+            // workerCtl 의 step polling 이 워커 stage2 보다 빨라 false negative 가능.
+            // 워커 /managed-status 직접 확인 — 진짜 done 까지 cron 백업 매분 도므로 90초 대기.
+            // (ADR 2026-05-12 "time-budget streaming = cross-cutting wrapper")
+            console.log(yellow(`    [step ${stepNum}] workerCtl step 진행 0 (queueRemaining=${data.remaining}) — 워커 status 직접 확인 중...`))
+
+            const pollIntervalMs = 30_000  // 30초
+            const maxPollMs = 90_000       // 90초 = cron 1-2번
+            let waited = 0
+            while (waited < maxPollMs) {
+                await new Promise(r => setTimeout(r, pollIntervalMs))
+                waited += pollIntervalMs
+                let statusRes, status
+                try {
+                    statusRes = await fetch(`${workerUrl}/managed-status`, { signal: AbortSignal.timeout(10_000) })
+                    status = await statusRes.json()
+                } catch (e) {
+                    console.log(dim(`               · status 호출 실패 (${e.message}) — 재시도`))
+                    continue
+                }
+                if (status.status === "done") {
+                    console.log()
+                    console.log(green(`  ✅ 큐 완료 (cron 백업이 마무리, 총 records 정보는 워커 /managed-status 참조)`))
+                    console.log()
+                    return true
+                }
+                if (status.status === "error") {
+                    console.log(red(`  ❌ 워커 에러: ${status.error ?? 'unknown'}`))
+                    return false
+                }
+                console.log(dim(`               · 워커 진행 중 (queueRemaining=${status.queueRemaining ?? '?'}, ${waited/1000}s 대기)`))
+            }
+
+            // 90초 후에도 done 아님 — 진행 중일 수 있으나 사용자 입력 받음.
+            console.log(yellow(`    [step ${stepNum}] 90초 후에도 done 아님 — 워커는 계속 진행 중일 수 있음`))
             console.log(dim(`               · cron 매분 백업이 이어받아 완료시킴 (Mac 닫혀도 OK)`))
-            console.log(dim(`               · 확인: curl ${workerUrl}/managed-status`))
+            console.log(dim(`               · 수동 확인: curl ${workerUrl}/managed-status`))
             return false
         }
 
