@@ -223,7 +223,17 @@ async function loopStreamingSteps(workerUrl, stepPath) {
             continue
         }
         if (!res.ok) {
+            // HTTP 500 등 응답 body 안 친절 안내 메시지 (예: Framer collection 이름 충돌) 사용자에게 그대로 표시.
+            // 2026-05-13 mukayu /configure 직후 "FramerPluginError: A collection with the name "items" already exists" 사고 — 사용자가 메시지 못 봤음.
             console.log(red(`    [step ${stepNum}] HTTP ${res.status}`))
+            if (data?.error) {
+                console.log()
+                // 줄바꿈 보존해서 다 보여줌
+                for (const line of String(data.error).split("\n")) {
+                    console.log(red(`    ${line}`))
+                }
+                console.log()
+            }
             return false
         }
 
