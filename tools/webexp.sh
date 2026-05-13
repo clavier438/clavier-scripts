@@ -85,17 +85,16 @@ for URL in "${URLS[@]}"; do
   echo "  [${IDX}/${TOTAL}] ▶ $URL"
   echo "═══════════════════════════════════"
 
+  OUT_DIR="~/webexporter-output/${SLUG}-${TS}"
   ssh "$OCI" "cd ~/clavier-scripts/webExporter && \
-    $ENV_VARS ~/webexporter-venv/bin/python feedback_loop.py '$URL' \
-      --criteria criteria_mukayu.json \
-      --output ~/webexporter-output \
+    $ENV_VARS ~/webexporter-venv/bin/python webSiteExporter.py '$URL' \
+      --output $OUT_DIR \
       --max-pages $MAX_PAGES \
-      --concurrency 1 \
-      --max-retries 1 2>&1 | tee ~/webexporter-logs/$LOG" || echo "[WARN] $URL fail"
+      --concurrency 1 2>&1 | tee ~/webexporter-logs/$LOG" || echo "[WARN] $URL fail"
 
   # PDF pull
   if [ -z "$NO_PULL" ]; then
-    REMOTE_PDF=$(ssh "$OCI" "ls -t /home/ubuntu/webexporter-output/${SLUG}-*/[a-z]*.pdf 2>/dev/null | head -1")
+    REMOTE_PDF=$(ssh "$OCI" "ls -t /home/ubuntu/webexporter-output/${SLUG}-${TS}/*.pdf 2>/dev/null | head -1")
     if [ -n "$REMOTE_PDF" ]; then
       LOCAL_PDF="$ICLOUD_RESULTS/${SLUG}-${MODE}-${TS}.pdf"
       scp "$OCI:$REMOTE_PDF" "$LOCAL_PDF"
