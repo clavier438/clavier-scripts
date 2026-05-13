@@ -50,9 +50,6 @@ iCloud/0/
 │   ├── img2web.sh                  ← 이미지 웹용 변환 (webp/jpg/png)
 │   ├── pdf2img.sh                  ← PDF → 이미지 (ImageMagick)
 │   ├── pdf_to_jpeg.sh              ← PDF → JPEG (Quick Action용, macOS Quartz)
-│   ├── pdf_batch_resume.sh         ← PDF 일괄 내보내기 (재개 가능)
-│   ├── webPdfExporter.sh           ← 웹페이지 → PDF 내보내기
-│   ├── run_safari_tabs_export.sh   ← Safari 탭 목록 일괄 PDF 내보내기
 │   │
 │   ├── rename_ko_to_camel.py       ← 한글 파일명 → camelCase 영문 변환
 │   ├── airtable_generic.py         ← Airtable API 유틸리티
@@ -165,12 +162,6 @@ pdf2img [-f jpg|png|tiff|webp] [-d DPI] [-o 출력폴더] 파일...
 pdf2img report.pdf
 pdf2img -f png -d 300 -o ./output ./*.pdf
 
-# 웹페이지 → PDF
-webPdfExporter URL [-o 출력폴더] [-m 최대시도] [-s 대기초]
-webPdfExporter https://example.com -o ~/Downloads
-
-# PDF 일괄 내보내기 (url 목록 파일 기반, 재개 가능)
-pdf_batch_resume                   # pdf_export_urls.txt 읽어서 실행
 ```
 
 ### 파일명 변환

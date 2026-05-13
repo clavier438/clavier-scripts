@@ -83,7 +83,7 @@ Layer 2 — Platform 확장 (opt-in per environment)
 | Layer | 파일/폴더 | 비고 |
 |-------|-----------|------|
 | Layer 1 (환경 독립, sibling-first) | `tools/lib/repoPaths.mjs`, `tools/workerCtl.mjs`, `tools/closer-runner.mjs`, `tools/doc-coverage.sh`, `tools/doppler-sync-wrangler.sh` | env > sibling > iCloud Mac fallback 자동 탐색 — 어느 peer 든 zero-config |
-| Layer 2 / Mac | `setup.sh`, `installScripts.sh`, `daemons/`, `tools/runSafariTabsExport.sh`, `tools/scriptsList.sh`, `tools/scripts.sh`, `tools/sessionStartContext.sh`, `tools/doppler-mirror-icloud.sh`, `daemons/syncObsidian.py`, `daemons/syncMemory.sh` | Mac launchd / iCloud 의존이 본질 (Obsidian/Safari/Memory 가 거기 있음) |
+| Layer 2 / Mac | `setup.sh`, `installScripts.sh`, `daemons/`, `tools/scriptsList.sh`, `tools/scripts.sh`, `tools/sessionStartContext.sh`, `tools/doppler-mirror-icloud.sh`, `daemons/syncObsidian.py`, `daemons/syncMemory.sh` | Mac launchd / iCloud 의존이 본질 (Obsidian/Memory 가 거기 있음) |
 | Layer 2 / OCI | `clouds/oci/bootstrap-agent.sh`, `clouds/oci/ociIn.sh` (Doppler 우선, iCloud 폴백) | OCI-specific 또는 OCI 접속용 |
 | 메타/문서 | `CLAUDE.md`, `CONVENTIONS.md`, `ARCHITECTURE.md`, `README.md` | 모든 환경에서 읽음 |
 
@@ -151,7 +151,6 @@ Layer 2 — Platform 확장 (opt-in per environment)
 | `com.clavier.watcherObsidian` | Obsidian vault WatchPaths | syncObsidian.py |
 | `com.clavier.watcherCal` | Scriptable data/cal WatchPaths | syncObsidian.py (--src cal) |
 | `com.clavier.watcherScreenshots` | Screenshots WatchPaths | 스크린샷 처리 |
-| `com.clavier.workerPdf` | WatchPaths | pdfToImg 처리 |
 | `com.clavier.closer` | 매일 03:00 (StartCalendarInterval) | closer-runner.mjs (conduct + info-arch + Conductor) |
 
 ### bin 명령어
