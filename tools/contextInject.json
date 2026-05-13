@@ -18,6 +18,13 @@
     ]
   },
   {
+    "domain": "airtable-webhooks",
+    "keywords": ["webhook", "macSecret", "macSecretBase64", "X-Airtable-Content-MAC", "hmac-sha256", "changedTablesById", "createdRecordsById", "changedRecordsById", "destroyedRecordIds", "webhook:manage", "notificationUrl", "airtable_webhook_cursor", "airtable.*realtime", "실시간.*동기화"],
+    "files": [
+      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/airtable-webhooks.md"
+    ]
+  },
+  {
     "domain": "github",
     "keywords": ["github", "깃허브", "gh secret", "gh pr", "gh workflow", "gh api", "gh release", "github.*action", "pull request", "workflow.*run"],
     "files": [
