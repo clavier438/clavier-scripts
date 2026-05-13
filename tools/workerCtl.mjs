@@ -1219,15 +1219,52 @@ async function main() {
     if (fn.params?.length) {
         const rl = createInterface({ input: process.stdin, output: process.stdout })
         let current = {}
-        if (fn.currentFrom) {
-            try {
-                const res = await fetch(`${worker.url}${fn.currentFrom}`, { signal: AbortSignal.timeout(5_000) })
-                if (res.ok) current = await res.json()
-            } catch { /* 조회 실패 → current = {} */ }
-        }
-
         // configure: framerToken 은 (url, token) 쌍 단위로 별도 처리 — 일반 envKey 자동 주입 비활성화
         const isConfigure = fn.id === "configure"
+
+        if (fn.currentFrom) {
+            // 2026-05-13 fix: configure 시 Doppler 가 SSOT — 워커 /status 의 stale 값 보지 X.
+            // 직전 사고: wrangler 자동 sync 실패 시 워커 secret 이 옛 ID 그대로 →
+            //          workerCtl 메뉴 6 가 그 옛 값 표시 → 사용자 Enter 로 유지 → 옛 ID 다시 Doppler 박힘 (circular drift).
+            // Doppler 가 원천이라 거기서 직접 읽으면 stale 누수 없음.
+            if (isConfigure) {
+                try {
+                    const projectId = execSync(`doppler secrets get FRAMER_PROJECT_ID --project ${DOPPLER_PROJECT} --config ${dopplerConfig} --plain`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()
+                    const projectsRaw = execSync(`doppler secrets get FRAMER_PROJECTS --project ${DOPPLER_PROJECT} --config ${dopplerConfig} --plain`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()
+                    const airtableBaseId = execSync(`doppler secrets get AIRTABLE_BASE_ID --project ${DOPPLER_PROJECT} --config ${dopplerConfig} --plain`, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()
+                    const projects = projectsRaw ? JSON.parse(projectsRaw) : {}
+                    const entry = projects[projectId] ?? {}
+                    current = {
+                        framerProjectUrl: entry.url,
+                        airtableBaseId,
+                        hasFramerApiKey: !!entry.token,
+                        hasAirtableToken: true,
+                        // gtmContainerId 는 Doppler 에 있을 수도 없을 수도 — 워커 /status fallback 으로
+                    }
+                    // gtm 은 워커에만 있을 수 있음 — 보조로 한 번 가져옴 (실패 OK)
+                    try {
+                        const res = await fetch(`${worker.url}${fn.currentFrom}`, { signal: AbortSignal.timeout(3_000) })
+                        if (res.ok) {
+                            const workerCurrent = await res.json()
+                            if (workerCurrent.gtmContainerId) current.gtmContainerId = workerCurrent.gtmContainerId
+                        }
+                    } catch { /* gtm 없으면 무시 */ }
+                } catch (e) {
+                    // Doppler 조회 실패 — 워커 /status 로 fallback (옛 동작)
+                    console.log(yellow(`  ⚠️  Doppler 조회 실패 (${e.message}) — 워커 /status 로 fallback`))
+                    try {
+                        const res = await fetch(`${worker.url}${fn.currentFrom}`, { signal: AbortSignal.timeout(5_000) })
+                        if (res.ok) current = await res.json()
+                    } catch { /* */ }
+                }
+            } else {
+                // configure 외 (다른 메뉴) — 워커 /status 그대로
+                try {
+                    const res = await fetch(`${worker.url}${fn.currentFrom}`, { signal: AbortSignal.timeout(5_000) })
+                    if (res.ok) current = await res.json()
+                } catch { /* 조회 실패 → current = {} */ }
+            }
+        }
         const paramsForCollect = isConfigure
             ? fn.params.filter(p => p.key !== "framerToken")
             : fn.params
