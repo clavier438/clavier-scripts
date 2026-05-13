@@ -7,6 +7,30 @@
 
 ---
 
+## ⚠️ 2026-05-13 baseline 점검 후 사실관계 정정
+
+본 PR 의 핵심 가정 "**platform-workers 측 paste 대기**" 가 **stale**.
+
+**실제 워커 상태** (baseline 점검):
+- 워커가 이미 `POST /configure` 에서 `registerWebhook` 자동 호출 + `webhook:id` D1 저장
+- `POST /webhook` 라우트로 Airtable ping ingest → 즉시 `runStage1` (전체 Airtable→D1 동기화)
+- 매분 cron 안에 5일 주기 `refreshWebhook` 호출 (7일 expire 안전마진)
+- sisoso webhook `acheZXZlEtSAzOwLt` (last refresh 2026-05-12 18:24, last sync 2026-05-12 17:16 ok)
+- mukayu webhook `achdpu9oggDLEJ1Xw` (last refresh 2026-05-13 08:29, last sync 2026-05-13 08:10 ok)
+
+**본 PR 의 *남은 진짜 가치*** (재정의):
+1. ✅ `tools/capabilities/airtable-webhooks.md` — 일반 지식, 향후 세션 참조용. **유지**
+2. ✅ `tools/airtable-webhook-{register,verify}.mjs` — 운영 디버그/감사용 CLI. **유지**
+3. 🔁 `docs/patches/framer-sync-airtable-webhook.md` — *paste 명세* 가 아니라 ***향상 명세*** 로 재포장 필요. 현재 워커 대비 *추가 가치*:
+   - HMAC 검증 (현재 워커엔 없음 — `X-Airtable-Content-MAC` 미검증 = forge 가능)
+   - partial sync (현재는 매 ping 마다 전체 `runStage1` — payloads cursor 의 changedRecordIds 만 처리하면 더 빠름)
+4. 🔁 `docs/decisions/2026-05-13-airtable-realtime-sync.md` — 결정 사유 일부 stale, *향상 결정* 으로 재포장 필요
+5. ✅ `HANDOFF.md` 자체 — 본 정정 박스 박힘으로 cold-start 세션이 잘못 추리 안 함
+
+§2~§11 의 "paste 대기 / Step 1~5 진행" 흐름은 *최초 구현 가정* 의 흔적이라 ⚠️ 그대로 따라하면 안 됨 — *향상* 의도면 (3)(4) 명세를 새 PR 로 분리.
+
+---
+
 ## 0. 한 줄
 
 **Airtable 변경 → framer-sync 워커가 Airtable Webhook 직접 받아 partial sync.** OCI ngrok·VM 없이 Cloudflare Worker 단독 완결. 본 repo(`clavier-scripts`) 측 도구·문서는 *완료*, `platform-workers` 측 워커 라우트는 *paste 대기*.

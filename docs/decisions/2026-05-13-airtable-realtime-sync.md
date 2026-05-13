@@ -1,5 +1,7 @@
 # 2026-05-13 — Airtable → Framer 실시간 동기화 (이벤트드리븐)
 
+> ⚠️ **2026-05-13 STALE 부분** — 본 ADR 의 "결정 = 워커가 직접 받는다" 는 *이미 구현돼 있던 사실* 이지 신규 결정이 아님 (baseline 점검: `POST /webhook` 라우트 + cron refresh 5일 이미 동작). 따라서 본 ADR 은 *신규 ADR* 이 아니라 **기존 구현 사후 문서화 + 향상 결정 (HMAC 검증 + partial sync 도입)** 로 재포장 필요. `HANDOFF.md` §"⚠️ 2026-05-13 baseline 점검 후 사실관계 정정" 참조.
+
 > 이 파일은 `clavier-scripts/docs/decisions/` 에 임시 staging.
 > 합의 후 `clavier-hq/DECISIONS.md` 에 한 항목으로 정식 박힘 + MAP.md / SYSTEM_ENV.md 동시 갱신.
 
