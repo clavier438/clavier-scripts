@@ -1,8 +1,10 @@
 # Patch: framer-sync 워커에 Airtable webhook 라우트 + cron 추가
 
-> 대상 repo: `clavier0/platform-workers`
+> ⚠️ **2026-05-13 STALE 마크** — 본 명세의 "기존 워커엔 없으니 paste" 가정이 baseline 점검 후 사실과 다름. 워커는 이미 `POST /configure` 안에서 webhook 자동 등록 + `POST /webhook` 라우트 ingest + cron 5일 refresh 모두 처리 중 (sisoso/mukayu 둘 다 실가동 검증). 본 명세는 *paste 가이드* 가 아니라 **향상 가이드** (HMAC 검증 + partial sync 도입) 로 재해석하라. webhook 모드 토글 (stage1-only ↔ full) 은 platform-workers PR #2 에서 별도 반영.
+
+> 대상 repo: `clavier438/platform-workers`
 > 작업 위치: `platform-workers/framer-sync/`
-> 적용 방법: 사용자가 이 파일 보고 paste (이 repo `clavier-scripts` 의 MCP 스코프 밖이라 Claude 가 직접 push 불가)
+> 적용 방법: ⚠️ 그대로 paste X — 현재 워커의 `routes/configure.ts` `handleWebhook` 와 `adapters/airtable.ts` `registerWebhook/refreshWebhook` 위에 HMAC 검증 + partial sync 만 *추가* 하는 형태로 재해석
 > 짝 파일: `clavier-scripts/tools/airtable-webhook-register.mjs` + `airtable-webhook-verify.mjs`
 > 관련 capability: `clavier-scripts/tools/capabilities/airtable-webhooks.md`
 
