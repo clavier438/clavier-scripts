@@ -150,17 +150,28 @@ function saveFramerProjects(projects, config = "prd", workerName = null) {
 
 // Doppler → wrangler secrets 동기화 (별도 스크립트 호출). 실패해도 throw 안 함.
 // workerName 주면 그 워커만 (예: "mukayu"), null 이면 모든 워커 일괄 sync.
+//
+// 2026-05-13 fix: spawn("doppler-sync-wrangler") 가 PATH 검색 — `~/bin` 이 spawn context 의
+// PATH 에 안 들어가는 경우 (Doppler/IDE/non-interactive shell) ENOENT 로 실패. 절대 경로로 직접 호출.
+// 사고 = mukayu /configure 시 자동 sync 실패 → 사용자가 수동 sync 필요했음 (RAY_DALIO 후보).
 function syncDopplerToWrangler(workerName = null) {
     const args = workerName ? [workerName] : []
+    const here = dirname(fileURLToPath(import.meta.url))
+    const SCRIPT = join(here, "doppler-sync-wrangler.sh")
     try {
-        const r = spawnSync("doppler-sync-wrangler", args,
+        const r = spawnSync(SCRIPT, args,
             { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 })
         if (r.status === 0) {
             const target = workerName ?? "전체"
             console.log(dim(`  ↳ doppler-sync-wrangler: ${target} secrets 자동 갱신 완료`))
         } else {
+            // 실패 원인 상세 표시 — 사용자가 진단 가능
+            const why = r.error?.code === "ENOENT"
+                ? `스크립트 못 찾음 (${SCRIPT})`
+                : (r.stderr?.trim() || r.error?.message || `exit ${r.status}`)
             const hint = workerName ? `doppler-sync-wrangler ${workerName}` : "doppler-sync-wrangler"
-            console.log(yellow(`  ⚠️  wrangler 자동 sync 실패 — 수동 '${hint}' 필요`))
+            console.log(yellow(`  ⚠️  wrangler 자동 sync 실패 — 원인: ${why}`))
+            console.log(yellow(`     수동 명령: ${hint}`))
         }
     } catch (e) {
         console.log(yellow(`  ⚠️  wrangler 자동 sync 스킵: ${e.message}`))
