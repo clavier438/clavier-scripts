@@ -112,7 +112,7 @@ iCloud `clavier.env`는 **백업 미러**. 값 다르면 Doppler가 정답.
 1. **즉시** `doc-coverage <개념>` 또는 `doc-coverage --recent` 실행
 2. 12개 표준 문서 중 ❌ 표시된 곳을 모두 갱신할 때까지 다음 작업 시작 금지
 3. clavier-hq commit 시 post-commit 훅이 자동 재검증 (Layer 2 백업)
-4. 일주일 안 catch는 Conductor 책무 #4가 마지막 그물 (Layer 3)
+4. 일주일 안 catch는 Architect 책무 #4가 마지막 그물 (Layer 3)
 
 **왜 이 규칙인가**: ADR을 추가하고 다른 문서를 빠뜨리면 의존 작업이 잘못된 가정 위에서 돌아감. 사용자 자리에 없을 때도 자동 보장돼야 함. (CONCEPTS.md "SSOT" + "Defense in Depth" 항목 참조)
 
@@ -186,7 +186,7 @@ Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.m
 **모든 자동화 = 단일 책임 루틴 + 익명 부하** 구조. 어떤 자동화도 *책임지는 루틴 없이* 떠돌면 안 됨.
 
 규칙:
-1. **루틴** (overnight / Conductor / Architect / Strategist) = 한 영역 단일 책임자. 사용자가 이름을 안다.
+1. **루틴** = 한 영역 단일 책임자. 사용자가 이름을 안다. 현재 5 cron-등록 (clavier-hq/routines/): Closer (매일 03:00) / Ray Dalio (매일 03:30) / Sentinel (매일 03:45) / Engineer (주 일 03:30) / Architect (주 월 04:30). + Strategist 는 ad-hoc (cron 없음).
 2. **부하** = 루틴이 임명. 한 루틴 종속. 사용자에 직접 메시지 X.
 3. 사용자와 직접 대화하는 entity = 오직 루틴. 부하 결과는 루틴이 통합 → 1 briefing.
 4. 무소속 자동화 금지 — 새 prompt 작성 시 어느 루틴의 부하인지 먼저 명시.

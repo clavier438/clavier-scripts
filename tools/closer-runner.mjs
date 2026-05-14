@@ -151,7 +151,7 @@ async function main() {
 
     let failCount = 0  // 함수 상단으로 끌어올림 (옛 위치 line 205 가 hoisting bug — line 178 의 failCount++ 가 ReferenceError)
 
-    // 0. police: 매일 새벽 핵심 영역 순찰 + precheck 해석 (Conductor 와 SRP 분리)
+    // 0. police: 매일 새벽 핵심 영역 순찰 + precheck 해석 (Architect 와 SRP 분리)
     //    police agent 가 precheck all 실행 + 5 영역 순찰 (workers/repos/actions/framer-sync/OCI)
     //    + 분류 (🟢/🟡/🔴) + 자동 수정 가능한 건 시도 + 결정 필요는 alarm.
     //    police-prompt.md 없으면 precheck.sh 직접 실행 fallback.
