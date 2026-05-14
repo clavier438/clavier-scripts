@@ -28,4 +28,21 @@ combined=$(printf '# === clavier-hq/MISSION.md (방향) ===\n%s\n\n# === clavier
   "$(read_file "$HQ/STATUS.md")" \
   "$(read_file "$HQ/QUEUE.md")")
 
+# Tier 3 routines 등록 대기 마커 — setup.sh Step 9 가 박음 (포맷 후 한 번)
+ROUTINES_PENDING="$HOME/.clavier/routines-pending"
+if [ -f "$ROUTINES_PENDING" ]; then
+    combined="$combined
+
+# === ⚠️ Tier 3 routines 등록 대기 (포맷 후 1회) ===
+
+마커 발견: \`~/.clavier/routines-pending\` (setup.sh Step 9 가 박음).
+
+**행동**: 다른 작업 시작 전에
+1. \`mcp__scheduled-tasks__list_scheduled_tasks\` 호출 — 현재 등록 현황 확인.
+2. 5 routines (closer/ray-dalio/sentinel/engineer/architect) 모두 등록 안돼있으면 사용자에 \"/registerRoutines 한 번 실행하면 5 routines 일괄 등록\" 권유.
+3. 사용자 yes 시 → /registerRoutines slash command 실행 (~/.claude/commands/registerRoutines.md). 마커는 그 명령이 삭제.
+
+이미 모두 등록돼있으면 마커만 조용히 삭제 (\`rm ~/.clavier/routines-pending\`)."
+fi
+
 echo "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":$(echo "$combined" | jq -Rs .)}}"

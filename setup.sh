@@ -5,7 +5,7 @@
 set -euo pipefail
 
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LAUNCHAGENTS_SRC="$(dirname "$SCRIPTS_DIR")/launchagents"
+LAUNCHAGENTS_SRC="$SCRIPTS_DIR/daemons"
 BIN_DIR="$HOME/bin"
 
 echo "======================================"
@@ -114,7 +114,7 @@ echo "[ 5/6 ] LaunchAgent 등록..."
 mkdir -p "$HOME/Library/LaunchAgents"
 
 if [ ! -d "$LAUNCHAGENTS_SRC" ]; then
-    echo "  launchagents 폴더 없음: $LAUNCHAGENTS_SRC"
+    echo "  daemons 폴더 없음: $LAUNCHAGENTS_SRC"
 else
     for plist in "$LAUNCHAGENTS_SRC"/*.plist; do
         [ -f "$plist" ] || continue
@@ -154,7 +154,7 @@ fi
 
 # ── 8. framer-sync npm install ─────────────────────────────────────────
 echo ""
-echo "[ 8/8 ] framer-sync 의존성 설치 (Mac 로컬 Node 실행에 필요) ..."
+echo "[ 8/9 ] framer-sync 의존성 설치 (Mac 로컬 Node 실행에 필요) ..."
 FRAMER_SYNC_DIR="$(dirname "$SCRIPTS_DIR")/code/projects/platform-workers/framer-sync"
 if [ -d "$FRAMER_SYNC_DIR" ]; then
     if [ -d "$FRAMER_SYNC_DIR/node_modules" ]; then
@@ -169,19 +169,40 @@ else
     echo "      git clone https://github.com/clavier0/platform-workers \"$(dirname "$FRAMER_SYNC_DIR" | sed 's|/projects$||')\""
 fi
 
+# ── 9. Claude routines (Tier 3) — slash command + 등록 trigger ─────────
+# bash 에서 MCP 호출 불가하므로 Claude 세션 안에서 /registerRoutines 으로 분리 실행.
+echo ""
+echo "[ 9/9 ] Claude routines (Tier 3) trigger 준비..."
+SLASH_CMD_SRC="$SCRIPTS_DIR/tools/registerRoutines.md"
+SLASH_CMD_DIR="$HOME/.claude/commands"
+SLASH_CMD_LINK="$SLASH_CMD_DIR/registerRoutines.md"
+if [ -f "$SLASH_CMD_SRC" ]; then
+    mkdir -p "$SLASH_CMD_DIR"
+    if [ ! -L "$SLASH_CMD_LINK" ] || [ "$(readlink "$SLASH_CMD_LINK")" != "$SLASH_CMD_SRC" ]; then
+        ln -sf "$SLASH_CMD_SRC" "$SLASH_CMD_LINK"
+        echo "  [slash] ~/.claude/commands/registerRoutines.md → $SLASH_CMD_SRC"
+    else
+        echo "  [skip] slash command 이미 연결됨"
+    fi
+    mkdir -p "$HOME/.clavier"
+    : > "$HOME/.clavier/routines-pending"
+    echo "  [marker] ~/.clavier/routines-pending 박음 (다음 Claude 세션이 자동 권유)"
+else
+    echo "  ⚠️  $SLASH_CMD_SRC 없음 — Tier 3 등록 수동 필요"
+fi
+
 echo ""
 echo "======================================"
 echo "  완료"
 echo ""
-echo "  등록된 서비스:"
-echo "    syncObsidian      — Obsidian → Google Drive 실시간 sync"
-echo "    syncScriptable    — Scriptable → Google Drive 실시간 sync"
-echo "    watcherSync       — 데몬 1시간마다 감시/자동재시작"
-echo "    watcherScreenshots — 스크린샷 → Photos 자동 가져오기"
+echo "  등록된 LaunchAgents (Tier 2):"
+launchctl list | awk '/com\.clavier\./ {printf "    %s (pid %s)\n", $3, $1}' 2>/dev/null || true
 echo ""
-echo "  FDA 설정 후 동작 확인:"
-echo "    launchctl list | grep clavier"
-echo "    syncObsidian status"
-echo "    syncScriptable status"
-echo "    cat ~/Library/Logs/watcherSync.log"
+echo "  남은 1발 (Tier 3 — Claude routines):"
+echo "    1. Claude Code 세션 띄움 (clavier-scripts 디렉토리에서 권장)"
+echo "    2. /registerRoutines  실행 → 5 routines 일괄 등록"
+echo ""
+echo "  검증:"
+echo "    launchctl list | grep clavier   # Tier 2 (macOS)"
+echo "    Claude 세션 안에서 /scheduled-tasks list   # Tier 3"
 echo "======================================"
