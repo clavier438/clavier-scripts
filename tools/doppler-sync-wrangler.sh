@@ -69,6 +69,17 @@ if ! doppler me >/dev/null 2>&1; then
     exit 1
 fi
 
+# ── wrangler 인증 — Doppler[prd] CLOUDFLARE_API_TOKEN 사용 (wrangler login 불필요) ──
+# 예전엔 CLOUDFLARE_API_TOKEN 을 언셋하고 OAuth 세션에 의존했는데, OAuth 로그인이 안 돼
+# 있어 모든 키 sync 가 silent 실패했다 (2026-05-15 사고). Doppler 가 SSOT — 토큰도
+# 거기서 끌어 export 하면 무인증·완전자동. account ID 도 함께 넘겨 env 추론 안정화.
+CLOUDFLARE_API_TOKEN="$(doppler secrets get CLOUDFLARE_API_TOKEN --plain --project clavier --config prd 2>/dev/null)" || {
+    echo "❌ Doppler[prd] CLOUDFLARE_API_TOKEN 없음 — wrangler 인증 불가." >&2
+    exit 1
+}
+CLOUDFLARE_ACCOUNT_ID="$(doppler secrets get CLOUDFLARE_ACCOUNT_ID --plain --project clavier --config prd 2>/dev/null || true)"
+export CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID
+
 if [[ ! -d "$PLATFORM_WORKERS_DIR/$WORKER_DIR" ]]; then
     echo "❌ 워커 디렉터리 없음: $PLATFORM_WORKERS_DIR/$WORKER_DIR" >&2
     exit 1
@@ -101,10 +112,10 @@ for worker_entry in "${WORKERS[@]}"; do
         else
             env_arg=()
             [[ "$wrangler_env" != "-" ]] && env_arg=(--env "$wrangler_env")
-            # CLOUDFLARE_API_TOKEN 언셋 — wrangler는 OAuth 토큰 사용 (clavier.env L13 주의사항)
+            # wrangler 인증 = 위에서 export 한 CLOUDFLARE_API_TOKEN (Doppler SSOT). 로그인 불필요.
             # set -u 환경에서 빈 배열 expansion 보호 (${arr[@]:+...})
             if (cd "$PLATFORM_WORKERS_DIR/$WORKER_DIR" && \
-                CLOUDFLARE_API_TOKEN= echo "$value" | npx wrangler secret put "$key" ${env_arg[@]+"${env_arg[@]}"} >/dev/null 2>&1); then
+                echo "$value" | npx wrangler secret put "$key" ${env_arg[@]+"${env_arg[@]}"} >/dev/null 2>&1); then
                 echo "  ✅ $key"
                 ((synced++))
             else
@@ -119,5 +130,5 @@ echo ""
 if [[ "$DRY_RUN" == "1" ]]; then
     echo "dry-run 완료 (실제 sync는 --dry-run 빼고 재실행)"
 else
-    echo "완료: $synced개 sync, $skipped개 스킵"
+    echo "완료: ${synced}개 sync, ${skipped}개 스킵"
 fi
