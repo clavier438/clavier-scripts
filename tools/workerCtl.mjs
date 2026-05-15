@@ -132,6 +132,54 @@ function extractFramerProjectId(url) {
     return m ? m[1] : null
 }
 
+// Airtable Base ID 정규화 — raw base ID(appXXX) 든 base URL 이든 ID 만 뽑는다.
+// Framer URL 칸은 extractFramerProjectId 로 추출하는데 Airtable 칸은 verbatim 저장이라,
+// 사용자가 URL 을 붙여넣으면 그게 그대로 base ID 로 박혀 워커 스키마 fetch 가 404.
+function extractAirtableBaseId(input) {
+    const m = String(input).match(/\bapp[A-Za-z0-9]{14}\b/)
+    return m ? m[0] : null
+}
+
+// Airtable Base 사전검증 — /configure 를 POST 하기 전에 base 가 실재하는지 직접 확인.
+// 잘못된 base 가 워커 config 를 poison 해 워커 전체가 죽는 사고 방지 (2026-05-15).
+// API 키 없음·권한 부족·네트워크 실패면 검증 스킵 — 워커가 최종 판단하게 둔다.
+async function validateAirtableBase(baseId) {
+    const apiKey = process.env.AIRTABLE_API_KEY
+    if (!apiKey) return { ok: true, skipped: true, note: "AIRTABLE_API_KEY 없음" }
+    try {
+        const res = await fetch(`https://api.airtable.com/v0/meta/bases/${baseId}/tables`, {
+            headers: { Authorization: `Bearer ${apiKey}` },
+            signal: AbortSignal.timeout(10_000),
+        })
+        if (res.ok) return { ok: true }
+        if (res.status === 404) return { ok: false, reason: `base "${baseId}" 없음 (Airtable 404)` }
+        if (res.status === 401 || res.status === 403) return { ok: true, skipped: true, note: `토큰 권한 부족 (${res.status})` }
+        return { ok: false, reason: `Airtable 응답 ${res.status}` }
+    } catch (e) {
+        return { ok: true, skipped: true, note: `검증 호출 실패 (${e.name})` }
+    }
+}
+
+// 워커 capabilities 조회 실패(워커 다운/설정 손상) 시 복구용 fallback.
+// '연결 설정'만 제공해 깨진 워커를 workerCtl 안에서 재설정해 살릴 수 있게 한다 —
+// capabilities 가 500 이어도 dead-end 로 빠지지 않도록.
+// framer-sync /capabilities 의 configure 함수 계약과 동일하게 유지할 것.
+const FALLBACK_CONFIGURE_FN = {
+    id: "configure",
+    label: "연결 설정 (복구 모드)",
+    description: "Airtable Base ID / Token, Framer 프로젝트 URL / Token 변경",
+    method: "POST",
+    path: "/configure",
+    currentFrom: "/status",
+    params: [
+        { key: "airtableBaseId", label: "Airtable Base ID", required: true, secret: false, envKey: null, statusKey: "airtableBaseId", hint: "appXXXXXXXXXXXXXX" },
+        { key: "airtableToken", label: "Airtable API Token", required: true, secret: true, envKey: "AIRTABLE_API_KEY", statusKey: "hasAirtableToken", hint: null },
+        { key: "framerProjectUrl", label: "Framer 프로젝트 URL", required: false, secret: false, envKey: null, statusKey: "framerProjectUrl", hint: "https://xxx.framer.app" },
+        { key: "framerToken", label: "Framer Token", required: false, secret: true, envKey: "FRAMER_TOKEN", statusKey: "hasFramerToken", hint: "기존 URL이면 Enter — 자동 적용" },
+        { key: "gtmContainerId", label: "GTM Container ID", required: false, secret: false, envKey: null, statusKey: "gtmContainerId", hint: "GTM-XXXXXX (Framer Custom Code에 박힌 값과 동일하게 등록)" },
+    ],
+}
+
 function loadFramerProjects(config = "prd") {
     const raw = getDopplerSecret(FRAMER_PROJECTS_KEY, config)
     if (!raw) return {}
@@ -1174,9 +1222,14 @@ async function main() {
         caps = await fetchCapabilities(worker.url)
         process.stdout.write("\r" + " ".repeat(30) + "\r")
     } catch (err) {
+        // capabilities 조회 실패 = 워커 다운 또는 설정 손상 (예: base ID poison → /status·/capabilities 500).
+        // dead-end 로 죽지 말고 복구 모드 — '연결 설정'만 띄워 workerCtl 안에서 재설정해 살릴 수 있게.
         process.stdout.write("\n")
-        console.error(red(`  ✗ ${err.message}`))
-        process.exit(1)
+        console.log(yellow(`  ⚠️  워커 capabilities 조회 실패: ${err.message}`))
+        console.log(yellow(`     워커가 다운됐거나 설정이 손상됐습니다 — ${bold("복구 모드")}로 '연결 설정'만 제공합니다.`))
+        console.log(dim(`     올바른 값으로 configure 를 다시 실행하면 워커 config 가 덮어써져 복구됩니다.`))
+        console.log()
+        caps = { degraded: true, configured: false, functions: [FALLBACK_CONFIGURE_FN] }
     }
 
     if (!caps.functions?.length) {
@@ -1270,6 +1323,38 @@ async function main() {
             : fn.params
 
         body = await collectParams(rl, paramsForCollect, current)
+
+        // configure: Airtable Base ID 정규화 + 사전검증.
+        // URL 붙여넣어도 ID 추출 (Framer URL 칸과 일관성), 그리고 워커에 보내기 전에
+        // base 실재 여부를 직접 확인 — 잘못된 값이 워커 config 를 poison 하는 사고 차단.
+        // 실패하면 워커에 아무것도 안 보내고 그 자리에서 재입력받는다 (최대 3회).
+        if (isConfigure && body.airtableBaseId !== undefined) {
+            let raw = body.airtableBaseId
+            for (let attempt = 0; ; attempt++) {
+                const extracted = extractAirtableBaseId(raw)
+                if (extracted) {
+                    if (extracted !== String(raw).trim())
+                        console.log(dim(`  ↳ 입력값에서 Base ID 추출: ${extracted}`))
+                    const v = await validateAirtableBase(extracted)
+                    if (v.ok) {
+                        if (v.skipped) console.log(dim(`  ↳ Base 사전검증 스킵 (${v.note}) — 워커가 최종 검증`))
+                        else console.log(dim(`  ↳ Base 사전검증 통과: ${extracted}`))
+                        body.airtableBaseId = extracted
+                        break
+                    }
+                    console.error(red(`  ✗ Airtable Base 검증 실패 — ${v.reason}`))
+                } else {
+                    console.error(red(`  ✗ Base ID 형식 아님 — appXXXXXXXXXXXXXX(17자) 또는 base URL 을 입력하세요`))
+                }
+                if (attempt >= 2) {
+                    console.error(red(`  ✗ 3회 실패 — 워커에 아무것도 적용하지 않고 중단합니다 (워커 상태 안전).`))
+                    rl.close()
+                    process.exit(1)
+                }
+                raw = (await prompt(rl, `  ${bold("Airtable Base ID")} 다시 입력 ${dim("(appXXX 또는 URL)")}: `)).trim()
+                if (!raw) { console.error(red("  ✗ 입력 취소 — 중단")); rl.close(); process.exit(1) }
+            }
+        }
 
         // configure 후처리: 새 projectUrl 입력 시 (url, token) 매핑 조회/등록
         if (isConfigure && body.framerProjectUrl) {
