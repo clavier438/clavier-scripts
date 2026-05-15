@@ -4,18 +4,18 @@
   "configured": true,
   "airtableBaseId": "appIrjwfcGeVMI9xb",
   "hasAirtableToken": true,
-  "framerProjectUrl": "https://framer.com/projects/baseTemplate-sisoso-workers-latest--wzpwPMubOM1Z6pte62Im-5xRa5",
+  "framerProjectUrl": "https://framer.com/projects/1-0-0-copy--zZZGCne3pUUaH5TmeSMD-avGfa",
   "hasFramerApiKey": true,
   "gtmContainerId": null,
   "tables": [
     {
       "name": "pages",
-      "fields": 7,
+      "fields": 5,
       "slugField": "slug"
     },
     {
       "name": "section",
-      "fields": 14,
+      "fields": 15,
       "slugField": "slug"
     },
     {
@@ -40,7 +40,7 @@
     }
   ],
   "sync": {
-    "lastStage1": "2026-04-30T13:24:15.145Z",
+    "lastStage1": "2026-05-12T00:06:09.044Z",
     "status": "stage1-ok",
     "summaries": [
       {
@@ -60,8 +60,8 @@
       },
       {
         "collection": "items",
-        "upserted": 52,
-        "skippedNoSlug": 1
+        "upserted": 53,
+        "skippedNoSlug": 0
       },
       {
         "collection": "subitems",
@@ -73,7 +73,8 @@
         "upserted": 5,
         "skippedNoSlug": 0
       }
-    ]
+    ],
+    "webhookRefreshed": "2026-05-12T00:06:10.130Z"
   },
   "conversion": {
     "status": "error",
@@ -81,5 +82,6 @@
     "finishedAt": "2026-04-30T00:46:30.896Z",
     "error": "Error: Airtable PATCH 실패: 429 {\"errors\":[{\"error\":\"RATE_LIMIT_REACHED\",\"message\":\"Rate limit exceeded. Please try again later\"}]}"
   },
-  "snapshotAt": "2026-04-30T18:06:31.247Z"
+  "transformChain": "\n┌─ 필드 변환 체인 ─────────────────────────────────────────────────\n│\n│ ▸ pages  (5 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   slug                  formula               string          string\n│   name                  singleLineText        string          string\n│   kind                  singleSelect          enum            string\n│   stories               multipleRecordLinks   multiCollection…string\n│   section               multipleRecordLinks   multiCollection…string\n│\n│ ▸ section  (15 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   slug                  formula               string          string\n│   role                  singleSelect          enum            string\n│   name                  singleLineText        string          string\n│   subName               singleLineText        string          string\n│   img                   multipleAttachments   image           image\n│   layout1               formula               string          string\n│   notes                 richText              formattedText   string\n│   ctaText               singleLineText        string          string\n│   ctaUrl                url                   link            string\n│   tags                  multipleRecordLinks   multiCollection…string\n│   filterMode            singleSelect          enum            string\n│   layout                singleSelect          enum            string\n│   layout_inverted?      formula               number          number\n│   page                  multipleRecordLinks   multiCollection…string\n│   items                 multipleRecordLinks   multiCollection…string\n│\n│ ▸ tags  (6 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   slug                  formula               string          string\n│   name                  singleLineText        string          string\n│   group                 singleSelect          enum            string\n│   items                 multipleRecordLinks   multiCollection…string\n│   stories               multipleRecordLinks   multiCollection…string\n│   section               multipleRecordLinks   multiCollection…string\n│\n│ ▸ items  (17 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   slug                  formula               string          string\n│   section               multipleRecordLinks   multiCollection…string\n│   name                  singleLineText        string          string\n│   subName               singleLineText        string          string\n│   img                   multipleAttachments   image           image\n│   gallery               multipleAttachments   image           image\n│   layout                singleSelect          enum            string\n│   notes                 richText              formattedText   string\n│   notes2                richText              formattedText   string\n│   price                 richText              formattedText   string\n│   caption               singleLineText        string          string\n│   ctaText               singleLineText        string          string\n│   ctaUrl                url                   link            string\n│   tags                  multipleRecordLinks   multiCollection…string\n│   subitems              multipleRecordLinks   multiCollection…string\n│   stories               multipleRecordLinks   multiCollection…string\n│   layout_inverted?      formula               number          number\n│\n│ ▸ subitems  (5 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   slug                  formula               string          string\n│   name                  singleLineText        string          string\n│   items                 multipleRecordLinks   multiCollection…string\n│   notes                 richText              formattedText   string\n│   price                 singleLineText        string          string\n│\n│ ▸ stories  (14 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   slug                  formula               string          string\n│   name                  singleLineText        string          string\n│   subName               singleLineText        string          string\n│   img                   multipleAttachments   image           image\n│   page                  multipleRecordLinks   multiCollection…string\n│   tags                  multipleRecordLinks   multiCollection…string\n│   items                 multipleRecordLinks   multiCollection…string\n│   excerpt               richText              formattedText   string\n│   notes                 richText              formattedText   string\n│   featured              checkbox              boolean         boolean\n│   readTime              formula               string          string\n│   publishDate           date                  date            date\n│   seoTitleAi            aiText                string          string\n│   seoDescAi             aiText                string          string\n└──────────────────────────────────────────────────────────────────",
+  "snapshotAt": "2026-05-12T02:26:50.106Z"
 }

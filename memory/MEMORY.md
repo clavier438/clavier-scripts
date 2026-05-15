@@ -6,6 +6,7 @@
 - [에코시스템 아키텍처 인사이트](project_ecosystem_architecture.md) — Worker=계산레이어, Framer/Airtable/CF/OCI/Google 조합 패턴 (제안용)
 - [피드백: 메모리 저장 방식](feedback_memory.md) — 중요한 것은 항상 즉시 메모리에 저장할 것
 - [피드백: 단계적 수정 방식](feedback_incremental_fixes.md) — 문제 하나씩 fix→확인→커밋 순서로 진행, 한꺼번에 고치지 말 것
+- [피드백: 옵션 메뉴 금지](feedback_no_quick_options.md) — "진행/처리/그냥 해" 발화 시 빠른길 vs 정석 옵션 제시 X, 원칙대로 끝까지
 - [피드백: git 기능 적극 제안](feedback_git_workflow.md) — 브랜치/태그/stash 등을 사용자가 묻기 전에 먼저 제안할 것
 - [피드백: 깃 커밋 범위](feedback_git.md) — git commit은 scripts 폴더 작업에 한정
 - [피드백: Clean Architecture 원칙](feedback_clean_architecture.md) — SOLID 원칙 적용, 비슷한 기능은 같은 방식으로 구현, Claude가 스스로 점검해서 먼저 제안
