@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# installScripts.sh — iCloud/0/scripts/ 의 스크립트를 ~/bin 에 복사
+# installScripts.sh — iCloud/0/scripts/ 의 스크립트를 ~/bin 에 심볼릭 링크
 #
 # 폴더 기반 자동 배포 (SvelteKit 방식):
 #   루트 스크립트     → ~/bin/
@@ -26,51 +26,31 @@ install_scripts() {
     local src_dir="$1"
     local dst_dir="$2"
     local count=0
-    local updated=0
 
     mkdir -p "$dst_dir"
 
     while IFS= read -r -d '' script; do
         local filename
         filename="$(basename "$script")"
-        local ext="${filename##*.}"
         local name="${filename%.*}"
         local target="$dst_dir/$name"
 
-        # .mjs 파일은 심볼릭 링크 — 소스 변경이 ~/bin에 즉시 반영됨 (버전 드리프트 방지)
-        if [[ "$ext" == "mjs" ]]; then
-            if [ -L "$target" ] && [ "$(readlink "$target")" = "$script" ]; then
-                continue  # 이미 올바른 심링크
-            fi
-            [ -e "$target" ] || [ -L "$target" ] && rm "$target"
-            ln -sf "$script" "$target"
-            chmod +x "$target"
-            echo "  [link]   $name → $filename"
-            ((count++))
-            continue
+        # 모든 스크립트 = 심볼릭 링크. 소스 변경이 ~/bin 에 즉시 반영 — 버전 드리프트 방지.
+        # 예전엔 .sh/.py 를 복사했는데, 복사본이 stale 돼 소스 수정이 ~/bin 에 안 먹는
+        # 사고가 났다 (2026-05-15 doppler-sync-wrangler). 복사 분기 폐기 — 전부 링크.
+        if [ -L "$target" ] && [ "$(readlink "$target")" = "$script" ]; then
+            continue  # 이미 올바른 심링크
         fi
-
-        # 나머지 파일은 복사
-        if [ -f "$target" ] && [ ! -L "$target" ]; then
-            if cmp -s "$script" "$target"; then
-                continue  # 이미 최신 → 출력 생략
-            fi
-            cp "$script" "$target"
-            chmod +x "$target"
-            echo "  [update] $name"
-            ((updated++))
-        else
-            [ -L "$target" ] && rm "$target"
-            cp "$script" "$target"
-            chmod +x "$target"
-            echo "  [new]    $name"
-            ((count++))
-        fi
+        rm -f "$target"
+        ln -sf "$script" "$target"
+        chmod +x "$script"
+        echo "  [link]   $name → $filename"
+        ((count++))
     done < <(find "$src_dir" -maxdepth 1 -type f \
         \( -name "*.sh" -o -name "*.py" -o -name "*.rb" -o -name "*.js" -o -name "*.mjs" \) \
         -print0)
 
-    echo "  완료: 신규 ${count}개, 업데이트 ${updated}개"
+    echo "  완료: 링크 ${count}개"
 }
 
 # ── SKIP_DIRS 판단 함수 ───────────────────────────────────
