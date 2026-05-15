@@ -8,7 +8,10 @@ env.md
 *.pid
 __pycache__/
 *.pyc
-.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+.claude/settings.local.json
 webExporter/pdf_daemon_stderr.log
 webExporter/pdf_daemon_stdout.log
 webExporter/pdf_export_master.log
