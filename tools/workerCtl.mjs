@@ -598,25 +598,29 @@ function renderManagedStatus(data) {
     }
 }
 
-// /managed-status → 브리핑용 한 줄 요약 (패널 아닌 압축형).
-function pushStateLine(data) {
-    if (!data || typeof data !== "object" || data.status === undefined) return null
-    switch (data.status) {
-        case "not_started":
-            return gray("⚪ 트리거된 적 없음")
-        case "running": {
-            if (data.phase === "stage1")
-                return yellow("⏳ 스트리밍 중 — Layer 1 (Airtable→D1)")
-            const rem = data.queueRemaining !== undefined ? ` · 남은 큐 ${data.queueRemaining}` : ""
-            return yellow(`⏳ 스트리밍 중 — Layer 2 (D1→Framer)${rem}`)
-        }
-        case "done":
-            return green(`✅ 완료 — idle 대기 중${data.finishedAt ? ` (${timeAgo(data.finishedAt)})` : ""}`)
-        case "error":
-            return red("❌ 에러 — 중단됨")
-        default:
-            return null
+// 브리핑용 — /status + /managed-status → 동기화 모드/상태 2줄.
+// 사용자 관점의 핵심 질문:
+//   "Airtable 변경 시 Framer 까지 자동 반영(full)?" vs "수동 1회성 푸시(stage1-only)?"
+//   그리고 "마지막으로 sync 된 게 언제?"
+function syncBriefLines(status, pushStatus) {
+    if (!status || typeof status !== "object") return []
+    const lastSync = status.sync?.lastSync
+    const agoStr = lastSync ? timeAgo(lastSync) : gray("기록 없음")
+
+    let modeLine
+    if (pushStatus?.status === "running") {
+        // 수동 push-managed 가 지금 진행 중 — 최우선 표시
+        const layer = pushStatus.phase === "stage1" ? "Layer 1 (Airtable→D1)" : "Layer 2 (D1→Framer)"
+        modeLine = `${yellow("⏳ 푸시 진행 중")} ${dim("— " + layer)}`
+    } else if (status.webhookMode === "full") {
+        modeLine = `${green("🟢 자동 (full)")} ${dim("— Airtable 변경 시 Framer 까지 자동 반영")}`
+    } else {
+        modeLine = `${gray("⚪ 수동 (stage1-only)")} ${dim("— 변경 시 D1 까지만, Framer 푸시는 수동")}`
     }
+    return [
+        `  ${dim("동기화:")}    ${modeLine}`,
+        `  ${dim("마지막 sync:")} ${agoStr}`,
+    ]
 }
 
 // ── 일반 함수 실행 ────────────────────────────────────────────────────────
@@ -1179,14 +1183,18 @@ async function showBriefing(workers) {
     const results = await Promise.allSettled(
         workers.map(async w => {
             const caps = await fetchCapabilities(w.url)
-            // push 상태 — managed-status 함수가 있는 워커만 (framer-sync 계열)
-            let pushStatus = null
+            // 동기화 모드/상태 — /status (webhookMode + sync.lastSync) + /managed-status (진행 중 여부).
+            // framer-sync 계열 (managed-status 함수 보유) 워커만 조회.
+            let status = null, pushStatus = null
             if (caps.functions?.some(f => f.id === "managed-status")) {
-                pushStatus = await fetch(`${w.url}/managed-status`, { signal: AbortSignal.timeout(8_000) })
-                    .then(r => r.ok ? r.json() : null)
-                    .catch(() => null)
+                [status, pushStatus] = await Promise.all([
+                    fetch(`${w.url}/status`, { signal: AbortSignal.timeout(8_000) })
+                        .then(r => r.ok ? r.json() : null).catch(() => null),
+                    fetch(`${w.url}/managed-status`, { signal: AbortSignal.timeout(8_000) })
+                        .then(r => r.ok ? r.json() : null).catch(() => null),
+                ])
             }
-            return { worker: w, caps, pushStatus }
+            return { worker: w, caps, status, pushStatus }
         })
     )
 
@@ -1200,8 +1208,7 @@ async function showBriefing(workers) {
             const ver = caps.version ? dim(`v${caps.version}`) : ""
             console.log(`  ${bold(w.label ?? w.name)}  ${statusBadge}  ${ver}`)
             console.log(`  ${gray(w.url)}`)
-            const pl = pushStateLine(r.value.pushStatus)
-            if (pl) console.log(`  ${dim("푸시:")} ${pl}`)
+            for (const line of syncBriefLines(r.value.status, r.value.pushStatus)) console.log(line)
             if (caps.functions?.length) {
                 const fnList = caps.functions.map(f => cyan(f.id)).join("  ")
                 console.log(`  ${dim("함수:")} ${fnList}`)
