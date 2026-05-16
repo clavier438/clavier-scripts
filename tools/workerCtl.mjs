@@ -527,19 +527,7 @@ async function pollUntilComplete(workerUrl, triggerTimeMs, statusPath = "/status
 // ── managed-status 친절 렌더 ──────────────────────────────────────────────
 // /managed-status (STATUS_KEY) raw JSON 대신 사람이 한눈에 읽는 패널.
 // 핵심 질문 — "지금 스트리밍 중?" vs "1회 푸시 끝나고 idle 대기 중?"
-function timeAgo(iso) {
-    if (!iso) return null
-    const ms = Date.now() - new Date(iso).getTime()
-    if (Number.isNaN(ms)) return null
-    const s = Math.round(ms / 1000)
-    if (s < 60) return `${s}초 전`
-    const m = Math.round(s / 60)
-    if (m < 60) return `${m}분 전`
-    const h = Math.round(m / 60)
-    if (h < 24) return `${h}시간 전`
-    return `${Math.round(h / 24)}일 전`
-}
-
+// timeAgo() 는 아래에 이미 정의됨 (hoist 되므로 여기서 호출 OK).
 function renderManagedStatus(data) {
     if (!data || typeof data !== "object" || data.status === undefined) {
         printResponseBody(data)   // 알 수 없는 형식 — raw fallback
@@ -645,7 +633,11 @@ async function runFunction(workerUrl, fn, body = null) {
     }
 
     console.log()
-    printResponseBody(responseBody)
+    if (fn.id === "managed-status" && res.ok) {
+        renderManagedStatus(responseBody)
+    } else {
+        printResponseBody(responseBody)
+    }
     console.log()
 
     // streamingStep 감지: capabilities 의 streamingStep 경로가 있으면 done=true 까지 자동 loop
