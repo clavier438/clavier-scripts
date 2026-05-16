@@ -7,6 +7,7 @@
 - [피드백: 메모리 저장 방식](feedback_memory.md) — 중요한 것은 항상 즉시 메모리에 저장할 것
 - [피드백: 단계적 수정 방식](feedback_incremental_fixes.md) — 문제 하나씩 fix→확인→커밋 순서로 진행, 한꺼번에 고치지 말 것
 - [피드백: 옵션 메뉴 금지](feedback_no_quick_options.md) — "진행/처리/그냥 해" 발화 시 빠른길 vs 정석 옵션 제시 X, 원칙대로 끝까지
+- [피드백: 현재 상태는 묻기 전에 먼저](feedback_status_upfront.md) — 도구/브리핑 설계 시 상태를 별도 조회 뒤에 숨기지 말고 진입 즉시 표시
 - [피드백: git 기능 적극 제안](feedback_git_workflow.md) — 브랜치/태그/stash 등을 사용자가 묻기 전에 먼저 제안할 것
 - [피드백: 깃 커밋 범위](feedback_git.md) — git commit은 관리 repo(scripts/oci/platform-workers)에 한정
 - [피드백: platform-workers 배포·머지 프로세스](feedback_deploy_workflow.md) — 브랜치→커밋→수동배포 검증(mukayu 먼저)→main 머지(CI 재배포)
