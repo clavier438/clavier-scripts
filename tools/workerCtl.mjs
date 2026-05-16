@@ -598,6 +598,27 @@ function renderManagedStatus(data) {
     }
 }
 
+// /managed-status → 브리핑용 한 줄 요약 (패널 아닌 압축형).
+function pushStateLine(data) {
+    if (!data || typeof data !== "object" || data.status === undefined) return null
+    switch (data.status) {
+        case "not_started":
+            return gray("⚪ 트리거된 적 없음")
+        case "running": {
+            if (data.phase === "stage1")
+                return yellow("⏳ 스트리밍 중 — Layer 1 (Airtable→D1)")
+            const rem = data.queueRemaining !== undefined ? ` · 남은 큐 ${data.queueRemaining}` : ""
+            return yellow(`⏳ 스트리밍 중 — Layer 2 (D1→Framer)${rem}`)
+        }
+        case "done":
+            return green(`✅ 완료 — idle 대기 중${data.finishedAt ? ` (${timeAgo(data.finishedAt)})` : ""}`)
+        case "error":
+            return red("❌ 에러 — 중단됨")
+        default:
+            return null
+    }
+}
+
 // ── 일반 함수 실행 ────────────────────────────────────────────────────────
 async function runFunction(workerUrl, fn, body = null) {
     const url = `${workerUrl}${fn.path}`
@@ -1156,7 +1177,17 @@ async function showBriefing(workers) {
     console.log()
 
     const results = await Promise.allSettled(
-        workers.map(w => fetchCapabilities(w.url).then(caps => ({ worker: w, caps })))
+        workers.map(async w => {
+            const caps = await fetchCapabilities(w.url)
+            // push 상태 — managed-status 함수가 있는 워커만 (framer-sync 계열)
+            let pushStatus = null
+            if (caps.functions?.some(f => f.id === "managed-status")) {
+                pushStatus = await fetch(`${w.url}/managed-status`, { signal: AbortSignal.timeout(8_000) })
+                    .then(r => r.ok ? r.json() : null)
+                    .catch(() => null)
+            }
+            return { worker: w, caps, pushStatus }
+        })
     )
 
     let anyOk = false
@@ -1169,6 +1200,8 @@ async function showBriefing(workers) {
             const ver = caps.version ? dim(`v${caps.version}`) : ""
             console.log(`  ${bold(w.label ?? w.name)}  ${statusBadge}  ${ver}`)
             console.log(`  ${gray(w.url)}`)
+            const pl = pushStateLine(r.value.pushStatus)
+            if (pl) console.log(`  ${dim("푸시:")} ${pl}`)
             if (caps.functions?.length) {
                 const fnList = caps.functions.map(f => cyan(f.id)).join("  ")
                 console.log(`  ${dim("함수:")} ${fnList}`)
