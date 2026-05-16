@@ -558,7 +558,7 @@ function renderManagedStatus(data) {
                     ? yellow(`${data.queueRemaining} collection`)
                     : dim("0 — 마지막 step 마무리 중"))
             }
-            if (timeAgo(data.startedAt)) row("시작", timeAgo(data.startedAt))
+            if (data.startedAt) row("시작", timeAgo(data.startedAt))
             console.log()
             console.log(dim(`    cron 이 매분 step 을 이어받아 진행 — Mac 닫아도 계속됩니다.`))
             break
@@ -566,7 +566,7 @@ function renderManagedStatus(data) {
 
         case "done": {
             row("상태", green("✅ 완료 — idle 대기 중"))
-            if (timeAgo(data.finishedAt)) row("완료", timeAgo(data.finishedAt))
+            if (data.finishedAt) row("완료", timeAgo(data.finishedAt))
             if (data.startedAt && data.finishedAt) {
                 const sec = Math.round((new Date(data.finishedAt) - new Date(data.startedAt)) / 1000)
                 if (!Number.isNaN(sec)) row("소요", `${sec}초`)
@@ -579,7 +579,7 @@ function renderManagedStatus(data) {
 
         case "error":
             row("상태", red("❌ 에러 — 중단됨"))
-            if (timeAgo(data.finishedAt)) row("발생", timeAgo(data.finishedAt))
+            if (data.finishedAt) row("발생", timeAgo(data.finishedAt))
             console.log()
             for (const line of String(data.error ?? "unknown").split("\n")) {
                 console.log(red(`    ${line}`))
