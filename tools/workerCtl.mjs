@@ -604,7 +604,9 @@ function renderManagedStatus(data) {
 //   그리고 "마지막으로 sync 된 게 언제?"
 function syncBriefLines(status, pushStatus) {
     if (!status || typeof status !== "object") return []
-    const lastSync = status.sync?.lastSync
+    const sync = status.sync ?? {}
+    // 워커 코드 경로마다 필드명이 다름 — configure/webhook 은 lastSync, sync/stage1 은 lastStage1.
+    const lastSync = sync.lastSync ?? sync.lastStage1
     const agoStr = lastSync ? timeAgo(lastSync) : gray("기록 없음")
 
     let modeLine
@@ -617,10 +619,22 @@ function syncBriefLines(status, pushStatus) {
     } else {
         modeLine = `${gray("⚪ 수동 (stage1-only)")} ${dim("— 변경 시 D1 까지만, Framer 푸시는 수동")}`
     }
-    return [
+
+    const lines = [
         `  ${dim("동기화:")}    ${modeLine}`,
         `  ${dim("마지막 sync:")} ${agoStr}`,
     ]
+
+    // full 모드는 Airtable webhook 이 살아있어야 의미 있음 (~7일 만료, cron 이 5일마다 갱신).
+    // 갱신이 7일 넘었으면 자동 감시가 조용히 멈췄을 수 있어 경고.
+    if (status.webhookMode === "full") {
+        const wr = sync.webhookRefreshed
+        const stale = !wr || (Date.now() - new Date(wr).getTime()) > 7 * 24 * 3600 * 1000
+        if (stale) {
+            lines.push(`  ${dim("webhook:")}    ${yellow(`⚠ 갱신 ${wr ? timeAgo(wr) : "기록 없음"} — 자동 감시가 멈췄을 수 있음`)}`)
+        }
+    }
+    return lines
 }
 
 // ── 일반 함수 실행 ────────────────────────────────────────────────────────
