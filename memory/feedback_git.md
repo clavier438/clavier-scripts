@@ -1,17 +1,18 @@
 ---
 name: 피드백: 깃 커밋 범위
-description: git commit은 scripts 폴더 작업에 한정, 다른 폴더는 해당 없음
+description: git commit 대상은 git 관리 repo(scripts/oci/platform-workers)에 한정, 그 외 폴더는 해당 없음
 type: feedback
 originSessionId: a05b5723-8989-45df-93b1-11047ec8bb16
 ---
-git 관리 대상 repo 두 곳 — 둘 다 동일한 원칙 적용:
+git 관리 대상 repo 세 곳 — 모두 동일한 원칙 적용:
 - `clavier-scripts`: Mac `iCloud/0/scripts/` 작업 시 → repo: `clavier0/clavier-scripts`
 - `oci-scripts`: OCI 서버 `~/oci-scripts/` 작업 시 → repo: `clavier0/oci-scripts`
+- `platform-workers`: `iCloud/0/code/projects/platform-workers/` (framer-sync 등 CF Workers) → repo: `clavier438/platform-workers`. 배포·머지는 [배포 프로세스](feedback_deploy_workflow.md) 4단계를 따른다.
 
-각 폴더 파일을 수정했을 때 반드시 git commit. 다른 폴더는 해당 없음.
+각 repo 파일을 수정했을 때 반드시 git commit. git 관리 repo 가 아닌 폴더는 해당 없음.
 
-**Why:** scripts/oci 두 곳 모두 자동화 인프라의 핵심. 동일 원칙으로 관리.
-**How to apply:** scripts 폴더 파일 수정 → 커밋 필수. 그 외 폴더(~/bin, LaunchAgents 등) → 커밋 불필요.
+**Why:** 세 repo 모두 자동화 인프라의 핵심. 동일 원칙으로 관리.
+**How to apply:** 위 repo 폴더 파일 수정 → 커밋 필수. 그 외 폴더(~/bin, LaunchAgents 등) → 커밋 불필요.
 커밋 메시지에는 **목적(왜)** 과 **수단(어떻게)** 을 반드시 함께 써라.
 - 목적: 어떤 문제/필요 때문에 이 변경을 했나
 - 수단: 그 목적을 위해 무엇을 어떻게 바꿨나
