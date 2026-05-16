@@ -524,6 +524,96 @@ async function pollUntilComplete(workerUrl, triggerTimeMs, statusPath = "/status
     return null
 }
 
+// ── managed-status 친절 렌더 ──────────────────────────────────────────────
+// /managed-status (STATUS_KEY) raw JSON 대신 사람이 한눈에 읽는 패널.
+// 핵심 질문 — "지금 스트리밍 중?" vs "1회 푸시 끝나고 idle 대기 중?"
+function timeAgo(iso) {
+    if (!iso) return null
+    const ms = Date.now() - new Date(iso).getTime()
+    if (Number.isNaN(ms)) return null
+    const s = Math.round(ms / 1000)
+    if (s < 60) return `${s}초 전`
+    const m = Math.round(s / 60)
+    if (m < 60) return `${m}분 전`
+    const h = Math.round(m / 60)
+    if (h < 24) return `${h}시간 전`
+    return `${Math.round(h / 24)}일 전`
+}
+
+function renderManagedStatus(data) {
+    if (!data || typeof data !== "object" || data.status === undefined) {
+        printResponseBody(data)   // 알 수 없는 형식 — raw fallback
+        return
+    }
+    const row = (k, v) => console.log(`    ${dim(k.padEnd(9))} ${v}`)
+
+    console.log()
+    console.log(bold("  📊 push-managed (Airtable → Framer) 상태"))
+    console.log()
+
+    switch (data.status) {
+        case "not_started":
+            row("상태", gray("⚪ 트리거된 적 없음"))
+            console.log()
+            console.log(dim(`    이 워커는 아직 push 를 한 번도 안 했습니다.`))
+            console.log(dim(`    푸시 시작: workerCtl <워커> push-managed`))
+            break
+
+        case "running": {
+            const stage1 = data.phase === "stage1"
+            row("상태", yellow("⏳ 스트리밍 진행 중"))
+            row("단계", stage1
+                ? "Layer 1 — Airtable → D1 읽는 중 (stage1)"
+                : "Layer 2 — D1 → Framer 큐 푸시 중")
+            if (!stage1 && data.queueRemaining !== undefined) {
+                row("남은 큐", data.queueRemaining > 0
+                    ? yellow(`${data.queueRemaining} collection`)
+                    : dim("0 — 마지막 step 마무리 중"))
+            }
+            if (timeAgo(data.startedAt)) row("시작", timeAgo(data.startedAt))
+            console.log()
+            console.log(dim(`    cron 이 매분 step 을 이어받아 진행 — Mac 닫아도 계속됩니다.`))
+            break
+        }
+
+        case "done": {
+            row("상태", green("✅ 완료 — idle 대기 중"))
+            if (timeAgo(data.finishedAt)) row("완료", timeAgo(data.finishedAt))
+            if (data.startedAt && data.finishedAt) {
+                const sec = Math.round((new Date(data.finishedAt) - new Date(data.startedAt)) / 1000)
+                if (!Number.isNaN(sec)) row("소요", `${sec}초`)
+            }
+            console.log()
+            console.log(dim(`    1회 푸시가 끝났고 큐가 비어 있습니다 — cron 은 매분 idle 체크만 합니다.`))
+            console.log(dim(`    다시 푸시: workerCtl <워커> push-managed`))
+            break
+        }
+
+        case "error":
+            row("상태", red("❌ 에러 — 중단됨"))
+            if (timeAgo(data.finishedAt)) row("발생", timeAgo(data.finishedAt))
+            console.log()
+            for (const line of String(data.error ?? "unknown").split("\n")) {
+                console.log(red(`    ${line}`))
+            }
+            break
+
+        default:
+            printResponseBody(data)
+            return
+    }
+
+    // 직전 stage1 요약 (참고용) — collection 별 D1 upsert 수
+    if (Array.isArray(data.stage1Summaries) && data.stage1Summaries.length) {
+        console.log()
+        console.log(dim(`    직전 stage1 (Airtable → D1):`))
+        for (const s of data.stage1Summaries) {
+            const skip = s.skippedNoSlug ? dim(` · skip ${s.skippedNoSlug}`) : ""
+            console.log(dim(`      ${String(s.collection).padEnd(14)} ${s.upserted} rows${skip}`))
+        }
+    }
+}
+
 // ── 일반 함수 실행 ────────────────────────────────────────────────────────
 async function runFunction(workerUrl, fn, body = null) {
     const url = `${workerUrl}${fn.path}`
