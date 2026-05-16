@@ -567,10 +567,6 @@ function renderManagedStatus(data) {
         case "done": {
             row("상태", green("✅ 완료 — idle 대기 중"))
             if (data.finishedAt) row("완료", timeAgo(data.finishedAt))
-            if (data.startedAt && data.finishedAt) {
-                const sec = Math.round((new Date(data.finishedAt) - new Date(data.startedAt)) / 1000)
-                if (!Number.isNaN(sec)) row("소요", `${sec}초`)
-            }
             console.log()
             console.log(dim(`    1회 푸시가 끝났고 큐가 비어 있습니다 — cron 은 매분 idle 체크만 합니다.`))
             console.log(dim(`    다시 푸시: workerCtl <워커> push-managed`))
