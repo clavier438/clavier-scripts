@@ -1336,8 +1336,8 @@ async function main() {
             console.log(gray(`  사용 가능: all, ${workers.map(w => w.name).join(", ")}`))
             process.exit(1)
         }
-        console.log(`  워커: ${bold(worker.label ?? worker.name)}`)
-        console.log()
+        // 특정 워커를 인자로 줬어도 그 워커 브리핑부터 — 상태 먼저 보고 작업 (무인자와 동일).
+        await showBriefing([worker])
     } else {
         const rl = createInterface({ input: process.stdin, output: process.stdout })
         console.log(bold("  워커 선택:"))
