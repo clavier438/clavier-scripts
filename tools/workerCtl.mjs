@@ -598,41 +598,46 @@ function renderManagedStatus(data) {
     }
 }
 
-// 브리핑용 — /status + /managed-status → 동기화 모드/상태 2줄.
-// 사용자 관점의 핵심 질문:
-//   "Airtable 변경 시 Framer 까지 자동 반영(full)?" vs "수동 1회성 푸시(stage1-only)?"
-//   그리고 "마지막으로 sync 된 게 언제?"
+// 브리핑용 — /status(.sync) + /managed-status → 동기화 모드 + 파이프라인 3단계.
+// 워커가 각 이벤트를 나눠 기록(sync:status v2)하므로, 사용자가 동작을 그대로 읽을 수 있음:
+//   Airtable 감지 → D1 반영(stage1) → Framer 푸시(stage2)
+// 각 단계의 "마지막 언제"가 따로 보존돼 어디까지 흘렀는지 투명하게 보임.
 function syncBriefLines(status, pushStatus) {
     if (!status || typeof status !== "object") return []
     const sync = status.sync ?? {}
-    // 워커 코드 경로마다 필드명이 다름 — configure/webhook 은 lastSync, sync/stage1 은 lastStage1.
-    const lastSync = sync.lastSync ?? sync.lastStage1
-    const agoStr = lastSync ? timeAgo(lastSync) : gray("기록 없음")
+    const lines = []
 
-    let modeLine
-    if (pushStatus?.status === "running") {
-        // 수동 push-managed 가 지금 진행 중 — 최우선 표시
-        const layer = pushStatus.phase === "stage1" ? "Layer 1 (Airtable→D1)" : "Layer 2 (D1→Framer)"
-        modeLine = `${yellow("⏳ 푸시 진행 중")} ${dim("— " + layer)}`
-    } else if (status.webhookMode === "full") {
-        modeLine = `${green("🟢 자동 (full)")} ${dim("— Airtable 변경 시 Framer 까지 자동 반영")}`
-    } else {
-        modeLine = `${gray("⚪ 수동 (stage1-only)")} ${dim("— 변경 시 D1 까지만, Framer 푸시는 수동")}`
-    }
+    // 동기화 모드
+    const modeText = status.webhookMode === "full"
+        ? `${green("🟢 자동 (full)")} ${dim("— Airtable 변경 시 Framer 까지 자동 반영")}`
+        : `${gray("⚪ 수동 (stage1-only)")} ${dim("— 변경 시 D1 까지만, Framer 푸시는 수동")}`
+    lines.push(`  ${dim("동기화 모드:")} ${modeText}`)
 
-    const lines = [
-        `  ${dim("동기화:")}    ${modeLine}`,
-        `  ${dim("마지막 sync:")} ${agoStr}`,
-    ]
+    // ── 파이프라인 3단계 — 각 단계 마지막 발생 ──
+    // 1) Airtable 변경 감지 (webhook 수신)
+    lines.push(`  ${dim("├ Airtable 감지:")}  ${sync.webhookReceived?.at ? timeAgo(sync.webhookReceived.at) : gray("기록 없음")}`)
 
-    // full 모드는 Airtable webhook 이 살아있어야 의미 있음 (~7일 만료, cron 이 5일마다 갱신).
-    // 갱신이 7일 넘었으면 자동 감시가 조용히 멈췄을 수 있어 경고.
+    // 2) D1 반영 (stage1) — 구 형식(lastSync/lastStage1) fallback 포함
+    const s1at = sync.stage1?.at ?? sync.lastSync ?? sync.lastStage1
+    let s1 = s1at ? timeAgo(s1at) : gray("기록 없음")
+    if (sync.stage1?.by) s1 += dim(`  · ${sync.stage1.by} 트리거`)
+    if (sync.stage1?.rows !== undefined) s1 += dim(` · ${sync.stage1.rows} rows`)
+    lines.push(`  ${dim("├ D1 반영:")}        ${s1}`)
+
+    // 3) Framer 푸시 (stage2) — managed:status 기준
+    let s2
+    if (pushStatus?.status === "running") s2 = yellow("⏳ 진행 중")
+    else if (pushStatus?.status === "done") s2 = green("✅ 완료") + (pushStatus.finishedAt ? dim(` · ${timeAgo(pushStatus.finishedAt)}`) : "")
+    else if (pushStatus?.status === "error") s2 = red("❌ 에러")
+    else if (pushStatus?.status === "not_started") s2 = gray("아직 없음")
+    else s2 = gray("기록 없음")
+    lines.push(`  ${dim("└ Framer 푸시:")}    ${s2}`)
+
+    // full 모드는 webhook 이 살아있어야 의미 — 7일 넘으면 자동 감시가 멈췄을 수 있음.
     if (status.webhookMode === "full") {
-        const wr = sync.webhookRefreshed
+        const wr = sync.webhookRefreshed?.at ?? (typeof sync.webhookRefreshed === "string" ? sync.webhookRefreshed : null)
         const stale = !wr || (Date.now() - new Date(wr).getTime()) > 7 * 24 * 3600 * 1000
-        if (stale) {
-            lines.push(`  ${dim("webhook:")}    ${yellow(`⚠ 갱신 ${wr ? timeAgo(wr) : "기록 없음"} — 자동 감시가 멈췄을 수 있음`)}`)
-        }
+        if (stale) lines.push(`  ${yellow(`⚠ webhook 갱신 ${wr ? timeAgo(wr) : "기록 없음"} — 자동 감시가 멈췄을 수 있음`)}`)
     }
     return lines
 }
