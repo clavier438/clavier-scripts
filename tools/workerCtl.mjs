@@ -633,6 +633,14 @@ function syncBriefLines(status, pushStatus) {
     else s2 = gray("기록 없음")
     lines.push(`  ${dim("└ Framer 푸시:")}    ${s2}`)
 
+    // 에러 표면화 — stage1 실패(sync.error) 또는 Framer 푸시 실패(managed-status.error).
+    const syncErr = typeof sync.error === "string" ? sync.error : sync.error?.message
+    const errMsg = syncErr ?? (pushStatus?.status === "error" ? pushStatus.error : null)
+    if (errMsg) {
+        const s = String(errMsg)
+        lines.push(`  ${red("❌ 에러:")} ${red(s.length > 160 ? s.slice(0, 159) + "…" : s)}`)
+    }
+
     // full 모드는 webhook 이 살아있어야 의미 — 7일 넘으면 자동 감시가 멈췄을 수 있음.
     if (status.webhookMode === "full") {
         const wr = sync.webhookRefreshed?.at ?? (typeof sync.webhookRefreshed === "string" ? sync.webhookRefreshed : null)
