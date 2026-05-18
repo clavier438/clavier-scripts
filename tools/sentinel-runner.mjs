@@ -111,8 +111,8 @@ const L1_FIXABLE_PATTERNS = [
     },
 ]
 
-// 1회용 마이그레이션 스크립트 추정 — Engineer 가 매주 archive 처리할 후보.
-// Sentinel 은 별도 카테고리 분류만 하고 RAY_DALIO 안 박음 (Engineer 인계).
+// 1회용 마이그레이션 스크립트 추정 — 별도 카테고리로 분류해 보고만 한다.
+// Sentinel 은 RAY_DALIO 큐에 박지 않음 (운영 코드 위반과 노이즈 분리). archive 여부는 사용자 판단.
 //
 // 휴리스틱: scripts repo 의 <workername>-*.{mjs,js,ts,py} 는 1회용 데이터 작업.
 // (운영 워커 코드는 platform-workers repo 안. scripts repo 의 워커prefix 파일은
@@ -261,7 +261,7 @@ function buildReport(allFindings, dopplerKeysSet) {
     lines.push(`> 부하: scanner × ${Object.keys(byRepo).length} repo. Sentinel 이 통합 → 1 보고.`)
     lines.push("")
     lines.push(`**운영 코드 위반**: L1 ${byLevel.L1.length} / L2 ${byLevel.L2.length}  ·  Doppler[prd] 키 ${dopplerKeysSet.size}개`)
-    lines.push(`**1회용 스크립트 (Engineer archive 인계)**: ${oneShot.length}건`)
+    lines.push(`**1회용 스크립트 (archive 후보 — 사용자 검토)**: ${oneShot.length}건`)
     lines.push("")
     lines.push("**repo 별**:")
     for (const [repo, counts] of Object.entries(byRepo)) {
@@ -303,7 +303,7 @@ function buildReport(allFindings, dopplerKeysSet) {
     }
 
     if (oneShot.length) {
-        lines.push("### 1회용 스크립트 위반 (Engineer 인계 — archive 후보)")
+        lines.push("### 1회용 스크립트 위반 (archive 후보 — 사용자 검토)")
         lines.push("")
         const byFile = {}
         for (const f of oneShot) {
@@ -313,7 +313,7 @@ function buildReport(allFindings, dopplerKeysSet) {
             lines.push(`- \`${path}\` (${n}건)`)
         }
         lines.push("")
-        lines.push("> 매주 일 03:30 Engineer 가 CATALOG.md 갱신 시 archive 검토. Sentinel 은 RAY_DALIO 큐에 박지 않음.")
+        lines.push("> 1회용 스크립트는 RAY_DALIO 큐에 박지 않음 (운영 코드 위반과 노이즈 분리). archive 여부는 사용자가 직접 판단.")
         lines.push("")
     }
 
@@ -379,7 +379,7 @@ async function main() {
         return
     }
 
-    // audit — 운영 코드 L2 만 RAY_DALIO 큐에 박음 (1회용 스크립트는 Engineer 인계, 노이즈 방지)
+    // audit — 운영 코드 L2 만 RAY_DALIO 큐에 박음 (1회용 스크립트는 보고만, 노이즈 방지)
     const l2 = allFindings.filter(f => f.level === "L2" && f.category === "operational")
     if (l2.length) {
         const queueFile = join(hqDir, "RAY_DALIO_QUEUE.md")
@@ -415,7 +415,7 @@ async function main() {
 
     const oneShotCount = allFindings.filter(f => f.category === "one-shot").length
     console.log()
-    console.log(`✅ Sentinel 감사 완료. 운영 L1 ${l1.length} / L2 ${l2.length}  ·  1회용 ${oneShotCount} (Engineer 인계)`)
+    console.log(`✅ Sentinel 감사 완료. 운영 L1 ${l1.length} / L2 ${l2.length}  ·  1회용 ${oneShotCount} (archive 후보)`)
 }
 
 main().catch(err => {
