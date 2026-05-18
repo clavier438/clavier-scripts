@@ -1,5 +1,8 @@
 # Memory Index
 
+> ## ★ 최상위 원칙 — 모든 설계·판단에 우선
+> **나쁜 상태로 가는 *경로 자체*를 없애는, 다른 path 없는 단순한 해결책 하나를 찾아 그것만 적용한다.** 여러 장치를 덧대 "막았다는 기분"을 만들지 않는다. 해결책이 여러 개면 아직 못 찾은 것. → [feedback_single_solution.md](feedback_single_solution.md)
+
 > **메모리 원칙**: Claude 행동지침만 기록. 시스템 구조/사실 정보는 각 repo의 ARCHITECTURE.md에. "어떻게 일할 것인가"만 여기에.
 
 - [피드백: 문서 역할 분담 원칙](feedback_doc_structure.md) — ARCHITECTURE.md/git/memory 역할 분담 + 에코시스템 수준 메모리 예외 원칙
@@ -7,6 +10,7 @@
 - [피드백: 메모리 저장 방식](feedback_memory.md) — 중요한 것은 항상 즉시 메모리에 저장할 것
 - [피드백: 단계적 수정 방식](feedback_incremental_fixes.md) — 문제 하나씩 fix→확인→커밋 순서로 진행, 한꺼번에 고치지 말 것
 - [피드백: 옵션 메뉴 금지](feedback_no_quick_options.md) — "진행/처리/그냥 해" 발화 시 빠른길 vs 정석 옵션 제시 X, 원칙대로 끝까지
+- [피드백: 판단 책임 떠넘기기 금지](feedback_ownership.md) — 보고·승인요청 남발 X, 코드 판단은 Claude가 직접 결정·책임 (사용자는 비전문가)
 - [피드백: 현재 상태는 묻기 전에 먼저](feedback_status_upfront.md) — 도구/브리핑 설계 시 상태를 별도 조회 뒤에 숨기지 말고 진입 즉시 표시
 - [피드백: git 기능 적극 제안](feedback_git_workflow.md) — 브랜치/태그/stash 등을 사용자가 묻기 전에 먼저 제안할 것
 - [피드백: 깃 커밋 범위](feedback_git.md) — git commit은 관리 repo(scripts/oci/platform-workers)에 한정
