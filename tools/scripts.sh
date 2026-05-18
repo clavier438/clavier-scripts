@@ -77,7 +77,7 @@ done
 render_section "scripts" "${TOP[@]}"
 
 # 서브폴더 자동 감지 (installScripts.sh SKIP_DIRS 미러)
-SKIP=(tools memory memory-backup backup .git .claude .wrangler webExporter Markdown2ID docs framer-components)
+SKIP=(tools memory backup .git .claude .wrangler webExporter Markdown2ID docs framer-components)
 
 for d in "$SRC"/*(N/); do
     dn="${d:t}"
