@@ -26,8 +26,9 @@
  *   $GDRIVE_PATH/{ws_label}/{base_id}_{base_name}/{table_id}_{table_name}.json
  */
 
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from "fs"
+import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from "fs"
 import { join } from "path"
+import { homedir } from "os"
 
 // ── CLI 파싱 ─────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2)
@@ -39,8 +40,36 @@ function argValue(name) {
 const FILTER_BASE = argValue("--base")
 const FILTER_TABLE = argValue("--table")
 
-const GDRIVE_PATH = process.env.GDRIVE_PATH
-    ?? "/Users/clavier/Library/CloudStorage/GoogleDrive-hyuk439@gmail.com/내 드라이브/works_gdrive/airtable/sync"
+// GoogleDrive 마운트 경로는 사용자·계정·Drive 앱 언어에 따라 달라 하드코딩 불가.
+// CloudStorage 에서 마운트를 탐색하고, 명시적 override 는 GDRIVE_PATH 로 받는다.
+const GDRIVE_SUBPATH = "works_gdrive/airtable/sync"
+
+function resolveGdrivePath() {
+    if (process.env.GDRIVE_PATH) return process.env.GDRIVE_PATH
+
+    const die = (msg) => {
+        console.error(`✗ ${msg}`)
+        process.exit(1)
+    }
+    const cloudStorage = join(homedir(), "Library", "CloudStorage")
+    let entries
+    try {
+        entries = readdirSync(cloudStorage)
+    } catch {
+        die(`CloudStorage 폴더 없음 (${cloudStorage}) — Google Drive 데스크톱 앱 설치/실행 확인`)
+    }
+    const account = entries.find(d => d.startsWith("GoogleDrive-"))
+    if (!account) die(`GoogleDrive 마운트 없음 (${cloudStorage}) — Drive 앱 로그인/실행 확인, 또는 GDRIVE_PATH 직접 지정`)
+
+    const accountDir = join(cloudStorage, account)
+    // "My Drive" 폴더명은 Drive 앱 언어 설정에 따라 다름 (영문 "My Drive" / 한글 "내 드라이브")
+    const myDrive = ["My Drive", "내 드라이브"].find(n => readdirSync(accountDir).includes(n))
+    if (!myDrive) die(`'My Drive' 폴더를 ${accountDir} 에서 못 찾음 — GDRIVE_PATH 로 직접 지정`)
+
+    return join(accountDir, myDrive, GDRIVE_SUBPATH)
+}
+
+const GDRIVE_PATH = resolveGdrivePath()
 
 const TARGET_WS = {
     "wsp9s9TITA2bUxIdq": "claude",
