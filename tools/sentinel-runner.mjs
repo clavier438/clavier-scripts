@@ -60,7 +60,7 @@ function findRepos() {
 
 // 스캔 제외 디렉토리 (path 의 어디든 매칭)
 const EXCLUDE_DIRS = new Set([
-    "node_modules", ".git", "dist", "build", ".next", "memory", "memory-backup",
+    "node_modules", ".git", "dist", "build", ".next", "memory",
     ".claude", "worker-snapshots", "airtable-blocks-sdk", "docs", "vendor",
     ".doppler", "__pycache__", ".venv", "venv",
 ])
