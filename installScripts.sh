@@ -144,12 +144,12 @@ if command -v doppler >/dev/null 2>&1; then
         echo ""
         echo "⚠️  Doppler 로그인 필요 — 다음 명령을 직접 실행하세요:"
         echo "     doppler login"
-        echo "     cd \"$SCRIPT_DIR\" && doppler setup --project clavier --config prd --no-interactive"
+        echo "     cd \"$SCRIPT_DIR\" && doppler setup --no-interactive"
     else
         # 이미 로그인됐으면 scripts 디렉터리 바인딩 보장 (idempotent)
         bound_project="$(doppler configure get project --scope "$SCRIPT_DIR" --plain 2>/dev/null)"
         if [[ "$bound_project" != "clavier" ]]; then
-            (cd "$SCRIPT_DIR" && doppler setup --project clavier --config prd --no-interactive >/dev/null 2>&1) \
+            (cd "$SCRIPT_DIR" && doppler setup --no-interactive >/dev/null 2>&1) \
                 && echo "  [doppler] $SCRIPT_DIR → clavier/prd 바인딩 완료"
         fi
     fi

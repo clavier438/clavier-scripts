@@ -1,0 +1,6 @@
+# Doppler repo config — 이 repo의 시크릿 바인딩을 선언형으로 고정.
+# 새 머신: `doppler setup --no-interactive` 한 번이면 이 파일을 읽어 자동 스코프.
+# installScripts.sh 가 부트스트랩 시 자동 실행한다.
+setup:
+  project: clavier
+  config: prd
