@@ -15,3 +15,4 @@ webExporter/pdf_export_master.log
 webExporter/pdf_export_progress.txt
 webExporter/pdf_export_urls.txt
 safari_export_*.log
+.wrangler/

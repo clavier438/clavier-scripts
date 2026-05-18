@@ -524,6 +524,132 @@ async function pollUntilComplete(workerUrl, triggerTimeMs, statusPath = "/status
     return null
 }
 
+// ── managed-status 친절 렌더 ──────────────────────────────────────────────
+// /managed-status (STATUS_KEY) raw JSON 대신 사람이 한눈에 읽는 패널.
+// 핵심 질문 — "지금 스트리밍 중?" vs "1회 푸시 끝나고 idle 대기 중?"
+// timeAgo() 는 아래에 이미 정의됨 (hoist 되므로 여기서 호출 OK).
+function renderManagedStatus(data) {
+    if (!data || typeof data !== "object" || data.status === undefined) {
+        printResponseBody(data)   // 알 수 없는 형식 — raw fallback
+        return
+    }
+    const row = (k, v) => console.log(`    ${dim(k.padEnd(9))} ${v}`)
+
+    console.log()
+    console.log(bold("  📊 push-managed (Airtable → Framer) 상태"))
+    console.log()
+
+    switch (data.status) {
+        case "not_started":
+            row("상태", gray("⚪ 트리거된 적 없음"))
+            console.log()
+            console.log(dim(`    이 워커는 아직 push 를 한 번도 안 했습니다.`))
+            console.log(dim(`    푸시 시작: workerCtl <워커> push-managed`))
+            break
+
+        case "running": {
+            const stage1 = data.phase === "stage1"
+            row("상태", yellow("⏳ 스트리밍 진행 중"))
+            row("단계", stage1
+                ? "Layer 1 — Airtable → D1 읽는 중 (stage1)"
+                : "Layer 2 — D1 → Framer 큐 푸시 중")
+            if (!stage1 && data.queueRemaining !== undefined) {
+                row("남은 큐", data.queueRemaining > 0
+                    ? yellow(`${data.queueRemaining} collection`)
+                    : dim("0 — 마지막 step 마무리 중"))
+            }
+            if (data.startedAt) row("시작", timeAgo(data.startedAt))
+            console.log()
+            console.log(dim(`    cron 이 매분 step 을 이어받아 진행 — Mac 닫아도 계속됩니다.`))
+            break
+        }
+
+        case "done": {
+            row("상태", green("✅ 완료 — idle 대기 중"))
+            if (data.finishedAt) row("완료", timeAgo(data.finishedAt))
+            console.log()
+            console.log(dim(`    1회 푸시가 끝났고 큐가 비어 있습니다 — cron 은 매분 idle 체크만 합니다.`))
+            console.log(dim(`    다시 푸시: workerCtl <워커> push-managed`))
+            break
+        }
+
+        case "error":
+            row("상태", red("❌ 에러 — 중단됨"))
+            if (data.finishedAt) row("발생", timeAgo(data.finishedAt))
+            console.log()
+            for (const line of String(data.error ?? "unknown").split("\n")) {
+                console.log(red(`    ${line}`))
+            }
+            break
+
+        default:
+            printResponseBody(data)
+            return
+    }
+
+    // 직전 stage1 요약 (참고용) — collection 별 D1 upsert 수
+    if (Array.isArray(data.stage1Summaries) && data.stage1Summaries.length) {
+        console.log()
+        console.log(dim(`    직전 stage1 (Airtable → D1):`))
+        for (const s of data.stage1Summaries) {
+            const skip = s.skippedNoSlug ? dim(` · skip ${s.skippedNoSlug}`) : ""
+            console.log(dim(`      ${String(s.collection).padEnd(14)} ${s.upserted} rows${skip}`))
+        }
+    }
+}
+
+// 브리핑용 — /status(.sync) + /managed-status → 동기화 모드 + 파이프라인 3단계.
+// 워커가 각 이벤트를 나눠 기록(sync:status v2)하므로, 사용자가 동작을 그대로 읽을 수 있음:
+//   Airtable 감지 → D1 반영(stage1) → Framer 푸시(stage2)
+// 각 단계의 "마지막 언제"가 따로 보존돼 어디까지 흘렀는지 투명하게 보임.
+function syncBriefLines(status, pushStatus) {
+    if (!status || typeof status !== "object") return []
+    const sync = status.sync ?? {}
+    const lines = []
+
+    // 동기화 모드
+    const modeText = status.webhookMode === "full"
+        ? `${green("🟢 자동 (full)")} ${dim("— Airtable 변경 시 Framer 까지 자동 반영")}`
+        : `${gray("⚪ 수동 (stage1-only)")} ${dim("— 변경 시 D1 까지만, Framer 푸시는 수동")}`
+    lines.push(`  ${dim("동기화 모드:")} ${modeText}`)
+
+    // ── 파이프라인 3단계 — 각 단계 마지막 발생 ──
+    // 1) Airtable 변경 감지 (webhook 수신)
+    lines.push(`  ${dim("├ Airtable 감지:")}  ${sync.webhookReceived?.at ? timeAgo(sync.webhookReceived.at) : gray("기록 없음")}`)
+
+    // 2) D1 반영 (stage1) — 구 형식(lastSync/lastStage1) fallback 포함
+    const s1at = sync.stage1?.at ?? sync.lastSync ?? sync.lastStage1
+    let s1 = s1at ? timeAgo(s1at) : gray("기록 없음")
+    if (sync.stage1?.by) s1 += dim(`  · ${sync.stage1.by} 트리거`)
+    if (sync.stage1?.rows !== undefined) s1 += dim(` · ${sync.stage1.rows} rows`)
+    lines.push(`  ${dim("├ D1 반영:")}        ${s1}`)
+
+    // 3) Framer 푸시 (stage2) — managed:status 기준
+    let s2
+    if (pushStatus?.status === "running") s2 = yellow("⏳ 진행 중")
+    else if (pushStatus?.status === "done") s2 = green("✅ 완료") + (pushStatus.finishedAt ? dim(` · ${timeAgo(pushStatus.finishedAt)}`) : "")
+    else if (pushStatus?.status === "error") s2 = red("❌ 에러")
+    else if (pushStatus?.status === "not_started") s2 = gray("아직 없음")
+    else s2 = gray("기록 없음")
+    lines.push(`  ${dim("└ Framer 푸시:")}    ${s2}`)
+
+    // 에러 표면화 — stage1 실패(sync.error) 또는 Framer 푸시 실패(managed-status.error).
+    const syncErr = typeof sync.error === "string" ? sync.error : sync.error?.message
+    const errMsg = syncErr ?? (pushStatus?.status === "error" ? pushStatus.error : null)
+    if (errMsg) {
+        const s = String(errMsg)
+        lines.push(`  ${red("❌ 에러:")} ${red(s.length > 160 ? s.slice(0, 159) + "…" : s)}`)
+    }
+
+    // full 모드는 webhook 이 살아있어야 의미 — 7일 넘으면 자동 감시가 멈췄을 수 있음.
+    if (status.webhookMode === "full") {
+        const wr = sync.webhookRefreshed?.at ?? (typeof sync.webhookRefreshed === "string" ? sync.webhookRefreshed : null)
+        const stale = !wr || (Date.now() - new Date(wr).getTime()) > 7 * 24 * 3600 * 1000
+        if (stale) lines.push(`  ${yellow(`⚠ webhook 갱신 ${wr ? timeAgo(wr) : "기록 없음"} — 자동 감시가 멈췄을 수 있음`)}`)
+    }
+    return lines
+}
+
 // ── 일반 함수 실행 ────────────────────────────────────────────────────────
 async function runFunction(workerUrl, fn, body = null) {
     const url = `${workerUrl}${fn.path}`
@@ -555,7 +681,11 @@ async function runFunction(workerUrl, fn, body = null) {
     }
 
     console.log()
-    printResponseBody(responseBody)
+    if (fn.id === "managed-status" && res.ok) {
+        renderManagedStatus(responseBody)
+    } else {
+        printResponseBody(responseBody)
+    }
     console.log()
 
     // streamingStep 감지: capabilities 의 streamingStep 경로가 있으면 done=true 까지 자동 loop
@@ -1078,7 +1208,21 @@ async function showBriefing(workers) {
     console.log()
 
     const results = await Promise.allSettled(
-        workers.map(w => fetchCapabilities(w.url).then(caps => ({ worker: w, caps })))
+        workers.map(async w => {
+            const caps = await fetchCapabilities(w.url)
+            // 동기화 모드/상태 — /status (webhookMode + sync.lastSync) + /managed-status (진행 중 여부).
+            // framer-sync 계열 (managed-status 함수 보유) 워커만 조회.
+            let status = null, pushStatus = null
+            if (caps.functions?.some(f => f.id === "managed-status")) {
+                [status, pushStatus] = await Promise.all([
+                    fetch(`${w.url}/status`, { signal: AbortSignal.timeout(8_000) })
+                        .then(r => r.ok ? r.json() : null).catch(() => null),
+                    fetch(`${w.url}/managed-status`, { signal: AbortSignal.timeout(8_000) })
+                        .then(r => r.ok ? r.json() : null).catch(() => null),
+                ])
+            }
+            return { worker: w, caps, status, pushStatus }
+        })
     )
 
     let anyOk = false
@@ -1091,6 +1235,7 @@ async function showBriefing(workers) {
             const ver = caps.version ? dim(`v${caps.version}`) : ""
             console.log(`  ${bold(w.label ?? w.name)}  ${statusBadge}  ${ver}`)
             console.log(`  ${gray(w.url)}`)
+            for (const line of syncBriefLines(r.value.status, r.value.pushStatus)) console.log(line)
             if (caps.functions?.length) {
                 const fnList = caps.functions.map(f => cyan(f.id)).join("  ")
                 console.log(`  ${dim("함수:")} ${fnList}`)
@@ -1204,8 +1349,8 @@ async function main() {
             console.log(gray(`  사용 가능: all, ${workers.map(w => w.name).join(", ")}`))
             process.exit(1)
         }
-        console.log(`  워커: ${bold(worker.label ?? worker.name)}`)
-        console.log()
+        // 특정 워커를 인자로 줬어도 그 워커 브리핑부터 — 상태 먼저 보고 작업 (무인자와 동일).
+        await showBriefing([worker])
     } else {
         const rl = createInterface({ input: process.stdin, output: process.stdout })
         console.log(bold("  워커 선택:"))

@@ -84,12 +84,27 @@ log "커밋 메시지: $COMMIT_MSG"
 git commit -m "$COMMIT_MSG"
 log "커밋 완료"
 
-# ── Push (remote 있을 때만) ──────────────────────────────────
+# ── Push (안전장치: remote 앞서면 중단, 분기되면 중단) ──────
 if git remote get-url origin &>/dev/null; then
-    if git push origin main >> "$LOG_FILE" 2>&1; then
-        log "push 완료"
+    BRANCH="$(git branch --show-current)"
+    if ! git fetch origin "$BRANCH" >> "$LOG_FILE" 2>&1; then
+        log "fetch 실패 — push 생략"
     else
-        log "push 실패 (로그 확인)"
+        LOCAL=$(git rev-parse HEAD)
+        REMOTE=$(git rev-parse "origin/$BRANCH" 2>/dev/null || echo "")
+        BASE=$(git merge-base HEAD "origin/$BRANCH" 2>/dev/null || echo "")
+        if [[ -z "$REMOTE" ]]; then
+            log "원격 브랜치 없음 — 첫 push"
+            git push -u origin "$BRANCH" >> "$LOG_FILE" 2>&1 && log "push 완료" || log "push 실패"
+        elif [[ "$LOCAL" == "$REMOTE" ]]; then
+            log "원격 동기 상태 — push 생략"
+        elif [[ "$REMOTE" == "$BASE" ]]; then
+            git push origin "$BRANCH" >> "$LOG_FILE" 2>&1 && log "push 완료" || log "push 실패"
+        elif [[ "$LOCAL" == "$BASE" ]]; then
+            log "원격이 앞섬 — push 중단 (수동 pull 필요)"
+        else
+            log "분기 발생 — push 중단 (수동 merge 필요)"
+        fi
     fi
 else
     log "remote 없음 — push 생략"
