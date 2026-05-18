@@ -15,47 +15,15 @@
 > **MAP.md** 가 진짜 "한 화면 도면". 의존성 방향, 흐름, 변동성 적응 메커니즘이 전부 거기.
 > SYSTEM_ENV.md 는 데이터 (URL, KV ID, Doppler 키 목록).
 
-## 살아있는 도면 우선 원칙 (2026-05-10~) ★ 절대 원칙
+## 도면 — 현재상태는 생성한다 (2026-05-18~) ★
 
-**현상태를 알려주는 도면 = 항상 최신**. 어긋남 발견 시 *그 즉시* 갱신.
+**현재상태 도면(어떤 자동화가 도는가 등)은 손으로 쓰지 않는다.** 손으로 쓴 현황 도면은 현실의 *사본* — 사본은 반드시 어긋난다. "바뀌면 같이 갱신" 규칙은 의지에 기댄 권유이고, 실제로 gitSync·watcherMemory 가 삭제된 뒤에도 도면에 *현역으로* 남았다.
 
-사용자 발화 (2026-05-10): *"현상태를 알려주는 도면을 항상 최신버전으로 가지고 있도록 하고, 그게 틀린거 발견했으면 매번 최신화"*
+- **생성**: `systemMap.mjs` 가 `~/Library/LaunchAgents` 를 직접 읽어 렌더. SessionStart 훅이 매 세션 주입 — 매번 현실 그 자체라 drift 불가. `systemMap` 명령으로 직접도 확인.
+- **손으로 남는 것**: `MAP.md` = 아키텍처·의존성·흐름·개념(왜·방향)뿐. "현재 기계 상태" 주장이 아니라 drift 개념이 없다.
+- 도면이 현실과 어긋나 보이면 **MAP.md 를 손으로 고치지 말 것**. 생성기 입력(plist 등)이 곧 현실 — 입력을 고치면 도면은 자동으로 따라온다.
 
-### 살아있는 도면 (clavier-hq)
-
-| 도면 | 갱신 방식 | 어긋남 시 |
-|---|---|---|
-| MAP.md | 수동 — 구조 변경한 사람 | 즉시 같은 commit |
-| STATUS.md | 수동 — 상태 변경한 사람 | 즉시 |
-| SYSTEM_ENV.md | 수동 — 환경 변경한 사람 | 즉시 |
-| routines/*.md | 수동 — routine 책임자 | 즉시 |
-| WORKER_STATUS.md | 자동 (workerCtl conduct) | 다음 conduct |
-| CATALOG.md | 자동 (Engineer 일요일) | 다음 일요일 |
-| SENTINEL_AUDIT.md | 자동 (Sentinel 매일) | 다음 새벽 |
-| PRINCIPLES.md | 수동 (Ray Dalio 매일) | 다음 새벽 |
-
-분류 표 master = `clavier-hq/MAP.md` "살아있는 도면 — 원칙 + 책임 분류" 섹션.
-
-### Claude 행동 규칙
-
-작업 중 도면과 실제가 어긋남을 발견하면:
-1. **현재 작업 멈춤**.
-2. 도면 먼저 갱신 + commit (1줄이라도).
-3. 그 다음 원래 작업 재개.
-
-이유: 도면 갱신 미루면 그 commit 에 어긋남이 묻혀 다음 사람/Claude 가 거짓 위에서 추리 → cascading drift.
-
-### 구조 변경 시 동시 갱신 (Defense in Depth)
-
-**구조가 바뀌면 MAP.md 도 같은 commit 에 포함**:
-- 워커 추가/삭제 → 노드 수, SSOT 박스
-- 새 layer / 폴더 → 의존성 트리
-- 새 흐름 (route, cron, queue) → 흐름 시나리오
-- 새 외부 SSOT 키 → Doppler 박스
-- 새 외부 변동성 처리 → 적응 표
-- 새 routine / 시간 슬롯 변경 → "정기 자동화 — 루틴도면" 섹션
-
-매 commit 메시지에 영향 받은 도면 영역 명시.
+DECISIONS.md 2026-05-18 "생성형 도면" ADR 참조.
 
 GitHub: https://github.com/clavier0/clavier-hq
 
