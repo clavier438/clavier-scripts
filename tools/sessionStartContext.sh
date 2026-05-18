@@ -23,7 +23,8 @@ read_file() {
     fi
 }
 
-combined=$(printf '# === clavier-hq/MISSION.md (방향) ===\n%s\n\n# === clavier-hq/STATUS.md (현재 상태) ===\n%s\n\n# === clavier-hq/QUEUE.md (지금 할 일) ===\n%s' \
+combined=$(printf '# === clavier-hq/README.md (뇌 지도 — front door) ===\n%s\n\n# === clavier-hq/MISSION.md (방향) ===\n%s\n\n# === clavier-hq/STATUS.md (현재 상태) ===\n%s\n\n# === clavier-hq/QUEUE.md (지금 할 일) ===\n%s' \
+  "$(read_file "$HQ/README.md")" \
   "$(read_file "$HQ/MISSION.md")" \
   "$(read_file "$HQ/STATUS.md")" \
   "$(read_file "$HQ/QUEUE.md")")
