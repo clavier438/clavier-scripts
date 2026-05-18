@@ -17,6 +17,7 @@
 - [피드백: platform-workers 배포·머지 프로세스](feedback_deploy_workflow.md) — 브랜치→커밋→수동배포 검증(mukayu 먼저)→main 머지(CI 재배포)
 - [피드백: Clean Architecture 원칙](feedback_clean_architecture.md) — SOLID 원칙 적용, 비슷한 기능은 같은 방식으로 구현, Claude가 스스로 점검해서 먼저 제안
 - [피드백: 자동화 순서 원칙](feedback_automation_order.md) — 자동화는 마지막 단계, 패턴 검증 전 스크립트 금지, 두 사슬 결합 방식 먼저 검토
+- [피드백: 루틴 시스템 신뢰 부재](feedback_routine_distrust.md) — 사용자는 STL 루틴이 작동한다 느낀 적 없음, 루틴 apparatus 를 고정 전제로 두지 말 것
 - [피드백: env.md에서 API 키/토큰 먼저 확인](feedback_env_check.md) — API 키 등 env 값이 필요하면 env.md 먼저 확인, 없을 때만 물어볼 것
 - [피드백: 데이터 소스 직접 읽기](feedback_data_source.md) — CSV/JSON 파일이 있으면 하드코딩 말고 파일 파싱해서 사용할 것
 - [피드백: 공식 문서 우선 원칙](feedback_docs_first.md) — 새 API 연동 시 공식 docs/예제 먼저, 바퀴 재발명 금지
