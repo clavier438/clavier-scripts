@@ -155,6 +155,17 @@ if command -v doppler >/dev/null 2>&1; then
     fi
 fi
 
+# ── clavier-scripts git hooks 활성화 (커밋⇒push 원자화) ──────────────────────
+# pre-commit: main 직접 커밋 차단 / post-commit: 커밋 즉시 push.
+# "push 안 된 로컬 커밋" 상태를 구조적으로 제거 — gitSync 데몬 대체 (2026-05-18).
+if [[ -d "$SCRIPT_DIR/.git" ]] && [[ -d "$SCRIPT_DIR/hooks" ]]; then
+    bound_sc_hooks="$(cd "$SCRIPT_DIR" && git config --local core.hooksPath 2>/dev/null || true)"
+    if [[ "$bound_sc_hooks" != "hooks" ]]; then
+        (cd "$SCRIPT_DIR" && git config --local core.hooksPath hooks) \
+            && echo "  [hooks] clavier-scripts core.hooksPath = hooks (커밋⇒push 활성화)"
+    fi
+fi
+
 # ── clavier-hq git hooks 자동 활성화 (구조적 보호 Layer 2) ────────────────────
 # DECISIONS.md 변경 시 doc-coverage 자동 검증. 새 맥 복구해도 바로 작동.
 HQ_DIR="${CLAVIER_HQ:-$HOME/clavier-hq}"

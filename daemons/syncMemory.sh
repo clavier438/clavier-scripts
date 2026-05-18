@@ -7,15 +7,14 @@
 # 동작 원리 (이벤트 드리븐):
 #   com.clavier.watcherMemory LaunchAgent가 ~/.claude/projects/-Users-clavier/memory/
 #   폴더를 WatchPaths로 감시한다. 파일이 바뀌면 이 스크립트가 실행됨.
-#   복사된 파일이 scripts/ 안으로 들어오면 watcherGitSync가 다시 트리거되어
-#   GitHub에 자동 커밋+push 된다.
 #
 # 흐름:
 #   memory/ 파일 변경
 #     → watcherMemory LaunchAgent 트리거
 #     → 이 스크립트 실행 → scripts/memory-backup/ 으로 rsync
-#     → watcherGitSync LaunchAgent 트리거 (scripts 변경 감지)
-#     → gitSync → git commit + push → GitHub 백업 완료
+#
+# GitHub 반영: gitSync 데몬 폐지(2026-05-18) — 자동 커밋 없음.
+#   memory/ 는 git 추적 디렉터리이므로 Claude 세션이 커밋하면 post-commit 훅이 push.
 #
 # 직접 실행:
 #   ~/bin/daemons/syncMemory
