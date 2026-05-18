@@ -28,6 +28,20 @@ combined=$(printf '# === clavier-hq/MISSION.md (방향) ===\n%s\n\n# === clavier
   "$(read_file "$HQ/STATUS.md")" \
   "$(read_file "$HQ/QUEUE.md")")
 
+# 시스템 자동화 실측 도면 — systemMap.mjs 가 ~/Library/LaunchAgents 를 직접 렌더.
+# 손으로 쓴 현황 도면(사본)은 반드시 drift → 매 세션 *생성*해 주입한다
+# (DECISIONS 2026-05-18 "생성형 도면"). 생성 실패는 침묵 아닌 시끄러운 마커로.
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+sysmap=$(node "$SELF_DIR/systemMap.mjs" 2>&1)
+if [ $? -ne 0 ] || [ -z "$sysmap" ]; then
+    sysmap="# === ⚠️ 시스템 자동화 도면 생성 실패 ===
+systemMap.mjs 실행 실패. 현재 자동화 상태를 신뢰하지 말 것.
+\`node '$SELF_DIR/systemMap.mjs'\` 를 직접 실행해 진단."
+fi
+combined="$combined
+
+$sysmap"
+
 # Tier 3 routines 등록 대기 마커 — setup.sh Step 9 가 박음 (포맷 후 한 번)
 ROUTINES_PENDING="$HOME/.clavier/routines-pending"
 if [ -f "$ROUTINES_PENDING" ]; then
