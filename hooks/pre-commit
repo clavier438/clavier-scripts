@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# pre-commit — main 직접 커밋 차단.
+#
+# SSOT = origin/main. main 은 PR 로만 바뀐다. 로컬 main 에 커밋이 쌓이면
+# branch protection 때문에 push 도 못 하고, 그게 drift 의 시작점이 된다.
+# 작업은 항상 브랜치에서 → PR 로 보이고, 숨은 브랜치가 생기지 않는다.
+
+branch="$(git symbolic-ref --short HEAD 2>/dev/null)"
+if [ "$branch" = "main" ]; then
+    echo "" >&2
+    echo "‼️  main 에 직접 커밋할 수 없습니다." >&2
+    echo "    작업 브랜치를 만드세요:  git switch -c <작업이름>" >&2
+    echo "" >&2
+    exit 1
+fi

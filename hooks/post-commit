@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# post-commit — 커밋 즉시 origin 에 push.
+#
+# SSOT 의 단 하나의 강제 장치: 커밋과 push 는 분리되지 않는다.
+# "push 안 된 로컬 커밋" 이라는 상태 자체가 존재할 수 없게 한다.
+# 브랜치 push 는 main 을 못 건드리므로 언제나 안전하다 (부담 없음).
+
+branch="$(git symbolic-ref --short HEAD 2>/dev/null)"
+[ -z "$branch" ] && exit 0
+
+if git push origin "$branch" >/dev/null 2>&1; then
+    exit 0
+fi
+
+# push 실패(오프라인·충돌 등) = 잔여 위험. 침묵하지 않고 시끄럽게 드러낸다.
+echo "" >&2
+echo "‼️  git push 실패 — 이 커밋이 아직 GitHub 에 없습니다." >&2
+echo "    네트워크 확인 후 'git push' 를 직접 실행하세요." >&2
+osascript -e 'display notification "커밋이 GitHub 에 올라가지 않음 — git push 직접 실행" with title "‼️ push 실패"' 2>/dev/null || true
+exit 0

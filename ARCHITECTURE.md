@@ -132,7 +132,17 @@ Layer 2 — Platform 확장 (opt-in per environment)
 |------|--------|------|
 | `syncObsidian.py` | watcherObsidian / watcherCal | iCloud → GDrive API 직접 싱크 (범용, `--src`/`--gdrive-root`로 대상 지정) |
 | `syncMemory.sh` | watcherMemory | Claude 메모리 → memory-backup/ rsync |
-| `gitSync.sh` | watcherGitSync (5분 + 변경감지) | scripts 변경 → git commit + push |
+
+### git hooks (커밋⇒push 원자화)
+
+`hooks/` — `git config core.hooksPath hooks` 로 활성화 (installScripts.sh 자동).
+
+| 훅 | 역할 |
+|----|------|
+| `pre-commit` | main 직접 커밋 차단 — 작업은 항상 브랜치에서 |
+| `post-commit` | 커밋 즉시 `git push` — "push 안 된 로컬 커밋" 상태를 없앤다 |
+
+gitSync 데몬(폐지, 2026-05-18)의 대체. 데몬은 비-main 브랜치에 커밋하면서 하드코딩된 `main` 으로만 push 해 drift 를 만들었다 — 커밋과 push 를 훅으로 한 몸으로 묶어 그 경로 자체를 제거.
 
 ### iCloud → GDrive 싱크 현황
 
@@ -146,7 +156,6 @@ Layer 2 — Platform 확장 (opt-in per environment)
 | Label | 트리거 | 실행 |
 |-------|--------|------|
 | `com.clavier.watcherScripts` | scripts 폴더 WatchPaths | installScripts |
-| `com.clavier.watcherGitSync` | scripts 폴더 WatchPaths + 5분 | gitSync |
 | `com.clavier.watcherMemory` | memory 폴더 WatchPaths | syncMemory |
 | `com.clavier.watcherObsidian` | Obsidian vault WatchPaths | syncObsidian.py |
 | `com.clavier.watcherCal` | Scriptable data/cal WatchPaths | syncObsidian.py (--src cal) |
