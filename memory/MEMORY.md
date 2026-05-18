@@ -6,8 +6,11 @@
 - [에코시스템 아키텍처 인사이트](project_ecosystem_architecture.md) — Worker=계산레이어, Framer/Airtable/CF/OCI/Google 조합 패턴 (제안용)
 - [피드백: 메모리 저장 방식](feedback_memory.md) — 중요한 것은 항상 즉시 메모리에 저장할 것
 - [피드백: 단계적 수정 방식](feedback_incremental_fixes.md) — 문제 하나씩 fix→확인→커밋 순서로 진행, 한꺼번에 고치지 말 것
+- [피드백: 옵션 메뉴 금지](feedback_no_quick_options.md) — "진행/처리/그냥 해" 발화 시 빠른길 vs 정석 옵션 제시 X, 원칙대로 끝까지
+- [피드백: 현재 상태는 묻기 전에 먼저](feedback_status_upfront.md) — 도구/브리핑 설계 시 상태를 별도 조회 뒤에 숨기지 말고 진입 즉시 표시
 - [피드백: git 기능 적극 제안](feedback_git_workflow.md) — 브랜치/태그/stash 등을 사용자가 묻기 전에 먼저 제안할 것
-- [피드백: 깃 커밋 범위](feedback_git.md) — git commit은 scripts 폴더 작업에 한정
+- [피드백: 깃 커밋 범위](feedback_git.md) — git commit은 관리 repo(scripts/oci/platform-workers)에 한정
+- [피드백: platform-workers 배포·머지 프로세스](feedback_deploy_workflow.md) — 브랜치→커밋→수동배포 검증(mukayu 먼저)→main 머지(CI 재배포)
 - [피드백: Clean Architecture 원칙](feedback_clean_architecture.md) — SOLID 원칙 적용, 비슷한 기능은 같은 방식으로 구현, Claude가 스스로 점검해서 먼저 제안
 - [피드백: 자동화 순서 원칙](feedback_automation_order.md) — 자동화는 마지막 단계, 패턴 검증 전 스크립트 금지, 두 사슬 결합 방식 먼저 검토
 - [피드백: env.md에서 API 키/토큰 먼저 확인](feedback_env_check.md) — API 키 등 env 값이 필요하면 env.md 먼저 확인, 없을 때만 물어볼 것

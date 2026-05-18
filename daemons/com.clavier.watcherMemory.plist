@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key><string>com.clavier.watcherMemory</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/daemons/syncMemory.sh</string>
+    </array>
+    <key>WatchPaths</key>
+    <array>
+        <string>/Users/clavier/.claude/projects/-Users-clavier/memory</string>
+    </array>
+    <key>ThrottleInterval</key><integer>10</integer>
+    <key>RunAtLoad</key><false/>
+    <key>StandardOutPath</key><string>/Users/clavier/Library/Logs/syncMemory.log</string>
+    <key>StandardErrorPath</key><string>/Users/clavier/Library/Logs/syncMemory_error.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key><string>/Users/clavier</string>
+    </dict>
+</dict>
+</plist>

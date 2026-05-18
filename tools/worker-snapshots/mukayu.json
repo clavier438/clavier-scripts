@@ -1,0 +1,74 @@
+{
+  "worker": "framer-sync",
+  "version": "2.3.0",
+  "configured": true,
+  "airtableBaseId": "appTGMmpNthg2ODh3",
+  "hasAirtableToken": true,
+  "framerProjectUrl": "https://framer.com/projects/15-0-6-sisoso--aWfh3MQ9tJcTAQEVINDs-pvTgH",
+  "hasFramerApiKey": true,
+  "gtmContainerId": null,
+  "webhookMode": "full",
+  "tables": [
+    {
+      "name": "topics",
+      "fields": 15,
+      "slugField": "slug"
+    },
+    {
+      "name": "group",
+      "fields": 16,
+      "slugField": "slug"
+    },
+    {
+      "name": "items",
+      "fields": 22,
+      "slugField": "slug"
+    },
+    {
+      "name": "subitems",
+      "fields": 6,
+      "slugField": "slug"
+    },
+    {
+      "name": "tags",
+      "fields": 7,
+      "slugField": "slug"
+    },
+    {
+      "name": "brand_assets",
+      "fields": 6,
+      "slugField": "slug"
+    },
+    {
+      "name": "journal",
+      "fields": 15,
+      "slugField": "slug"
+    }
+  ],
+  "sync": {
+    "stage1": {
+      "at": "2026-05-17T03:47:29.512Z",
+      "by": "webhook",
+      "collections": 7,
+      "rows": 246
+    },
+    "webhookReceived": {
+      "at": "2026-05-17T03:47:21.540Z"
+    },
+    "webhookRefreshed": {
+      "at": "2026-05-17T01:09:54.553Z"
+    }
+  },
+  "conversion": {
+    "startedAt": "2026-05-12T12:55:28.277Z",
+    "finishedAt": "2026-05-13T05:37:33.279Z",
+    "status": "ok",
+    "total": 75,
+    "converted": 21,
+    "skipped": 26,
+    "errors": 28,
+    "details": []
+  },
+  "transformChain": "\n┌─ 필드 변환 체인 ─────────────────────────────────────────────────\n│\n│ ▸ topics  (15 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   slug                  formula               string          string\n│   url                   url                   link            string\n│   slugKey               singleLineText        string          string\n│   name                  singleLineText        string          string\n│   page                  checkbox              boolean         boolean\n│   gallery               multipleAttachments   image           image\n│   notes                 richText              formattedText   string\n│   caption               singleLineText        string          string\n│   kind                  singleSelect          enum            string\n│   kind copy             singleSelect          enum            string\n│   section               singleLineText        string          string\n│   group                 multipleRecordLinks   multiCollection…string\n│   journal               multipleRecordLinks   multiCollection…string\n│   items                 singleLineText        string          string\n│   items 2               multipleRecordLinks   multiCollection…string\n│\n│ ▸ group  (16 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   slug                  formula               string          string\n│   topic                 multipleRecordLinks   multiCollection…string\n│   branch0               singleSelect          enum            string\n│   branch1               singleSelect          enum            string\n│   branch2               singleSelect          enum            string\n│   name                  singleLineText        string          string\n│   notes                 richText              formattedText   string\n│   items                 multipleRecordLinks   multiCollection…string\n│   layout                formula               string          string\n│   layoutException       singleSelect          enum            string\n│   layoutVarient         formula               enum            string\n│   tags                  multipleRecordLinks   multiCollection…string\n│   sections              singleLineText        string          string\n│   img                   multipleAttachments   image           image\n│   subName               singleLineText        string          string\n│   ctaText               singleLineText        string          string\n│\n│ ▸ items  (22 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   slug                  formula               string          string\n│   group                 multipleRecordLinks   multiCollection…string\n│   topic                 multipleRecordLinks   multiCollection…string\n│   branch0 (from group)  multipleLookupValues  enum            string\n│   name                  singleLineText        string          string\n│   section               singleLineText        string          string\n│   subName               singleLineText        string          string\n│   notes                 richText              formattedText   string\n│   price                 richText              formattedText   string\n│   caption               singleLineText        string          string\n│   img                   multipleAttachments   image           image\n│   gallery               multipleAttachments   image           image\n│   layoutException       singleSelect          enum            string\n│   ctaUrl                url                   link            string\n│   tags                  multipleRecordLinks   multiCollection…string\n│   subitems              multipleRecordLinks   multiCollection…string\n│   O_subitems?           formula               number          number\n│   layoutAuto            formula               string          string\n│   journal               multipleRecordLinks   multiCollection…string\n│   layout                formula               enum            string\n│   branch2 (from group)  multipleLookupValues  enum            string\n│   branch1 (from group)  multipleLookupValues  enum            string\n│\n│ ▸ subitems  (6 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   slug                  formula               string          string\n│   name                  singleLineText        string          string\n│   items                 multipleRecordLinks   multiCollection…string\n│   slug (from items)     multipleLookupValues  string          string\n│   notes                 richText              formattedText   string\n│   price                 richText              formattedText   string\n│\n│ ▸ tags  (7 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   slug                  formula               string          string\n│   name                  singleLineText        string          string\n│   slugKey               singleLineText        string          string\n│   group                 singleSelect          enum            string\n│   items                 multipleRecordLinks   multiCollection…string\n│   journal               multipleRecordLinks   multiCollection…string\n│   group 2               multipleRecordLinks   multiCollection…string\n│\n│ ▸ brand_assets  (6 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   name                  singleLineText        string          string\n│   slugKey               singleLineText        string          string\n│   kind                  singleSelect          enum            string\n│   file                  multipleAttachments   image           image\n│   notes                 richText              formattedText   string\n│   slug                  formula               string          string\n│\n│ ▸ journal  (15 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   name                  singleLineText        string          string\n│   slugKey               singleLineText        string          string\n│   kind                  singleSelect          enum            string\n│   publishedAt           date                  date            date\n│   author                singleLineText        string          string\n│   excerpt               singleLineText        string          string\n│   body                  richText              formattedText   string\n│   heroImg               multipleAttachments   image           image\n│   gallery               multipleAttachments   image           image\n│   newsletter            checkbox              boolean         boolean\n│   status                singleSelect          enum            string\n│   items                 multipleRecordLinks   multiCollection…string\n│   topics                multipleRecordLinks   multiCollection…string\n│   tags                  multipleRecordLinks   multiCollection…string\n│   slug                  formula               string          string\n└──────────────────────────────────────────────────────────────────",
+  "snapshotAt": "2026-05-17T10:00:15.144Z"
+}
