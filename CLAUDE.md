@@ -1,19 +1,10 @@
 # Claude 세션 시작 지침
 
-## 반드시 먼저 할 것
+## front door = clavier-hq/README.md (뇌 지도)
 
-새 세션을 시작하면 **무조건** 아래 순서로 읽어라:
+세션의 출발점은 **하나** — `clavier-hq/README.md` (뇌 지도). SessionStart 훅이 매 세션 *맨 먼저* 주입한다. "무엇을 하려면 / 무엇을 알고 싶으면 어디를 보는가" 라우팅 표가 거기 있다 — 이 repo 의 `CONVENTIONS.md`·`ARCHITECTURE.md`·`env.md`·`memory/` 포함.
 
-```
-1. clavier-hq/MAP.md        → 시스템 도면 (구조 한눈에) ★
-2. clavier-hq/SYSTEM_ENV.md → 환경변수·연결 현황 (URL, KV ID 등)
-3. clavier-hq/STATUS.md     → 현재 시스템 상태
-4. clavier-hq/QUEUE.md      → 지금 해야 할 것 (우선순위순)
-5. clavier-hq/MISSION.md    → 방향과 기준
-```
-
-> **MAP.md** 가 진짜 "한 화면 도면". 의존성 방향, 흐름, 변동성 적응 메커니즘이 전부 거기.
-> SYSTEM_ENV.md 는 데이터 (URL, KV ID, Doppler 키 목록).
+읽기 순서를 손으로 적은 목록은 *여기 두지 않는다*. 두 곳에 적히면 어긋난다 (drift). front door 는 뇌 지도 하나뿐.
 
 ## 도면 — 현재상태는 생성한다 (2026-05-18~) ★
 
@@ -26,11 +17,6 @@
 DECISIONS.md 2026-05-18 "생성형 도면" ADR 참조.
 
 GitHub: https://github.com/clavier0/clavier-hq
-
-그 다음 이 repo에서:
-1. `CONVENTIONS.md` — 작업 원칙 (Clean Architecture, Git, 메모리, 단계적 수정 등)
-2. `ARCHITECTURE.md` — Mac 자동화 모듈 구조
-3. `env.md` — 시크릿/계정 키 목록 (실제 값은 Doppler에 있음)
 
 ## 핵심 원칙 (요약)
 
