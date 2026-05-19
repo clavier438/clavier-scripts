@@ -688,10 +688,11 @@ async function runFunction(workerUrl, fn, body = null) {
     }
     console.log()
 
-    // streamingStep 감지: capabilities 의 streamingStep 경로가 있으면 done=true 까지 자동 loop
+    // streamingStep 감지: capabilities 의 streamingStep 경로가 있으면 done=true 까지 자동 loop.
+    // loopStreamingSteps 의 실제 결과(done 확인 true / 에러·미확인 false)를 그대로 반환 —
+    // 호출자(pickAndRun)가 거짓양성 없이 정확히 안내하도록.
     if (res.ok && fn.streamingStep) {
-        await loopStreamingSteps(workerUrl, fn.streamingStep)
-        return true
+        return await loopStreamingSteps(workerUrl, fn.streamingStep)
     }
 
     // 비동기 작업 감지: 응답 메시지에 "시작됨"/"started" → status polling
@@ -1382,14 +1383,26 @@ async function main() {
         process.exit(1)
     }
 
+    // ③④⑤ — 직접 지정 모드는 1회, 대화형은 함수 메뉴 복귀 루프 ("종료" 선택 시 탈출).
+    const directMode = Boolean(args[1])
+    while (true) {
+        const result = await pickAndRun(worker, caps, directMode ? args[1] : null)
+        if (result.done) process.exit(result.code)
+    }
+}
+
+// 함수 1개 선택 → params 수집 → 실행 = 1 사이클.
+// directFnId 있으면 직접 지정 모드(그 함수 1회), 없으면 대화형 메뉴.
+// 반환 { done:true, code } = 종료 / { done:false } = 대화형 메뉴 루프 계속.
+async function pickAndRun(worker, caps, directFnId) {
     // ③ 함수 결정
     let fn
-    if (args[1]) {
-        fn = caps.functions.find(f => f.id === args[1])
+    if (directFnId) {
+        fn = caps.functions.find(f => f.id === directFnId)
         if (!fn) {
-            console.error(red(`  ✗ 함수 "${args[1]}" 를 찾을 수 없습니다`))
+            console.error(red(`  ✗ 함수 "${directFnId}" 를 찾을 수 없습니다`))
             console.log(gray(`  사용 가능: ${caps.functions.map(f => f.id).join(", ")}`))
-            process.exit(1)
+            return { done: true, code: 1 }
         }
         console.log(`  함수: ${bold(fn.label)}`)
         console.log()
@@ -1397,15 +1410,22 @@ async function main() {
         const rl = createInterface({ input: process.stdin, output: process.stdout })
         console.log(bold(`  실행할 기능 (${caps.configured ? green("설정됨") : red("미설정")}):`) )
         console.log()
+        const EXIT_ITEM = { id: "__exit__", label: "종료" }
         fn = await selectFromList(
             rl,
-            caps.functions,
+            [...caps.functions, EXIT_ITEM],
             f => {
+                if (f.id === "__exit__") return dim("종료  workerCtl 끝내기")
                 const base = `${bold(f.label)}  ${dim(f.description ?? "")}`
                 return f.constraint ? base + `  ${yellow("[" + f.constraint + "]")}` : base
             }
         )
         rl.close()
+        if (fn.id === "__exit__") {
+            console.log()
+            console.log(dim("  workerCtl 를 종료합니다."))
+            return { done: true, code: 0 }
+        }
     }
 
     // ④ params 수집 (필요한 경우)
@@ -1563,7 +1583,22 @@ async function main() {
 
     // ⑤ 실행
     const ok = await runFunction(worker.url, fn, body)
-    process.exit(ok ? 0 : 1)
+
+    // 직접 지정 모드 = 1회로 끝. 대화형 = 함수 메뉴로 복귀.
+    if (directFnId) return { done: true, code: ok ? 0 : 1 }
+    console.log()
+    console.log(dim("  ──────────────────────────────────────────────"))
+    if (ok) {
+        console.log(green("  ✅ 완료") + dim(" — 메뉴로 돌아갑니다."))
+    } else {
+        // ok=false: 에러 또는 done 미확인. 어느 쪽이든 워커는 cron(매분)으로
+        // 이어받아 끝낼 수 있으므로, 단정 대신 다음 행동을 안내한다.
+        console.log(yellow("  ⏳ workerCtl 은 여기서 멈췄지만, 워커가 cron(매분 백업)으로 계속 처리할 수 있습니다."))
+        console.log(dim("     → 메뉴에서 '3. ManagedCollection 푸시 상태 확인' 으로 실제 결과를 보세요."))
+    }
+    console.log(dim("  ──────────────────────────────────────────────"))
+    console.log()
+    return { done: false }
 }
 
 main().catch(err => {
