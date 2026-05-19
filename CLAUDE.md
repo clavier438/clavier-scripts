@@ -154,7 +154,7 @@ Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.m
 **모든 자동화 = 단일 책임 루틴 + 익명 부하** 구조. 어떤 자동화도 *책임지는 루틴 없이* 떠돌면 안 됨.
 
 규칙:
-1. **루틴** = 한 영역 단일 책임자. 사용자가 이름을 안다. 현재 5 cron-등록 (clavier-hq/routines/): Closer (매일 03:00) / Ray Dalio (매일 03:30) / Sentinel (매일 03:45) / Engineer (주 일 03:30) / Architect (주 월 04:30). + Strategist 는 ad-hoc (cron 없음).
+1. **루틴** = 한 영역 단일 책임자. 사용자가 이름을 안다. 현재 4 cron-등록 (clavier-hq/routines/): Closer (매일 03:00) / Ray Dalio (매일 03:30) / Sentinel (매일 03:45) / Architect (주 월 04:30). + Strategist 는 ad-hoc (cron 없음).
 2. **부하** = 루틴이 임명. 한 루틴 종속. 사용자에 직접 메시지 X.
 3. 사용자와 직접 대화하는 entity = 오직 루틴. 부하 결과는 루틴이 통합 → 1 briefing.
 4. 무소속 자동화 금지 — 새 prompt 작성 시 어느 루틴의 부하인지 먼저 명시.

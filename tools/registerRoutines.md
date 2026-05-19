@@ -63,7 +63,6 @@ rm -f ~/.clavier/routines-pending
 | closer | 0 3 * * * | ✓ 등록 (또는 ✓ 이미 있음) |
 | ray-dalio | 30 3 * * * | ✓ 등록 |
 | sentinel | 45 3 * * * | ✓ 등록 |
-| engineer | 30 3 * * 0 | ✓ 등록 |
 | architect | 30 4 * * 1 | ✓ 등록 |
 
 ## 왜 이 패턴인가

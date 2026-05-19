@@ -53,7 +53,7 @@ if [ -f "$ROUTINES_PENDING" ]; then
 
 **행동**: 다른 작업 시작 전에
 1. \`mcp__scheduled-tasks__list_scheduled_tasks\` 호출 — 현재 등록 현황 확인.
-2. 5 routines (closer/ray-dalio/sentinel/engineer/architect) 모두 등록 안돼있으면 사용자에 \"/registerRoutines 한 번 실행하면 5 routines 일괄 등록\" 권유.
+2. 4 routines (closer/ray-dalio/sentinel/architect) 모두 등록 안돼있으면 사용자에 \"/registerRoutines 한 번 실행하면 4 routines 일괄 등록\" 권유.
 3. 사용자 yes 시 → /registerRoutines slash command 실행 (~/.claude/commands/registerRoutines.md). 마커는 그 명령이 삭제.
 
 이미 모두 등록돼있으면 마커만 조용히 삭제 (\`rm ~/.clavier/routines-pending\`)."
