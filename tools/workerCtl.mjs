@@ -1585,9 +1585,11 @@ async function pickAndRun(worker, caps, directFnId) {
 
     // 직접 지정 모드 = 1회로 끝. 대화형 = 함수 메뉴로 복귀.
     if (directFnId) return { done: true, code: ok ? 0 : 1 }
+    // streaming 함수는 runFunction 이 결과와 무관하게 true 를 반환하므로
+    // 여기서 성공/실패를 단정하지 않는다 — 실제 결과는 managed-status 로 확인.
     console.log()
     console.log(dim("  ──────────────────────────────────────────────"))
-    console.log(`  ${ok ? green("✓ 완료") : red("✗ 실패")}${dim(" — 메뉴로 돌아갑니다. 다른 기능을 고르거나 '종료' 를 선택하세요.")}`)
+    console.log(dim("  메뉴로 돌아갑니다 — 다른 기능 선택 또는 '종료'."))
     console.log()
     return { done: false }
 }
