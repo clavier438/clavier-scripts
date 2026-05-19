@@ -7,6 +7,7 @@ __pycache__/
 
 # 산출물 (PDF, attempt 중간 파일 등) — git 은 로직/설계만 추적
 exports/
+exports-batch/
 exports-loop/
 exports-loop-test/
 mac-results/

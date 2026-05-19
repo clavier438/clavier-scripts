@@ -249,8 +249,8 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
     )
     # nav 페이지가 인덱스(목록)면 페이지네이션 1~PAGINATION_PAGES까지 수집,
     # 각 인덱스 페이지에서 detail 링크 DETAIL_PER_INDEX 개 추가.
-    DETAIL_PER_INDEX  = 3
-    PAGINATION_PAGES  = 3
+    DETAIL_PER_INDEX  = int(os.environ.get("WEBEXP_DETAIL_PER_INDEX", "3"))
+    PAGINATION_PAGES  = int(os.environ.get("WEBEXP_PAGINATION_PAGES", "3"))
 
     seen    = set()
     ordered = []
@@ -1708,14 +1708,15 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
     total_ok   = sum(ok   for ok, _, _ in all_results)
     total_fail = sum(fail for _, fail, _ in all_results)
 
-    # ── 사이트 전체 단일 PDF: 페이지 순서 × 뷰포트 순서 (desktop→tablet→mobile) ──
+    # ── 사이트 전체 단일 PDF: 뷰포트별 그룹 (desktop→tablet→mobile), 그룹 안에서 발견(페이지) 순서 ──
     site_name = sanitize_filename(urlparse(base_url).netloc or "site")
     out_pdf   = os.path.join(output_dir, f"{site_name}.pdf")
 
     # streaming 모드에서 frame 들은 export_url 안에서 이미 jpeg 로 저장됨.
     # 여기서는 metadata 수집만. PDF 빌드는 아래 streaming build (reportlab) 가 담당.
+    vp_rank = {name: i for i, (name, _) in enumerate(VIEWPORT_CONFIGS)}
     frames_index: list[dict] = []
-    for url, (_, _, captured) in zip(pages, all_results):
+    for page_idx, (url, (_, _, captured)) in enumerate(zip(pages, all_results)):
         for entry in captured:
             frame_path = entry["frame_path"]
             try:
@@ -1726,11 +1727,14 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
             frames_index.append({
                 "url": url,
                 "viewport": entry["vp_name"],
+                "page_idx": page_idx,
                 "path": frame_path,
                 "width": entry["width"],
                 "height": entry["height"],
                 "size_bytes": size_bytes,
             })
+    # 디바이스 우선 그룹핑: 같은 viewport 끼리 모으고, 그 안에서 발견(랜딩→카테고리…) 순서 유지
+    frames_index.sort(key=lambda e: (vp_rank.get(e["viewport"], 99), e["page_idx"]))
 
     if frames_index:
         # streaming PDF build — reportlab 이 frame 단위 page write + 즉시 메모리 release.
