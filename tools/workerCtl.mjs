@@ -688,10 +688,11 @@ async function runFunction(workerUrl, fn, body = null) {
     }
     console.log()
 
-    // streamingStep 감지: capabilities 의 streamingStep 경로가 있으면 done=true 까지 자동 loop
+    // streamingStep 감지: capabilities 의 streamingStep 경로가 있으면 done=true 까지 자동 loop.
+    // loopStreamingSteps 의 실제 결과(done 확인 true / 에러·미확인 false)를 그대로 반환 —
+    // 호출자(pickAndRun)가 거짓양성 없이 정확히 안내하도록.
     if (res.ok && fn.streamingStep) {
-        await loopStreamingSteps(workerUrl, fn.streamingStep)
-        return true
+        return await loopStreamingSteps(workerUrl, fn.streamingStep)
     }
 
     // 비동기 작업 감지: 응답 메시지에 "시작됨"/"started" → status polling
@@ -1585,11 +1586,17 @@ async function pickAndRun(worker, caps, directFnId) {
 
     // 직접 지정 모드 = 1회로 끝. 대화형 = 함수 메뉴로 복귀.
     if (directFnId) return { done: true, code: ok ? 0 : 1 }
-    // streaming 함수는 runFunction 이 결과와 무관하게 true 를 반환하므로
-    // 여기서 성공/실패를 단정하지 않는다 — 실제 결과는 managed-status 로 확인.
     console.log()
     console.log(dim("  ──────────────────────────────────────────────"))
-    console.log(dim("  메뉴로 돌아갑니다 — 다른 기능 선택 또는 '종료'."))
+    if (ok) {
+        console.log(green("  ✅ 완료") + dim(" — 메뉴로 돌아갑니다."))
+    } else {
+        // ok=false: 에러 또는 done 미확인. 어느 쪽이든 워커는 cron(매분)으로
+        // 이어받아 끝낼 수 있으므로, 단정 대신 다음 행동을 안내한다.
+        console.log(yellow("  ⏳ workerCtl 은 여기서 멈췄지만, 워커가 cron(매분 백업)으로 계속 처리할 수 있습니다."))
+        console.log(dim("     → 메뉴에서 '3. ManagedCollection 푸시 상태 확인' 으로 실제 결과를 보세요."))
+    }
+    console.log(dim("  ──────────────────────────────────────────────"))
     console.log()
     return { done: false }
 }
