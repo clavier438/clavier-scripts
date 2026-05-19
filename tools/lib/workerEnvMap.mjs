@@ -17,6 +17,7 @@ export const DOPPLER_PROJECT = "clavier"
 export const WORKER_ENV_MAP = {
     sisoso: { dopplerConfig: "prd",        wranglerEnv: null },
     mukayu: { dopplerConfig: "prd_mukayu", wranglerEnv: "mukayu" },
+    test:   { dopplerConfig: "prd_test",   wranglerEnv: "test" },
 }
 
 export function getWorkerEnv(workerName) {

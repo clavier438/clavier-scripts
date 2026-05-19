@@ -34,6 +34,7 @@ done
 WORKERS=(
     "sisoso|-|prd"
     "mukayu|mukayu|prd_mukayu"
+    "test|test|prd_test"
 )
 
 # 모든 워커가 공유하는 secret 키 (Doppler key = Wrangler key 동일 이름 가정)
