@@ -1382,14 +1382,26 @@ async function main() {
         process.exit(1)
     }
 
+    // ③④⑤ — 직접 지정 모드는 1회, 대화형은 함수 메뉴 복귀 루프 ("종료" 선택 시 탈출).
+    const directMode = Boolean(args[1])
+    while (true) {
+        const result = await pickAndRun(worker, caps, directMode ? args[1] : null)
+        if (result.done) process.exit(result.code)
+    }
+}
+
+// 함수 1개 선택 → params 수집 → 실행 = 1 사이클.
+// directFnId 있으면 직접 지정 모드(그 함수 1회), 없으면 대화형 메뉴.
+// 반환 { done:true, code } = 종료 / { done:false } = 대화형 메뉴 루프 계속.
+async function pickAndRun(worker, caps, directFnId) {
     // ③ 함수 결정
     let fn
-    if (args[1]) {
-        fn = caps.functions.find(f => f.id === args[1])
+    if (directFnId) {
+        fn = caps.functions.find(f => f.id === directFnId)
         if (!fn) {
-            console.error(red(`  ✗ 함수 "${args[1]}" 를 찾을 수 없습니다`))
+            console.error(red(`  ✗ 함수 "${directFnId}" 를 찾을 수 없습니다`))
             console.log(gray(`  사용 가능: ${caps.functions.map(f => f.id).join(", ")}`))
-            process.exit(1)
+            return { done: true, code: 1 }
         }
         console.log(`  함수: ${bold(fn.label)}`)
         console.log()
@@ -1397,15 +1409,22 @@ async function main() {
         const rl = createInterface({ input: process.stdin, output: process.stdout })
         console.log(bold(`  실행할 기능 (${caps.configured ? green("설정됨") : red("미설정")}):`) )
         console.log()
+        const EXIT_ITEM = { id: "__exit__", label: "종료" }
         fn = await selectFromList(
             rl,
-            caps.functions,
+            [...caps.functions, EXIT_ITEM],
             f => {
+                if (f.id === "__exit__") return dim("종료  workerCtl 끝내기")
                 const base = `${bold(f.label)}  ${dim(f.description ?? "")}`
                 return f.constraint ? base + `  ${yellow("[" + f.constraint + "]")}` : base
             }
         )
         rl.close()
+        if (fn.id === "__exit__") {
+            console.log()
+            console.log(dim("  workerCtl 를 종료합니다."))
+            return { done: true, code: 0 }
+        }
     }
 
     // ④ params 수집 (필요한 경우)
@@ -1563,7 +1582,14 @@ async function main() {
 
     // ⑤ 실행
     const ok = await runFunction(worker.url, fn, body)
-    process.exit(ok ? 0 : 1)
+
+    // 직접 지정 모드 = 1회로 끝. 대화형 = 함수 메뉴로 복귀.
+    if (directFnId) return { done: true, code: ok ? 0 : 1 }
+    console.log()
+    console.log(dim("  ──────────────────────────────────────────────"))
+    console.log(`  ${ok ? green("✓ 완료") : red("✗ 실패")}${dim(" — 메뉴로 돌아갑니다. 다른 기능을 고르거나 '종료' 를 선택하세요.")}`)
+    console.log()
+    return { done: false }
 }
 
 main().catch(err => {
