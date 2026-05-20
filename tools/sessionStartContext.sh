@@ -7,6 +7,8 @@
 #
 # 출력: hookSpecificOutput JSON (Claude Code SessionStart hook 규약)
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 ICLOUD="/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0"
 HQ="$ICLOUD/code/projects/clavier-hq"
 

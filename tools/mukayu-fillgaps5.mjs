@@ -4,6 +4,8 @@
 // 2) 스파-info +1 item (예약 안내)
 // 3) stay 3 패키지의 subitems +6 (Program / Reservation / Additional)
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

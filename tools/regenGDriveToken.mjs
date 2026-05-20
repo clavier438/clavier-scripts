@@ -17,6 +17,8 @@
  *   http://localhost:8089/  포함되어 있어야 함.
  */
 
+import "./lib/freshness.mjs"
+
 import { createServer } from "http"
 import { exec } from "child_process"
 

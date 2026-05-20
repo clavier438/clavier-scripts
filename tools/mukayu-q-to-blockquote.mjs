@@ -4,6 +4,8 @@
 // (각 라인 앞 `> ` 박기, 빈 라인은 `>`)
 // Framer 측에서 blockquote text style 을 bodyImpact 와 동일하게 설정 → 큰 강조 본문 효과
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

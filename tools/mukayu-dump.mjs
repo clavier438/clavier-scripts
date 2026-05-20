@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 // mukayu-dump.mjs — 9.0.1_mukayu 전체 records dump (구조 분석용)
+
+import "./lib/freshness.mjs"
+
 import { writeFileSync } from 'fs';
 
 const BASE = 'appDyu0d6afRVeJiZ';

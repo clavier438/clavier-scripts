@@ -2,6 +2,8 @@
 // mukayu-fillgaps2.mjs — 사용자 스크린샷 기반 추가 데이터
 // News·Events 5 카테고리 + brand-awards section + Awards/디자이너/MICHELIN
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

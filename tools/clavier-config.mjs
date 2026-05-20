@@ -12,6 +12,8 @@
  *   clavier-config delete KEY       # 키 삭제 (Doppler + iCloud 미러)
  */
 
+import "./lib/freshness.mjs"
+
 import { execFileSync, spawnSync } from "child_process"
 
 const PROJECT = "clavier"

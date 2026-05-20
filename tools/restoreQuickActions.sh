@@ -7,6 +7,8 @@
 #   2. 터미널에서 실행:
 #      bash ~/Library/CloudStorage/GoogleDrive-*/My\ Drive/scripts/restore_quick_actions.sh
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"

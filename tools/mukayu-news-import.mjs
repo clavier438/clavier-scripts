@@ -2,6 +2,9 @@
 // mukayu-news-import.mjs — mukayu WP 99 게시물 → 9.0.1_mukayu 소식-list
 // title + ctaUrl + tags(category 매핑) 만. 본문 paragraph 옮기지 않음.
 // Scott Haas 책 시리즈 (cat=183) 는 skip — placeholder 가 시리즈 대표.
+
+import "./lib/freshness.mjs"
+
 import { readFileSync } from 'fs';
 
 const BASE = 'appDyu0d6afRVeJiZ';

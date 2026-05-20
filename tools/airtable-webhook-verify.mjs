@@ -21,6 +21,8 @@
  *   node tools/airtable-webhook-verify.mjs ping --url ... --secret ... --bad
  */
 
+import "./lib/freshness.mjs"
+
 import { createHmac, webcrypto } from "node:crypto"
 
 const argv = process.argv.slice(2)

@@ -2,6 +2,8 @@
 // mukayu-story-sections.mjs
 // section.role 에 'story' 옵션 추가 + 11 페이지 마다 {page}-story section 신설
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

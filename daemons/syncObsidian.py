@@ -23,6 +23,10 @@ syncObsidian.py — iCloud 폴더 → Google Drive API 직접 싱크
 @label com.clavier.watcherObsidian
 """
 
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.realpath(__file__)), "lib"))
+import freshness  # noqa: F401
+
 import argparse
 import hashlib
 import json

@@ -8,6 +8,8 @@
 #   -w <픽셀>          최대 너비 (기본: 1920, 0이면 원본 유지)
 #   -d <디렉토리>      출력 디렉토리 (기본: 원본 파일과 같은 위치)
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 set -euo pipefail
 
 # ── 기본값 ──────────────────────────────────────────────────

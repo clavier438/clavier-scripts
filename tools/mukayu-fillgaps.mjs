@@ -3,6 +3,8 @@
 // 빠진 navigation 페이지 (오퍼/소식/오시는길) + 푸터 items
 // 합계: tags 5 + pages 3 + sections 9 + items 16 = 33 records
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

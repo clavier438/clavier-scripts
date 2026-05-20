@@ -3,6 +3,8 @@
 // items.notes 의 ## H2 prefix → 별도 items.subName 필드로 역분리
 // 미니멀화 마이그레이션 (subName→notes 합침) 의 역방향
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

@@ -12,6 +12,8 @@
  *   node tools/closer-runner.mjs --dry  # dry-run
  */
 
+import "./lib/freshness.mjs"
+
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
 import { execSync } from "child_process"
 import { join } from "path"

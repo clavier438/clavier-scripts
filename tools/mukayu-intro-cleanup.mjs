@@ -2,6 +2,8 @@
 // mukayu-intro-cleanup.mjs
 // intro section 안 items 중 variantKey != q 인 것들을 같은 page 의 story section 으로 이전
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 const H = { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };

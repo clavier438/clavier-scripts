@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // mukayu-section-cta.mjs — 10 list section 의 ctaText 일괄 PATCH
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

@@ -17,6 +17,8 @@
 #   1 = Doppler 접근 실패
 #   2 = --check 모드에서 차이 발견
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 set -euo pipefail
 
 ICLOUD_DIR="/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts"

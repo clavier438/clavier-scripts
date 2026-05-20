@@ -24,6 +24,8 @@
  * 매일 03:45 LaunchAgent 자동 실행 (Closer 03:00 → Ray Dalio 03:30 → Sentinel 03:45).
  */
 
+import "./lib/freshness.mjs"
+
 import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "fs"
 import { execSync, spawnSync } from "child_process"
 import { join, relative, extname, basename } from "path"

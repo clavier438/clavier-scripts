@@ -5,6 +5,8 @@
 // 매칭 키 = name
 // PATCH = URL only (Airtable 가 자동 미러)
 
+import "./lib/freshness.mjs"
+
 const SRC = 'appdPTztnEtQeSHRQ';
 const TGT = 'appDyu0d6afRVeJiZ';
 const ITEMS = 'tblIrbig24H0axx5h';

@@ -11,6 +11,9 @@
 # 도메인 설정: tools/contextInject.json (OCP — 새 도메인 = JSON 편집만)
 
 # jq 없으면 silent exit (JSON 조립 불가)
+
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 command -v jq >/dev/null || exit 0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
