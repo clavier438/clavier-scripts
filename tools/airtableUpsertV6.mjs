@@ -82,9 +82,13 @@ for (const tableName of Object.keys(data)) {
   const matchKey = data[tableName].matchKey;
   const created = await ensureMatchKeyField(api, baseId, tSchema, matchKey, opts);
   console.log(`  ${tableName}.${matchKey}: ${created ? 'CREATED' : 'exists'}`);
+  // schema 에 가상 추가 (dry-run/live 모두 일관) — transformRow 가 matchKey 컬럼 인식하도록
+  if (created && !tSchema.fields.some(f => f.name === matchKey)) {
+    tSchema.fields.push({ name: matchKey, type: 'singleLineText' });
+  }
 }
 
-// matchKey field 추가 후 schema 재-fetch (새 field가 schema 에 반영되도록)
+// matchKey field 추가 후 schema 재-fetch (live 만, link target 등 정확하게)
 if (!opts.dryRun) {
   const refreshed = await api.getSchema(baseId);
   Object.assign(schema, analyzeSchema(refreshed));

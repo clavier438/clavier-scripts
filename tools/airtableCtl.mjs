@@ -196,6 +196,10 @@ async function runUpsert(api, baseId, dataDir, opts) {
     const matchKey = data[tableName].matchKey;
     const created = await ensureMatchKeyField(api, baseId, tSchema, matchKey, opts);
     console.log(`    ${cyan(tableName)}.${matchKey}: ${created ? green('CREATED') : gray('exists')}`);
+    // dry-run/live 모두: schema 에 가상 추가 — transformRow 가 matchKey 컬럼 인식
+    if (created && !tSchema.fields.some(f => f.name === matchKey)) {
+      tSchema.fields.push({ name: matchKey, type: 'singleLineText' });
+    }
   }
   if (!opts.dryRun) schema = analyzeSchema(await api.getSchema(baseId));
 
