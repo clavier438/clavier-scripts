@@ -19,6 +19,13 @@
 - 일괄 create/patch (records 10개씩 batch)
 - filterByFormula 로 특정 record 검색
 - typecast=true 로 singleSelect 자동 옵션 추가
+- ★ **typecast=true 로 multipleRecordLinks 자동 매칭** (2026-05-20 추가):
+  - link field 값으로 `["recXXX"]` (rec ID) 외에 **target 의 primary field 값 string** 도 가능
+  - 예: `{ tags: ["봄", "음식"] }` → Airtable 이 tags 테이블의 primary="봄", "음식" 인 record 와 자동 link
+  - **primary 가 formula 여도 동작** (formula output value 와 매칭)
+  - **단 매칭 안 되는 string → 자동으로 새 record 생성** (destructive 위험)
+  - 안전한 사용: 사전에 target record 존재 보장 또는 매핑 직접 확인 후 사용
+- ★ **자기 가정으로 "link 못 함" 같은 거짓 부정 단정 X** — 자주 잊혀짐 (V6 도구 개발 시 이 함정에 빠짐). 새 의문 발생 시 *이 파일* 또는 sandbox 시도 후 결론
 
 ### 스키마 (fields)
 - field **create** (`POST /meta/bases/{baseId}/tables/{tableId}/fields`)

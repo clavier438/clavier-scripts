@@ -268,6 +268,20 @@ async function runUpsert(api, baseId, dataDir, opts) {
     console.log(`    ${cyan(tableName)}: ${rows.length} upserted ${opts.dryRun ? gray('(dry)') : green('✓')}`);
   }
 
+  // link target 매핑 확장 — push 안 한 테이블 + push 한 테이블의 기존 record 까지
+  console.log(gray('  · link target 매핑 (기존 base record 포함)'));
+  for (const tableName of Object.keys(schema.tablesByName)) {
+    const tSchema = schema.tablesByName[tableName];
+    const matchKey = data[tableName]?.matchKey || config.matchKey;
+    if (!tSchema.fields.some(f => f.name === matchKey)) continue;
+    const all = await api.listRecords(baseId, tSchema.id);
+    allKeyToId[tableName] = allKeyToId[tableName] || {};
+    for (const r of all) {
+      const k = r.fields[matchKey];
+      if (k && !allKeyToId[tableName][k]) allKeyToId[tableName][k] = r.id;
+    }
+  }
+
   console.log(gray('  · Pass 2 — link resolve'));
   for (const [tableName, rows] of Object.entries(transformed)) {
     if (rows.length === 0) continue;
