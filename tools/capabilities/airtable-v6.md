@@ -34,8 +34,30 @@
 airtableCtl
 
 # Claude / script / cron = CLI
-AIRTABLE_PAT=... node ~/Library/.../scripts/tools/airtableUpsertV6.mjs <baseId> <data_dir> [--dry-run]
+AIRTABLE_PAT=... node ~/Library/.../scripts/tools/airtableUpsertV6.mjs <baseId> <data_dir> [--dry-run] [--extend]
 ```
+
+## 모드 (workerCtl push/stream 같은 두 모드 패턴)
+
+### strict (default) — 안전
+
+- 기존 base 의 record 만 update/create (matchKey 기준)
+- 새 field 생성 X (`slugKey` 자동 추가만 예외)
+- idempotency + destructive 안 함 보장
+
+### extend (`--extend` opt-in) — 새 field 자동 추가 허용
+
+- 위 + CSV 헤더에 base 에 없는 컬럼 있으면 → **`singleLineText` field 자동 생성**
+- log 에 `<table>.<field>: CREATED` 명확히 표시
+- 사용자가 명시적으로 켤 때만 동작
+
+### V6 가 다루지 않는 schema 변경 (web UI 또는 별도 작업)
+
+- link field (multipleRecordLinks) 추가
+- formula / lookup / rollup 식 디자인
+- primary field 변경
+- field type 변경 (text → number 등)
+- field / record 삭제
 
 ---
 

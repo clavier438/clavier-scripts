@@ -213,16 +213,16 @@ async function chooseDir(cache) {
 }
 
 // ─────────────────────────── 기능 함수
-async function actionDryRun(api, baseId, dataDir) {
-  console.log(`\n${bold('── DRY-RUN ──')}  ${dim(`base=${baseId} dir=${basename(dataDir)}`)}`);
-  await runUpsert(api, baseId, dataDir, { dryRun: true });
+async function actionDryRun(api, baseId, dataDir, extend) {
+  console.log(`\n${bold('── DRY-RUN ──')}  ${dim(`base=${baseId} dir=${basename(dataDir)} mode=${extend ? 'extend' : 'strict'}`)}`);
+  await runUpsert(api, baseId, dataDir, { dryRun: true, extend });
 }
 
-async function actionUpsert(api, baseId, dataDir) {
-  console.log(`\n${bold('── UPSERT (LIVE) ──')}  ${dim(`base=${baseId} dir=${basename(dataDir)}`)}`);
+async function actionUpsert(api, baseId, dataDir, extend) {
+  console.log(`\n${bold('── UPSERT (LIVE) ──')}  ${dim(`base=${baseId} dir=${basename(dataDir)} mode=${extend ? 'extend' : 'strict'}`)}`);
   const confirm = await ask(`${yellow('정말 실행할까? (y/N): ')}`);
   if (confirm.toLowerCase() !== 'y') { console.log(gray(`취소`)); return; }
-  await runUpsert(api, baseId, dataDir, { dryRun: false });
+  await runUpsert(api, baseId, dataDir, { dryRun: false, extend });
 }
 
 async function runUpsert(api, baseId, dataDir, opts) {
@@ -243,6 +243,32 @@ async function runUpsert(api, baseId, dataDir, opts) {
       tSchema.fields.push({ name: matchKey, type: 'singleLineText' });
     }
   }
+  // extend mode — CSV 헤더에 base 에 없는 컬럼 있으면 singleLineText 로 자동 생성
+  if (opts.extend) {
+    console.log(gray('  · extend mode — new fields'));
+    for (const [tableName, t] of Object.entries(data)) {
+      const tSchema = schema.tablesByName[tableName];
+      if (!tSchema) continue;
+      const existing = new Set(tSchema.fields.map(f => f.name));
+      const csvHeaders = new Set();
+      for (const row of t.rows) Object.keys(row).forEach(k => csvHeaders.add(k));
+      const newCols = [...csvHeaders].filter(h => !existing.has(h));
+      for (const col of newCols) {
+        if (opts.dryRun) {
+          console.log(`    ${cyan(tableName)}.${col}: ${yellow('would CREATE')} ${gray('(singleLineText, dry)')}`);
+          tSchema.fields.push({ name: col, type: 'singleLineText' });
+        } else {
+          await api.createField(baseId, tSchema.id, {
+            name: col, type: 'singleLineText',
+            description: 'Auto-created by V6 extend mode',
+          });
+          tSchema.fields.push({ name: col, type: 'singleLineText' });
+          console.log(`    ${cyan(tableName)}.${col}: ${green('CREATED')} (singleLineText)`);
+        }
+      }
+    }
+  }
+
   if (!opts.dryRun) schema = analyzeSchema(await api.getSchema(baseId));
 
   console.log(gray('  · transform CSV rows'));
@@ -266,6 +292,20 @@ async function runUpsert(api, baseId, dataDir, opts) {
     const keyToId = await pass1Upsert(api, baseId, tableName, tSchema, rows, matchKey, opts);
     allKeyToId[tableName] = keyToId;
     console.log(`    ${cyan(tableName)}: ${rows.length} upserted ${opts.dryRun ? gray('(dry)') : green('✓')}`);
+  }
+
+  // link target 매핑 확장 — base 의 기존 record 까지 포함 (sisoso items 가 mukayu group 에 link 같은 거)
+  console.log(gray('  · link target 매핑 (기존 base record 포함)'));
+  for (const tableName of Object.keys(schema.tablesByName)) {
+    const tSchema = schema.tablesByName[tableName];
+    const matchKey = data[tableName]?.matchKey || config.matchKey;
+    if (!tSchema.fields.some(f => f.name === matchKey)) continue;
+    const all = await api.listRecords(baseId, tSchema.id);
+    allKeyToId[tableName] = allKeyToId[tableName] || {};
+    for (const r of all) {
+      const k = r.fields[matchKey];
+      if (k && !allKeyToId[tableName][k]) allKeyToId[tableName][k] = r.id;
+    }
   }
 
   console.log(gray('  · Pass 2 — link resolve'));
@@ -306,25 +346,30 @@ async function main() {
   pushRecent(cache.dirs, dataDir);
   saveCache(cache);
 
+  let extend = false;  // mode: strict (default) ↔ extend
+
   while (true) {
     console.log(`\n${bold('━━━ airtableCtl ━━━')}`);
-    console.log(`  ${dim('base:')} ${cyan(baseId)}`);
-    console.log(`  ${dim('dir: ')} ${cyan(dataDir)}`);
+    console.log(`  ${dim('base: ')} ${cyan(baseId)}`);
+    console.log(`  ${dim('dir:  ')} ${cyan(dataDir)}`);
+    console.log(`  ${dim('mode: ')} ${extend ? yellow('extend (새 field 자동 생성)') : cyan('strict (안전)')}`);
     console.log(``);
     console.log(`  ${cyan('[1]')} dry-run preview`);
     console.log(`  ${cyan('[2]')} upsert 실행 ${yellow('(live)')}`);
     console.log(`  ${cyan('[3]')} base 상태 (record count)`);
     console.log(`  ${cyan('[4]')} base 변경`);
     console.log(`  ${cyan('[5]')} data_dir 변경`);
+    console.log(`  ${cyan('[m]')} mode toggle ${gray('(strict ↔ extend)')}`);
     console.log(`  ${cyan('[0]')} 종료`);
     const ans = await ask(`${gray('> ')}`);
     try {
       if (ans === '0' || ans === 'q' || ans === 'exit') break;
-      else if (ans === '1') await actionDryRun(api, baseId, dataDir);
-      else if (ans === '2') await actionUpsert(api, baseId, dataDir);
+      else if (ans === '1') await actionDryRun(api, baseId, dataDir, extend);
+      else if (ans === '2') await actionUpsert(api, baseId, dataDir, extend);
       else if (ans === '3') await actionStatus(api, baseId);
       else if (ans === '4') { const b = await chooseBase(cache); if (b) { baseId = b; pushRecent(cache.bases, b); saveCache(cache); } }
       else if (ans === '5') { const d = await chooseDir(cache); if (d) { dataDir = d; pushRecent(cache.dirs, d); saveCache(cache); } }
+      else if (ans === 'm') { extend = !extend; console.log(`  mode → ${extend ? yellow('extend') : cyan('strict')}`); }
       else console.log(red(`잘못된 선택: ${ans}`));
     } catch (e) {
       console.log(red(`\n에러: ${e.message}`));

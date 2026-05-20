@@ -62,8 +62,30 @@ const CAPABILITY_DOC = `# Airtable Upsert V6 — Claude 작업 컨텍스트
 airtableCtl
 
 # Claude / script / cron = CLI
-AIRTABLE_PAT=... node ~/Library/.../scripts/tools/airtableUpsertV6.mjs <baseId> <data_dir> [--dry-run]
+AIRTABLE_PAT=... node ~/Library/.../scripts/tools/airtableUpsertV6.mjs <baseId> <data_dir> [--dry-run] [--extend]
 \`\`\`
+
+## 모드 (workerCtl push/stream 같은 두 모드 패턴)
+
+### strict (default) — 안전
+
+- 기존 base 의 record 만 update/create (matchKey 기준)
+- 새 field 생성 X (\`slugKey\` 자동 추가만 예외)
+- idempotency + destructive 안 함 보장
+
+### extend (\`--extend\` opt-in) — 새 field 자동 추가 허용
+
+- 위 + CSV 헤더에 base 에 없는 컬럼 있으면 → **\`singleLineText\` field 자동 생성**
+- log 에 \`<table>.<field>: CREATED\` 명확히 표시
+- 사용자가 명시적으로 켤 때만 동작
+
+### V6 가 다루지 않는 schema 변경 (web UI 또는 별도 작업)
+
+- link field (multipleRecordLinks) 추가
+- formula / lookup / rollup 식 디자인
+- primary field 변경
+- field type 변경 (text → number 등)
+- field / record 삭제
 
 ---
 
@@ -167,17 +189,18 @@ V5 (\`airtableGenericV5_deleteMe.py\`) 는 폐기 — computed field create 한�
 
 // ─────────────────────────── CLI args
 const args = process.argv.slice(2);
-const opts = { dryRun: false };
+const opts = { dryRun: false, extend: false };
 const positional = [];
 for (const a of args) {
   if (a === '--dry-run') opts.dryRun = true;
+  else if (a === '--extend') opts.extend = true;
   else if (a === '--help' || a === '-h') { console.log(CAPABILITY_DOC); process.exit(0); }
   else if (a === '--print-capability') { process.stdout.write(CAPABILITY_DOC); process.exit(0); }
   else positional.push(a);
 }
 const [baseId, dataDir] = positional;
 if (!baseId || !dataDir) {
-  console.error(`Usage: AIRTABLE_PAT=... node airtableUpsertV6.mjs <base_id> <data_dir> [--dry-run]`);
+  console.error(`Usage: AIRTABLE_PAT=... node airtableUpsertV6.mjs <base_id> <data_dir> [--dry-run] [--extend]`);
   console.error(`       node airtableUpsertV6.mjs --help              (사용 규칙 출력)`);
   console.error(`       node airtableUpsertV6.mjs --print-capability  (capability doc — pre-commit 이 호출)`);
   process.exit(1);
@@ -190,7 +213,8 @@ if (!pat) { console.error('AIRTABLE_PAT environ not set'); process.exit(1); }
 // ─────────────────────────── main
 const api = createClient(pat);
 
-console.log(`base: ${baseId}  dataDir: ${dataDir}  ${opts.dryRun ? '[DRY-RUN]' : ''}`);
+const modeLabel = opts.extend ? '[EXTEND]' : '[strict]';
+console.log(`base: ${baseId}  dataDir: ${dataDir}  ${modeLabel}  ${opts.dryRun ? '[DRY-RUN]' : ''}`);
 
 // 1) load data + schema
 const { config, tables: data } = loadDataDir(dataDir);
@@ -213,7 +237,35 @@ for (const tableName of Object.keys(data)) {
   }
 }
 
-// matchKey field 추가 후 schema 재-fetch (live 만, link target 등 정확하게)
+// 2-bis) extend mode — CSV 헤더에 base 에 없는 컬럼 있으면 singleLineText 로 자동 생성
+if (opts.extend) {
+  console.log('\n── extend mode — new fields ──');
+  for (const [tableName, t] of Object.entries(data)) {
+    const tSchema = schema.tablesByName[tableName];
+    if (!tSchema) continue;
+    const existing = new Set(tSchema.fields.map(f => f.name));
+    const csvHeaders = new Set();
+    for (const row of t.rows) Object.keys(row).forEach(k => csvHeaders.add(k));
+    const newCols = [...csvHeaders].filter(h => !existing.has(h));
+    for (const col of newCols) {
+      if (opts.dryRun) {
+        console.log(`  [DRY] ${tableName}.${col}: would CREATE (singleLineText)`);
+        tSchema.fields.push({ name: col, type: 'singleLineText' });  // 가상 추가
+      } else {
+        await api.createField(baseId, tSchema.id, {
+          name: col,
+          type: 'singleLineText',
+          description: 'Auto-created by V6 extend mode',
+        });
+        tSchema.fields.push({ name: col, type: 'singleLineText' });
+        console.log(`  ${tableName}.${col}: CREATED (singleLineText)`);
+      }
+    }
+    if (newCols.length === 0) console.log(`  ${tableName}: 모든 CSV 컬럼이 base 에 이미 존재`);
+  }
+}
+
+// matchKey field + extend fields 추가 후 schema 재-fetch (live 만)
 if (!opts.dryRun) {
   const refreshed = await api.getSchema(baseId);
   Object.assign(schema, analyzeSchema(refreshed));
@@ -241,6 +293,23 @@ for (const [tableName, rows] of Object.entries(transformed)) {
   const keyToId = await pass1Upsert(api, baseId, tableName, tSchema, rows, matchKey, opts);
   allKeyToId[tableName] = keyToId;
   console.log(`  ${tableName}: ${rows.length} upserted`);
+}
+
+// 4-bis) link target 매핑 확장 — base 의 기존 record 까지 포함
+// (link 가 기존 base record 를 가리키는 케이스 = 가장 흔함. sisoso items 가 mukayu group 에 link 같은 거.)
+console.log('\n── link target 매핑 (기존 base record 포함) ──');
+for (const tableName of Object.keys(schema.tablesByName)) {
+  const tSchema = schema.tablesByName[tableName];
+  const matchKey = data[tableName]?.matchKey || config.matchKey;
+  if (!tSchema.fields.some(f => f.name === matchKey)) continue;
+  // fields 옵션 안 줌 — dry-run 시 가상 추가된 field 가 base 에 없어 422 회피
+  const all = await api.listRecords(baseId, tSchema.id);
+  allKeyToId[tableName] = allKeyToId[tableName] || {};
+  for (const r of all) {
+    const k = r.fields[matchKey];
+    if (k && !allKeyToId[tableName][k]) allKeyToId[tableName][k] = r.id;
+  }
+  console.log(`  ${tableName}: ${Object.keys(allKeyToId[tableName]).length} keys`);
 }
 
 // 5) Pass 2 — link resolution
