@@ -5,16 +5,17 @@
  *
  * Cloudflare Worker subrequest 한도 없음 — Mac 에서 한 번에 다 처리.
  *
- * 사용:
- *   doppler run --project clavier --config prd -- node ~/bin/airtable-backup
- *   doppler run --project clavier --config prd -- node ~/bin/airtable-backup --full
- *   doppler run --project clavier --config prd -- node ~/bin/airtable-backup --base appXXX
- *   doppler run --project clavier --config prd -- node ~/bin/airtable-backup --base appXXX --table section
- *   doppler run --project clavier --config prd -- node ~/bin/airtable-backup --table section
+ * 사용 (doppler 는 자동 wrap — AIRTABLE_PAT 없으면 self-respawn under doppler run):
+ *   airtable-backup
+ *   airtable-backup --full
+ *   airtable-backup --base appXXX
+ *   airtable-backup --base 'https://airtable.com/appXXX/tblYYY/viwZZZ'   # URL paste 도 됨
+ *   airtable-backup --base appXXX --table section
+ *   airtable-backup --table section
  *
  * 플래그:
  *   --full              skip 무시하고 강제 재기록 (기본은 변경된 파일만 write)
- *   --base <baseId>     특정 base 만 처리 (workspace 필터 우회)
+ *   --base <id|URL>     특정 base 만 처리. URL 통째 paste 가능 — 정규식으로 base id 추출.
  *   --table <id|name>   특정 table 만 처리 (--base 와 조합 가능. name 은 정확 일치)
  *
  * 증분 동작:
@@ -22,13 +23,42 @@
  *   동일하면 write skip → 파일 mtime 안 변함 → GDrive Desktop 이 안 올림.
  *
  * 출력 구조:
- *   $GDRIVE_PATH/{ws_label}/{base_id}_{base_name}/_meta.json
- *   $GDRIVE_PATH/{ws_label}/{base_id}_{base_name}/{table_id}_{table_name}.json
+ *   $GDRIVE_PATH/{ws_label}/{base_name}/_meta.json
+ *   $GDRIVE_PATH/{ws_label}/{base_name}/{table_id}_{table_name}.json
+ *   • 이름 충돌 시 자동 suffix: "{base_name} ({short_id})"
+ *   • 구 형식 "{base_id}_{base_name}" 폴더는 첫 run 에서 "{base_name}" 으로 자동 rename
  */
 
-import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from "fs"
+import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, renameSync } from "fs"
 import { join } from "path"
 import { homedir } from "os"
+import { fileURLToPath } from "url"
+import { spawnSync } from "child_process"
+
+// ── ANSI color ───────────────────────────────────────────────────────────
+const COLOR = { reset:"\x1b[0m", green:"\x1b[32m", yellow:"\x1b[33m", red:"\x1b[31m", dim:"\x1b[2m", bold:"\x1b[1m", cyan:"\x1b[36m" }
+const c = (col, s) => `${COLOR[col]}${s}${COLOR.reset}`
+
+// ── Doppler auto-wrap ────────────────────────────────────────────────────
+// AIRTABLE_PAT 없으면 자동으로 `doppler run --project clavier --config prd --` 으로
+// self-respawn. 이미 export 됐거나 한 번 wrap 거친 경우 skip.
+if (!process.env.AIRTABLE_PAT && !process.env.AIRTABLE_API_KEY && !process.env._AIRTABLE_BACKUP_WRAPPED) {
+    const scriptPath = fileURLToPath(import.meta.url)
+    const r = spawnSync(
+        "doppler",
+        ["run", "--project", "clavier", "--config", "prd", "--", "node", scriptPath, ...process.argv.slice(2)],
+        { stdio: "inherit", env: { ...process.env, _AIRTABLE_BACKUP_WRAPPED: "1" } },
+    )
+    if (r.error) {
+        if (r.error.code === "ENOENT") {
+            console.error(c("red", "✗ doppler 명령 못 찾음. 설치: brew install dopplerhq/cli/doppler"))
+        } else {
+            console.error(c("red", `✗ doppler 실행 실패: ${r.error.message}`))
+        }
+        process.exit(1)
+    }
+    process.exit(r.status ?? 1)
+}
 
 // ── CLI 파싱 ─────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2)
@@ -37,7 +67,19 @@ function argValue(name) {
     const i = argv.indexOf(name)
     return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : null
 }
-const FILTER_BASE = argValue("--base")
+// Airtable base id = "app" + 14 alphanumeric.
+function extractBaseId(input) {
+    if (!input) return null
+    const m = String(input).match(/app[A-Za-z0-9]{14}/)
+    return m ? m[0] : null
+}
+const FILTER_BASE_RAW = argValue("--base")
+const FILTER_BASE = FILTER_BASE_RAW ? extractBaseId(FILTER_BASE_RAW) : null
+if (FILTER_BASE_RAW && !FILTER_BASE) {
+    console.error(c("red", `✗ --base 값에서 base id 추출 실패: "${FILTER_BASE_RAW}"`))
+    console.error(c("dim", "   appXXXXXXXXXXXXXX (17자) 또는 base URL 을 넘기세요"))
+    process.exit(1)
+}
 const FILTER_TABLE = argValue("--table")
 
 // GoogleDrive 마운트 경로는 사용자·계정·Drive 앱 언어에 따라 달라 하드코딩 불가.
@@ -78,12 +120,10 @@ const TARGET_WS = {
 
 const PAT = process.env.AIRTABLE_PAT ?? process.env.AIRTABLE_API_KEY
 if (!PAT) {
-    console.error("✗ AIRTABLE_PAT 또는 AIRTABLE_API_KEY 환경변수 필요 (doppler run 으로 실행)")
+    // 도달하면 doppler config 에 AIRTABLE_PAT 자체가 없는 것
+    console.error(c("red", "✗ AIRTABLE_PAT 못 받음 — doppler config (project=clavier, config=prd) 에 AIRTABLE_PAT 있는지 확인"))
     process.exit(1)
 }
-
-const COLOR = { reset:"\x1b[0m", green:"\x1b[32m", yellow:"\x1b[33m", red:"\x1b[31m", dim:"\x1b[2m", bold:"\x1b[1m", cyan:"\x1b[36m" }
-const c = (col, s) => `${COLOR[col]}${s}${COLOR.reset}`
 
 async function airtable(path) {
     const r = await fetch(`https://api.airtable.com${path}`, {
@@ -130,6 +170,11 @@ function sanitize(s) {
     return String(s).replace(/[\\/:*?"<>|]/g, "_").trim().slice(0, 100) || "_"
 }
 
+function readMetaSafe(metaPath) {
+    if (!existsSync(metaPath)) return null
+    try { return JSON.parse(readFileSync(metaPath, "utf8")) } catch { return null }
+}
+
 // 증분 write — 기존 파일과 data 동일하면 skip (syncedAt 제외 비교).
 // return: true=wrote, false=skipped
 function writeIfChanged(filePath, data) {
@@ -150,26 +195,75 @@ function writeIfChanged(filePath, data) {
     return true
 }
 
+// ── 폴더 경로 결정 + 구 형식 마이그레이션 ────────────────────────────────
+// 출력 폴더명 = base 이름 그대로 (sanitize 만). 처리 로직:
+//  1) wsDir 안 "{base.id}_..." 구 형식 폴더 발견 → "{baseName}" 으로 자동 rename.
+//  2) 새 이름이 다른 base 차지 중 → "{baseName} ({shortId})" suffix 사용.
+function resolveBaseDir(wsDir, base) {
+    const desiredName = sanitize(base.name)
+    const desiredPath = join(wsDir, desiredName)
+    const shortId = base.id.slice(3, 9)  // "app" 뒤 6자
+
+    let entries = []
+    if (existsSync(wsDir)) {
+        try { entries = readdirSync(wsDir) } catch { /* ignore */ }
+    }
+
+    // 1) 구 형식 폴더 검색 ("{base.id}_..." prefix)
+    const oldPrefix = base.id + "_"
+    const oldFolder = entries.find(e => e.startsWith(oldPrefix))
+
+    if (oldFolder) {
+        const oldPath = join(wsDir, oldFolder)
+        if (oldPath === desiredPath) {
+            // 이미 새 이름과 동일 — 마이그 X
+            return { dir: desiredPath, migrated: null, collided: false }
+        }
+        if (!existsSync(desiredPath)) {
+            renameSync(oldPath, desiredPath)
+            return { dir: desiredPath, migrated: { from: oldFolder, to: desiredName }, collided: false }
+        }
+        // 새 이름 차지 중 → suffix 로 마이그
+        const suffixedName = `${desiredName} (${shortId})`
+        const suffixedPath = join(wsDir, suffixedName)
+        if (!existsSync(suffixedPath)) {
+            renameSync(oldPath, suffixedPath)
+            return { dir: suffixedPath, migrated: { from: oldFolder, to: suffixedName }, collided: true }
+        }
+        // suffix 도 차지 — 마이그 포기, 구 폴더 유지 (data loss 방지)
+        return { dir: oldPath, migrated: null, collided: false, warning: "구 형식 폴더 유지 (이름·suffix 모두 충돌)" }
+    }
+
+    // 2) 구 폴더 없음 → 새 이름 직사용. 단 desiredPath 가 다른 base 차지 중인지 확인.
+    if (existsSync(desiredPath)) {
+        const meta = readMetaSafe(join(desiredPath, "_meta.json"))
+        if (meta && meta.baseId && meta.baseId !== base.id) {
+            return { dir: join(wsDir, `${desiredName} (${shortId})`), migrated: null, collided: true }
+        }
+    }
+    return { dir: desiredPath, migrated: null, collided: false }
+}
+
 async function main() {
     const t0 = Date.now()
     console.log(c("bold", "\n=== airtable-backup ==="))
     console.log(c("dim", `target: ${GDRIVE_PATH}`))
     if (FORCE_FULL) console.log(c("yellow", "  --full: 모든 파일 강제 재기록"))
-    if (FILTER_BASE) console.log(c("cyan", `  --base: ${FILTER_BASE}`))
+    if (FILTER_BASE) {
+        const note = FILTER_BASE_RAW !== FILTER_BASE ? c("dim", ` (입력: ${FILTER_BASE_RAW.slice(0, 60)}${FILTER_BASE_RAW.length > 60 ? "…" : ""})`) : ""
+        console.log(c("cyan", `  --base: ${FILTER_BASE}`) + note)
+    }
     if (FILTER_TABLE) console.log(c("cyan", `  --table: ${FILTER_TABLE}`))
     console.log()
 
     let targets
 
     if (FILTER_BASE) {
-        // 특정 base 직접 조회 (workspace 검증 + meta 가져오기)
         console.log(`1. base ${FILTER_BASE} 직접 조회...`)
         try {
             const ws = await getBaseWs(FILTER_BASE)
             const wsLabel = TARGET_WS[ws] ?? "other"
-            // base name 은 listAllBases 에서만 옴 → 별도 조회 불가, base id 로 대체
             targets = [{ id: FILTER_BASE, name: FILTER_BASE, ws, wsLabel, permissionLevel: "?" }]
-            // listAllBases 한 번 호출해서 name 채우기 (FILTER_BASE 가 list 에 있으면)
             try {
                 const all = await listAllBases()
                 const found = all.find(b => b.id === FILTER_BASE)
@@ -206,13 +300,29 @@ async function main() {
     }
 
     console.log("3. 각 base 의 tables × records 가져와서 GDrive 마운트로 dump...")
-    let totalTables = 0, totalRecords = 0, wroteFiles = 0, skippedFiles = 0, errors = []
+    let totalTables = 0, totalRecords = 0, wroteFiles = 0, skippedFiles = 0, migrateCount = 0
+    const errors = []
 
     for (let i = 0; i < targets.length; i++) {
         const base = targets[i]
-        const baseDir = join(GDRIVE_PATH, base.wsLabel, sanitize(`${base.id}_${base.name}`))
+        const wsDir = join(GDRIVE_PATH, base.wsLabel)
         try {
+            mkdirSync(wsDir, { recursive: true })
+            const resolved = resolveBaseDir(wsDir, base)
+            const baseDir = resolved.dir
             mkdirSync(baseDir, { recursive: true })
+
+            if (resolved.migrated) {
+                migrateCount++
+                console.log(c("cyan", `   ↪ migrate: ${base.wsLabel}/${resolved.migrated.from} → ${resolved.migrated.to}`))
+            }
+            if (resolved.collided) {
+                console.log(c("yellow", `   ! ${base.wsLabel}/${base.name} — 이름 충돌, suffix: ${baseDir.split("/").pop()}`))
+            }
+            if (resolved.warning) {
+                console.log(c("yellow", `   ! ${base.wsLabel}/${base.name} — ${resolved.warning}`))
+            }
+
             const allTables = await fetchTables(base.id)
 
             // --table 필터: id 정확 일치 또는 name 정확 일치
@@ -277,6 +387,7 @@ async function main() {
     console.log(`  tables:  ${totalTables}`)
     console.log(`  records: ${totalRecords.toLocaleString()}`)
     console.log(`  write:   ${c("green", wroteFiles)} 변경 / ${c("dim", skippedFiles)} 동일 (skip)`)
+    if (migrateCount) console.log(`  migrate: ${c("cyan", migrateCount)} 폴더 rename (구 형식 → baseName)`)
     console.log(`  errors:  ${errors.length ? c("red", errors.length) : 0}`)
     console.log(`  소요:    ${dur}s`)
     console.log(`  경로:    ${GDRIVE_PATH}`)
