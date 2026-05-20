@@ -17,6 +17,8 @@
 #
 # 여러 URL: 순차 실행 (single-thread). 각 URL 사이 60초 sleep.
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 set -euo pipefail
 
 OCI="ubuntu@168.107.63.94"

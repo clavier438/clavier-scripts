@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // mukayu-symbol-catalog.mjs — 9.0.1 의 모든 텍스트 필드에서 특수문자 추출 + 빈도 + 컨텍스트 샘플
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

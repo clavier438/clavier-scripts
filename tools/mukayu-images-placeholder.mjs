@@ -3,6 +3,8 @@
 // items.img / items.gallery / section.img 비어있는 records 에 Lorem Picsum 자동 PATCH
 // seed=slug 로 record 마다 고정 이미지
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

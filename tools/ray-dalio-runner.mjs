@@ -22,6 +22,8 @@
  *   node tools/ray-dalio-runner.mjs --dry
  */
 
+import "./lib/freshness.mjs"
+
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
 import { execSync } from "child_process"
 import { join } from "path"

@@ -9,6 +9,8 @@
 #
 # 등록되지 않은 모드 = 사용법 안내
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 set -uo pipefail
 
 MODE="${1:-help}"

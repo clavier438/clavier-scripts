@@ -30,6 +30,8 @@
  * 종료코드: 0 정상, 1 사용자 입력 오류, 2 Airtable API 오류
  */
 
+import "./lib/freshness.mjs"
+
 const argv = process.argv.slice(2)
 const CMD = argv[0]
 const PAT = process.env.AIRTABLE_PAT ?? process.env.AIRTABLE_API_KEY

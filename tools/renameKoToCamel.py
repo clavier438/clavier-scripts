@@ -6,6 +6,10 @@ Usage:
   python3 rename_ko_to_camel.py --run    # actually rename files
 """
 
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.realpath(__file__)), "lib"))
+import freshness  # noqa: F401
+
 import re
 import sys
 from pathlib import Path

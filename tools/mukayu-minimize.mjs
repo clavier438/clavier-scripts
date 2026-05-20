@@ -4,6 +4,8 @@
 // 2) field rename: subName / notes2 / ctaText / layout_inverted? → deleteMe!_*
 // 3) section 은 이미 미니멀 (10 fields), 손대지 않음
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

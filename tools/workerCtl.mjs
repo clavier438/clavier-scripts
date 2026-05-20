@@ -9,6 +9,8 @@
  *   workerCtl <워커이름> <함수id>     # 바로 실행
  */
 
+import "./lib/freshness.mjs"
+
 import { createInterface } from "readline"
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
 import { execSync, spawnSync } from "child_process"

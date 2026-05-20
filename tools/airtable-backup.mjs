@@ -29,6 +29,8 @@
  *   • 구 형식 "{base_id}_{base_name}" 폴더는 첫 run 에서 "{base_name}" 으로 자동 rename
  */
 
+import "./lib/freshness.mjs"
+
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, renameSync } from "fs"
 import { join } from "path"
 import { homedir } from "os"

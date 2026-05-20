@@ -4,6 +4,8 @@
 // - mukayu base (appDyu0d6afRVeJiZ) items: 7개
 // - 디자인 베이스 (app9b7X9Tn2SXGuMW) strategy_notes: 12개
 
+import "./lib/freshness.mjs"
+
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');
 const H = { Authorization: `Bearer ${TOKEN}` };

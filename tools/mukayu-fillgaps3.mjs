@@ -3,6 +3,8 @@
 // FAX, RELAIS & CHATEAUX, Hara Design, Instagram, Facebook
 // AMORPHE ctaUrl 채움 + 저작권 텍스트 정정
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

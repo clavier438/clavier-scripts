@@ -3,6 +3,8 @@
 // brand-awards 5 + footer 7 + cuisine subitem 1 = 13 PATCH
 // name = 한글, subName = 영문 백업
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

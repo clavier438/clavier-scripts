@@ -14,6 +14,8 @@
 #   1 = 누락 발견 (어떤 문서가 모르고 있는지 출력)
 #   2 = 사용법 오류
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 set -euo pipefail
 
 # sibling-first repo 탐색 (environment-peer 모델, DECISIONS 2026-05-03)

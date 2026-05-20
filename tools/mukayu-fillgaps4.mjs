@@ -3,6 +3,8 @@
 // spa 17 + cuisine 시즌 매핑 + dinner subitems 3 + 객실-info 2 + 예약 신규
 // + spa-menu tags 3 + 기존 spa 3 items deleteMe! 마킹
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

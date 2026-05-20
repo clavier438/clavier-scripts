@@ -1,6 +1,8 @@
 #!/usr/bin/env zsh
 # pdf2img — PDF 파일을 이미지로 변환하는 스크립트
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 SCRIPT_NAME="${0:t}"
 
 usage() {

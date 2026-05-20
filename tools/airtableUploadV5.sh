@@ -10,6 +10,8 @@
 #   airtableUploadV5 ~/Downloads/sisoso_1.0.1 --base "새프로젝트" --workspace wspXXX
 #   cd ~/Downloads/sisoso_1.0.1 && airtableUploadV5   # 현재 폴더 사용
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 첫 인수가 --로 시작하지 않으면 폴더로 처리

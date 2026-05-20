@@ -7,6 +7,8 @@
 // 4. 코스의 메뉴 항목 = subitems (~80)
 // 5. season tags binding (spring/summer/autumn/winter — yearRound 는 tag 없음)
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

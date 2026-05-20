@@ -2,6 +2,8 @@
 // mukayu-revert-blockquote.mjs
 // 41 q records 의 notes 에서 라인 시작 `> ` / `>` prefix 제거 (revert)
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

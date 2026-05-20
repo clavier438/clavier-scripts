@@ -2,6 +2,8 @@
 // mukayu-unsplash-images.mjs
 // Unsplash API 로 카테고리별 료칸 톤 이미지 → items/sections 의 img/gallery PATCH (Picsum 덮어쓰기)
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 const UNSPLASH = process.env.UNSPLASH_ACCESS_KEY;

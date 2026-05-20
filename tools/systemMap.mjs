@@ -14,6 +14,8 @@
 //
 // macOS 전용. 다른 peer (OCI 등) 에서는 "N/A" 만 출력한다 (거짓말하지 않음).
 
+import "./lib/freshness.mjs"
+
 import { execSync } from "node:child_process";
 import { readdirSync, existsSync } from "node:fs";
 import { homedir, platform } from "node:os";

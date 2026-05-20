@@ -12,6 +12,8 @@
 #   doppler-sync-wrangler --dry-run      # 무엇이 sync될지만 출력
 #   doppler-sync-wrangler <worker-name>  # 특정 워커만 (예: mukayu, sisoso)
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 set -euo pipefail
 
 DRY_RUN=0

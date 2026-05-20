@@ -6,6 +6,8 @@
 # 3) 비정상 (revoked/만료 임박/24h 안 사용 안 됨) 시 ⚠️ 표시
 # 토큰 list 자체는 Cloudflare 대시보드 직접 확인 (Account-level 토큰은 API list 미제공)
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 set -e
 
 OUT_DIR="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/briefings"

@@ -1,6 +1,8 @@
 #!/bin/bash
 # PDF to JPEG converter script for macOS Quick Action
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 for pdf_file in "$@"; do
     if [[ "${pdf_file}" == *.pdf ]] || [[ "${pdf_file}" == *.PDF ]]; then
         # Get the directory and filename without extension

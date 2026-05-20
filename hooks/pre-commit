@@ -1,15 +1,65 @@
 #!/usr/bin/env bash
-# pre-commit — main 직접 커밋 차단.
+# pre-commit — SSOT 강제 장치 두 개.
 #
-# SSOT = origin/main. main 은 PR 로만 바뀐다. 로컬 main 에 커밋이 쌓이면
-# branch protection 때문에 push 도 못 하고, 그게 drift 의 시작점이 된다.
-# 작업은 항상 브랜치에서 → PR 로 보이고, 숨은 브랜치가 생기지 않는다.
+# (1) main 직접 커밋 차단.
+#     SSOT = origin/main. main 은 PR 로만 바뀐다. 로컬 main 에 커밋이 쌓이면
+#     branch protection 때문에 push 도 못 하고, drift 의 시작점이 된다.
+#     작업은 항상 브랜치에서 → PR 로 보이고, 숨은 브랜치가 생기지 않는다.
+#
+# (2) freshness import 강제.
+#     모든 tools/*.{mjs,sh,py} 와 daemons/*.{sh,py} 는 첫 50 줄 안에
+#     tools/lib/freshness.{mjs,sh,py} 참조가 있어야 한다. 없으면 commit 차단.
+#     → "freshness 체크 없는 tool" 이 repo 에 존재할 수 없음 →
+#       모든 invocation 은 origin/main 동기화 후에만 실행됨.
 
+# ── (1) main 직접 커밋 차단 ──────────────────────────────────────────────
 branch="$(git symbolic-ref --short HEAD 2>/dev/null)"
 if [ "$branch" = "main" ]; then
     echo "" >&2
     echo "‼️  main 에 직접 커밋할 수 없습니다." >&2
     echo "    작업 브랜치를 만드세요:  git switch -c <작업이름>" >&2
+    echo "" >&2
+    exit 1
+fi
+
+# ── (2) freshness import 강제 ────────────────────────────────────────────
+violations=()
+while IFS= read -r f; do
+    [ -z "$f" ] && continue
+    [ ! -f "$f" ] && continue  # 삭제된 파일 skip
+
+    # 라이브러리/hook 자체는 제외 (검사 대상이 아니라 검사를 *하는* 쪽)
+    case "$f" in
+        tools/lib/*) continue ;;
+        hooks/*) continue ;;
+    esac
+
+    # 확장자별로 freshness 참조 키워드 확인
+    case "$f" in
+        tools/*.mjs|tools/*.js)
+            head -50 "$f" | grep -qE 'lib/freshness\.mjs' \
+                || violations+=("$f  →  import \"./lib/freshness.mjs\"")
+            ;;
+        tools/*.sh|daemons/*.sh)
+            head -50 "$f" | grep -qE 'lib/freshness\.sh' \
+                || violations+=("$f  →  . \"\$(dirname …)/lib/freshness.sh\" 형식")
+            ;;
+        tools/*.py|daemons/*.py)
+            head -50 "$f" | grep -qE 'lib/freshness|import freshness' \
+                || violations+=("$f  →  sys.path.insert + import freshness")
+            ;;
+    esac
+done < <(git diff --cached --name-only --diff-filter=AM)
+
+if [ ${#violations[@]} -gt 0 ]; then
+    echo "" >&2
+    echo "‼️  freshness 체크 누락 — 아래 파일은 첫 50 줄 안에 freshness import 가 있어야 합니다:" >&2
+    echo "" >&2
+    for v in "${violations[@]}"; do
+        echo "    $v" >&2
+    done
+    echo "" >&2
+    echo "  → 자세한 형식: tools/lib/freshness.{mjs,sh,py} 헤더 참조" >&2
     echo "" >&2
     exit 1
 fi

@@ -1,6 +1,8 @@
 #!/usr/bin/env zsh
 # scripts — eza 스타일 grid 명령어 카탈로그 (빠름, 색별, 자동 컬럼)
 
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+
 setopt nullglob
 
 SRC="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/0/scripts"

@@ -2,6 +2,8 @@
 // mukayu-fix-links.mjs — atCreate 후 누락된 items.tags link 4개 수정
 // (slug formula 가 띄어쓰기 → 하이픈으로 split 해서 lookup 키 mismatch 였음)
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

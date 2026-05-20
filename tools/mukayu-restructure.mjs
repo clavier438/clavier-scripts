@@ -4,6 +4,8 @@
 // 2) 요리 정리 (요리 예시 4 + 디너 업그레이드 3 → deleteMe!, 1 남김)
 // 3) 스파 위계 재구성 (17 평등 → 3 카테고리 + 17 subitems)
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

@@ -31,6 +31,8 @@
  *   AIRTABLE_BASE_ID   configure 기본 base (기본: appIrjwfcGeVMI9xb sisoso)
  */
 
+import "./lib/freshness.mjs"
+
 import { execSync, spawn } from "child_process"
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "fs"
 import { dirname, join } from "path"

@@ -2,6 +2,8 @@
 // mukayu-section-subname-restore.mjs
 // section.notes 의 ## H2 prefix → 새 section.subName 분리
 
+import "./lib/freshness.mjs"
+
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
 if (!TOKEN) throw new Error('AIRTABLE_PAT not set');

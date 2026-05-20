@@ -21,6 +21,10 @@ Usage:
   python ~/Library/Mobile\\ Documents/com~apple~CloudDocs/0/scripts/airtableGenericV5.py
 """
 
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.realpath(__file__)), "lib"))
+import freshness  # noqa: F401
+
 import os, sys, json, time, csv, re, pathlib, argparse
 import requests
 

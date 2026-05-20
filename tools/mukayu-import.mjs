@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // mukayu-import.mjs — 9.0.0_mukayuPure CSV → Airtable appDyu0d6afRVeJiZ (9.0.1_mukayu)
 // 5 테이블 (pages / section / tags / items / subitems). stories 사용 안 함.
+
+import "./lib/freshness.mjs"
+
 import { readFileSync } from 'fs';
 
 const BASE_ID = 'appDyu0d6afRVeJiZ';
