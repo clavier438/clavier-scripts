@@ -110,14 +110,56 @@ ${cyan('흐름:')}
      [5] data_dir 변경
      [0] 종료
 
-${cyan('data_dir 형식:')}
-  <dir>/
-    upsert.config.json  (선택)  — matchKey 등 override
-    <table>.csv          — 테이블별 CSV. 파일명 stem = 테이블명
+${cyan('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
+${bold('  data_dir 프로토콜 — 엄격히 지켜야 idempotent 보장')}
+${cyan('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
 
-${cyan('CSV 헤더:')}
-  matchKey 컬럼 필수 (default: slugKey)
-  link 컬럼 = target 테이블의 matchKey 값들, "|" 구분
+${cyan('1. 디렉토리 구조 (한 base = 한 폴더)')}
+
+  <your-dir>/
+    upsert.config.json    (선택, 없어도 default 안전)
+    topics.csv             ← 파일명 stem = base 의 테이블명 (정확히 일치)
+    tags.csv               ← 테이블별 1개씩
+    items.csv
+    subitems.csv
+
+${cyan('2. CSV 헤더 — base 의 필드명 그대로')}
+
+  base 에 "name" 컬럼이면 CSV 헤더도 "name".
+  base 의 *모든* 컬럼 다 박을 필요 X — 채울 컬럼만.
+  ${yellow('slugKey 컬럼은 반드시 포함 (영문 stable key)')}
+
+${cyan('3. 컬럼별 셀 값 규칙')}
+
+  필드 타입                       | CSV 셀 값
+  ──────────────────────────────|─────────────────────────────
+  텍스트/숫자/날짜/URL/이메일 등 | 값 그대로
+  singleSelect                  | 옵션 이름 그대로 ("content")
+  multipleSelects               | "|" 구분 ("a|b|c")
+  checkbox                      | "true" / "false"
+  ${yellow('multipleRecordLinks (link)')}    | ${yellow('target 테이블의 slugKey 들, "|" 구분')}
+  attachments                   | URL 들, "|" 구분
+  formula / lookup / autoNumber / rollup | ${gray('박지 마 (있어도 자동 skip)')}
+  빈 셀                         | 변경 안 함 (기존 값 유지)
+
+${cyan('4. matchKey (slugKey) — 동일 input → 동일 결과의 핵심')}
+
+  • 영문 stable key. 절대 변하지 X (예: "room_sea_low", "tag_food")
+  • 같은 slugKey 면 ${green('update')}, 없으면 ${green('create')}
+  • base 에 slugKey field 없으면 V6 가 자동 생성 (한 번만)
+
+${cyan('5. link 컬럼 예시 (items.csv 의 topic + tags)')}
+
+  ${gray('slugKey,name,topic,tags')}
+  ${gray('room_sea_low,바다 숨소리가 가까운 방,rooms,season-spring|theme-sea')}
+                                ${yellow('↑ target=topics')}      ${yellow('↑ target=tags, 다중 = "|"')}
+
+${cyan('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
+
+${cyan('한 줄 요약:')}
+  "base 컬럼 그대로 헤더에 박고 행만 채움"
+   + slugKey 컬럼 필수
+   + link 컬럼은 target slugKey, "|" 구분
 `);
   process.exit(0);
 }

@@ -8,17 +8,28 @@
 //   AIRTABLE_PAT=... node airtableUpsertV6.mjs <base_id> <data_dir> [--dry-run]
 //   AIRTABLE_PAT=... node airtableUpsertV6.mjs appXXX ~/Downloads/sisoso_data
 //
-// data_dir 구조:
+// data_dir 프로토콜 (엄격히 — idempotent 보장의 근거):
 //   data_dir/
-//     upsert.config.json  (선택) — matchKey/linkSeparator/tables override
-//     <table>.csv          — 테이블별 CSV. 파일명 stem = base 의 테이블명
+//     upsert.config.json   (선택) — matchKey/linkSeparator/tables override
+//     <table>.csv           — 파일명 stem = base 의 테이블명 (정확히 일치)
 //
-// CSV 형식:
-//   첫 행 = 헤더. base 필드명 그대로
-//   matchKey 컬럼 필수 (default: slugKey, 영문 stable key)
-//   link 컬럼 = target table 의 matchKey 값들, 파이프 "|" 구분
-//   빈 셀 = 변경 안 함
-//   formula/lookup/autoNumber/rollup 컬럼은 CSV에 있어도 자동 skip
+// CSV 헤더 — base 의 필드명 그대로:
+//   base 에 "name" 컬럼이면 CSV 헤더도 "name". 모든 컬럼 다 박을 필요 X — 채울 것만.
+//   slugKey 컬럼은 반드시 포함 (영문 stable key).
+//
+// 컬럼별 셀 값 규칙:
+//   텍스트/숫자/날짜/URL/이메일 등          → 값 그대로
+//   singleSelect                          → 옵션 이름 그대로
+//   multipleSelects                        → "|" 구분
+//   checkbox                              → "true" / "false"
+//   multipleRecordLinks (link)            → target 테이블의 slugKey 들, "|" 구분
+//   attachments                           → URL 들, "|" 구분
+//   formula/lookup/autoNumber/rollup      → 박지 마 (있어도 자동 skip)
+//   빈 셀                                  → 변경 안 함 (기존 값 유지)
+//
+// matchKey (slugKey) — 동일 input → 동일 결과의 핵심:
+//   영문 stable key, 절대 변하지 X. 같은 값이면 update, 없으면 create.
+//   base 에 slugKey field 없으면 V6 가 자동 생성 (한 번만).
 //
 // 동작 (idempotent — 매번 같은 input = 같은 base 상태):
 //   1. base 스키마 fetch (필드 타입, link target 자동 추론)
