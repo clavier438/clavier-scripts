@@ -243,6 +243,36 @@ for (const [tableName, rows] of Object.entries(transformed)) {
   console.log(`  ${tableName}: ${rows.length} upserted`);
 }
 
+// 4-bis) link target 매핑 확장 — push 안 한 테이블 + push 한 테이블의 기존 record 까지
+// (link 가 base 의 기존 record 를 가리키는 경우 — 가장 흔한 케이스)
+console.log('\n── link target 매핑 (기존 base record 포함) ──');
+for (const tableName of Object.keys(schema.tablesByName)) {
+  const tSchema = schema.tablesByName[tableName];
+  const matchKey = data[tableName]?.matchKey || config.matchKey;
+  // matchKey field 가 없으면 link target 으로 사용 불가 — skip
+  if (!tSchema.fields.some(f => f.name === matchKey)) continue;
+  if (opts.dryRun) {
+    // dry-run 일 때도 기존 base record 까지 fetch (link plan 정확하게)
+    // fields 옵션 안 줌 — dry-run 시 가상 추가된 field 라 422 회피
+  const all = await api.listRecords(baseId, tSchema.id);
+    allKeyToId[tableName] = allKeyToId[tableName] || {};
+    for (const r of all) {
+      const k = r.fields[matchKey];
+      if (k && !allKeyToId[tableName][k]) allKeyToId[tableName][k] = r.id;
+    }
+    console.log(`  ${tableName}: ${Object.keys(allKeyToId[tableName]).length} keys (with existing base records)`);
+    continue;
+  }
+  // fields 옵션 안 줌 — dry-run 시 가상 추가된 field 라 422 회피
+  const all = await api.listRecords(baseId, tSchema.id);
+  allKeyToId[tableName] = allKeyToId[tableName] || {};
+  for (const r of all) {
+    const k = r.fields[matchKey];
+    if (k && !allKeyToId[tableName][k]) allKeyToId[tableName][k] = r.id;
+  }
+  console.log(`  ${tableName}: ${Object.keys(allKeyToId[tableName]).length} keys`);
+}
+
 // 5) Pass 2 — link resolution
 console.log('\n── Pass 2: link resolve + patch ──');
 for (const [tableName, rows] of Object.entries(transformed)) {
