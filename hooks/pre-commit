@@ -63,3 +63,24 @@ if [ ${#violations[@]} -gt 0 ]; then
     echo "" >&2
     exit 1
 fi
+
+# ── (3) capability docs 자동 generate ────────────────────────────────────
+#       도구 코드 안의 CAPABILITY_DOC const → capabilities/<name>.md 로 자동 sync.
+#       도구 = 진실 소스. capability doc = derived. drift 자체가 불가능하게.
+#
+#       generator 룰: tools/<name>.mjs 변경 시 → tools/<name> --print-capability
+#                     → tools/capabilities/<doc-name>.md 로 write + git add.
+declare -A CAPABILITY_GENERATORS=(
+    ["tools/airtableUpsertV6.mjs"]="tools/capabilities/airtable-v6.md"
+)
+for src in "${!CAPABILITY_GENERATORS[@]}"; do
+    if git diff --cached --name-only --diff-filter=AM | grep -qF "$src"; then
+        dst="${CAPABILITY_GENERATORS[$src]}"
+        if [ -x "$src" ] || [ -f "$src" ]; then
+            # CAPABILITY_LOCAL_DEV=1 로 도구 자체의 freshness 호출 우회
+            CLAVIER_LOCAL_DEV=1 node "$src" --print-capability > "$dst" 2>/dev/null
+            git add "$dst"
+            echo "  ⚙  $dst regenerated from $src" >&2
+        fi
+    fi
+done
