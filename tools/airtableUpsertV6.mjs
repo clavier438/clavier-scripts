@@ -132,20 +132,19 @@ room_sea_low,바다 숨소리가 가까운 방,rooms,season-spring|theme-sea
 
 ---
 
-## Claude 가 콘텐츠 생성할 때 (★)
+## 콘텐츠 작업 흐름 → 별도 doc 참조 (★)
 
-사용자가 콘텐츠 만들어달라 요청 시 — *직접 V6 형식 CSV 로 출력*:
+콘텐츠 작업 (자료조사 → 카피 → CSV → push) 의 워크플로우와 카피 작성 원칙은 V6 도구의 책임 밖. 자주 진화하는 가이드 — 별도 capability doc 에 박혀 있음:
 
-1. **자료조사 + 컨셉** (대화로 협의)
-2. **콘텐츠 생성** — 처음부터 V6 형식 CSV:
-   - 각 record 의 \`slugKey\` 영문 stable key 부여
-   - link 컬럼 = target table 의 slugKey 들, \`|\` 구분
-   - formula/lookup/autoNumber/rollup 컬럼은 빼고
-3. **data_dir 에 저장** — \`<table>.csv\` 파일별
-4. **V6 push** — \`--dry-run\` 으로 확인 → 실제 실행
-5. **결과 보고**
+**`tools/capabilities/airtable-content-workflow.md`**
+- 콘텐츠 워크플로우 8단계 (자료조사부터 push 까지)
+- 카피 작성 원칙 (공통/차별, 본질/수단, 메뉴판 패턴 등)
+- contextInject 통해 자동 주입됨 (콘텐츠/호텔/브랜드 키워드)
 
-**❌ 사나(외부 LLM) 거치지 마**. 사나 무한 토큰 워크플로우는 폐기 (잘림 + 4-step 마찰).
+**raw URL** (사나/외부 LLM 참조용):
+`https://raw.githubusercontent.com/clavier438/clavier-scripts/main/tools/capabilities/airtable-content-workflow.md`
+
+V6 = push 도구 (안정). 워크플로우 = 별도 doc (진화). 둘 다 같은 git repo 안.
 
 ---
 
