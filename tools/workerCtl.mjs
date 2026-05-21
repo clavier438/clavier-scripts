@@ -820,6 +820,20 @@ function saveSnapshot(workerName, status) {
     return file
 }
 
+// 워커의 sync mode 값 → 메뉴 헤더용 라벨. 3-mode 모델 (push-full / push-delta / live-delta) +
+// 옛 워커가 노출하는 webhookMode 두 값(full / stage1-only) 도 호환 처리.
+// 알 수 없는 값이거나 null 이면 null 반환 — 호출부에서 라인 자체를 생략.
+function syncModeLabel(mode) {
+    switch (mode) {
+        case "push-full":   return `${cyan("push-full")} ${dim("(기본 · push 시 전체 재조회, webhook 무동작)")}`
+        case "push-delta":  return `${yellow("push-delta")} ${dim("(push 시 webhook 변경분만)")}`
+        case "live-delta":  return `${green("live-delta")} ${dim("(webhook → Framer 까지 즉시 자동)")}`
+        case "full":        return `${green("full")} ${dim("(옛 webhook 자동)")}`
+        case "stage1-only": return `${gray("stage1-only")} ${dim("(옛 수동)")}`
+        default: return mode ? gray(`알 수 없음: ${mode}`) : null
+    }
+}
+
 function timeAgo(iso) {
     if (!iso) return "—"
     const diff = Date.now() - new Date(iso).getTime()
@@ -1410,7 +1424,21 @@ async function pickAndRun(worker, caps, directFnId) {
         console.log()
     } else {
         const rl = createInterface({ input: process.stdin, output: process.stdout })
+
+        // 메뉴 진입할 때마다 현재 sync mode 동적 조회 — 함수 실행 후 복귀했을 때도 최신 상태 반영.
+        // /sync/mode 는 가벼운 엔드포인트라 매 사이클 호출해도 부담 없음. 실패하면 라인만 생략.
+        let modeLine = null
+        try {
+            const res = await fetch(`${worker.url}/sync/mode`, { signal: AbortSignal.timeout(3_000) })
+            if (res.ok) {
+                const { mode } = await res.json()
+                const label = syncModeLabel(mode)
+                if (label) modeLine = `  ${dim("현재 모드:")} ${label}`
+            }
+        } catch { /* 워커 다운/타임아웃 — 메뉴는 정상 표시, 모드 라인만 생략 */ }
+
         console.log(bold(`  실행할 기능 (${caps.configured ? green("설정됨") : red("미설정")}):`) )
+        if (modeLine) console.log(modeLine)
         console.log()
         const EXIT_ITEM = { id: "__exit__", label: "종료" }
         fn = await selectFromList(
