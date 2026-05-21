@@ -609,11 +609,10 @@ function syncBriefLines(status, pushStatus) {
     const sync = status.sync ?? {}
     const lines = []
 
-    // 동기화 모드
-    const modeText = status.webhookMode === "full"
-        ? `${green("🟢 자동 (full)")} ${dim("— Airtable 변경 시 Framer 까지 자동 반영")}`
-        : `${gray("⚪ 수동 (stage1-only)")} ${dim("— 변경 시 D1 까지만, Framer 푸시는 수동")}`
-    lines.push(`  ${dim("동기화 모드:")} ${modeText}`)
+    // 동기화 모드 — syncModeLabel 이 3-mode (push-full/push-delta/live-delta) +
+    // 옛 webhookMode (full/stage1-only) 모두 처리. 메뉴 헤더와 동일한 라벨 SSOT.
+    const modeLabel = syncModeLabel(status.syncMode ?? status.webhookMode)
+    if (modeLabel) lines.push(`  ${dim("동기화 모드:")} ${modeLabel}`)
 
     // ── 파이프라인 3단계 — 각 단계 마지막 발생 ──
     // 1) Airtable 변경 감지 (webhook 수신)
@@ -643,8 +642,13 @@ function syncBriefLines(status, pushStatus) {
         lines.push(`  ${red("❌ 에러:")} ${red(s.length > 160 ? s.slice(0, 159) + "…" : s)}`)
     }
 
-    // full 모드는 webhook 이 살아있어야 의미 — 7일 넘으면 자동 감시가 멈췄을 수 있음.
-    if (status.webhookMode === "full") {
+    // webhook 의존 모드 — 7일 넘게 갱신 없으면 자동 감시가 멈췄을 수 있음.
+    //   push-delta : payload 로 변경분 cursor 기록 → webhook 필수
+    //   live-delta : webhook → Framer 즉시 → webhook 필수
+    //   full       : 옛 자동 모드 (호환)
+    //   push-full / stage1-only : webhook 무동작 → 체크 스킵
+    const mode = status.syncMode ?? status.webhookMode
+    if (mode === "push-delta" || mode === "live-delta" || mode === "full") {
         const wr = sync.webhookRefreshed?.at ?? (typeof sync.webhookRefreshed === "string" ? sync.webhookRefreshed : null)
         const stale = !wr || (Date.now() - new Date(wr).getTime()) > 7 * 24 * 3600 * 1000
         if (stale) lines.push(`  ${yellow(`⚠ webhook 갱신 ${wr ? timeAgo(wr) : "기록 없음"} — 자동 감시가 멈췄을 수 있음`)}`)
