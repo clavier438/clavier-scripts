@@ -64,6 +64,33 @@ if (!process.env.AIRTABLE_PAT && !process.env.AIRTABLE_API_KEY && !process.env._
 
 // ── CLI 파싱 ─────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2)
+
+if (argv.includes("--help") || argv.includes("-h")) {
+    console.log(`airtable-backup — Airtable claude/env 워크스페이스 base → 로컬 JSON dump
+
+사용:
+  airtable-backup                                    # 전체 base 백업 (변경된 것만 write)
+  airtable-backup --full                             # 전체 base 강제 재기록
+  airtable-backup --base appXXX                      # 특정 base 만
+  airtable-backup --base 'https://airtable.com/...'  # URL paste 도 OK (base id 추출)
+  airtable-backup --base appXXX --table tags         # 특정 base + 특정 table
+  airtable-backup --table section                    # 모든 base 의 특정 table
+
+플래그:
+  --full              skip 무시하고 강제 재기록 (기본은 변경된 파일만)
+  --base <id|URL>     특정 base 만 (URL paste 가능 — 정규식으로 base id 추출)
+  --table <id|name>   특정 table 만 (--base 와 조합 가능, name 은 정확 일치)
+  --help, -h          이 도움말
+
+증분 동작:
+  각 파일 write 전 디스크 기존 파일과 data 비교 (syncedAt 제외).
+  동일하면 write skip → 파일 mtime 안 변함 → GDrive Desktop 이 안 올림.
+
+Doppler:
+  AIRTABLE_PAT 없으면 'doppler run --project clavier --config prd' 로 self-respawn.`)
+    process.exit(0)
+}
+
 const FORCE_FULL = argv.includes("--full")
 function argValue(name) {
     const i = argv.indexOf(name)
