@@ -609,11 +609,10 @@ function syncBriefLines(status, pushStatus) {
     const sync = status.sync ?? {}
     const lines = []
 
-    // 동기화 모드
-    const modeText = status.webhookMode === "full"
-        ? `${green("🟢 자동 (full)")} ${dim("— Airtable 변경 시 Framer 까지 자동 반영")}`
-        : `${gray("⚪ 수동 (stage1-only)")} ${dim("— 변경 시 D1 까지만, Framer 푸시는 수동")}`
-    lines.push(`  ${dim("동기화 모드:")} ${modeText}`)
+    // 동기화 모드 — syncModeLabel 이 3-mode (push-full/push-delta/live-delta) +
+    // 옛 webhookMode (full/stage1-only) 모두 처리. 메뉴 헤더와 동일한 라벨 SSOT.
+    const modeLabel = syncModeLabel(status.syncMode ?? status.webhookMode)
+    if (modeLabel) lines.push(`  ${dim("동기화 모드:")} ${modeLabel}`)
 
     // ── 파이프라인 3단계 — 각 단계 마지막 발생 ──
     // 1) Airtable 변경 감지 (webhook 수신)
@@ -643,8 +642,13 @@ function syncBriefLines(status, pushStatus) {
         lines.push(`  ${red("❌ 에러:")} ${red(s.length > 160 ? s.slice(0, 159) + "…" : s)}`)
     }
 
-    // full 모드는 webhook 이 살아있어야 의미 — 7일 넘으면 자동 감시가 멈췄을 수 있음.
-    if (status.webhookMode === "full") {
+    // webhook 의존 모드 — 7일 넘게 갱신 없으면 자동 감시가 멈췄을 수 있음.
+    //   push-delta : payload 로 변경분 cursor 기록 → webhook 필수
+    //   live-delta : webhook → Framer 즉시 → webhook 필수
+    //   full       : 옛 자동 모드 (호환)
+    //   push-full / stage1-only : webhook 무동작 → 체크 스킵
+    const mode = status.syncMode ?? status.webhookMode
+    if (mode === "push-delta" || mode === "live-delta" || mode === "full") {
         const wr = sync.webhookRefreshed?.at ?? (typeof sync.webhookRefreshed === "string" ? sync.webhookRefreshed : null)
         const stale = !wr || (Date.now() - new Date(wr).getTime()) > 7 * 24 * 3600 * 1000
         if (stale) lines.push(`  ${yellow(`⚠ webhook 갱신 ${wr ? timeAgo(wr) : "기록 없음"} — 자동 감시가 멈췄을 수 있음`)}`)
@@ -818,6 +822,20 @@ function saveSnapshot(workerName, status) {
     const snapshot = { ...status, snapshotAt: new Date().toISOString() }
     writeFileSync(file, JSON.stringify(snapshot, null, 2))
     return file
+}
+
+// 워커의 sync mode 값 → 메뉴 헤더용 라벨. 3-mode 모델 (push-full / push-delta / live-delta) +
+// 옛 워커가 노출하는 webhookMode 두 값(full / stage1-only) 도 호환 처리.
+// 알 수 없는 값이거나 null 이면 null 반환 — 호출부에서 라인 자체를 생략.
+function syncModeLabel(mode) {
+    switch (mode) {
+        case "push-full":   return `${cyan("push-full")} ${dim("(기본 · push 시 전체 재조회, webhook 무동작)")}`
+        case "push-delta":  return `${yellow("push-delta")} ${dim("(push 시 webhook 변경분만)")}`
+        case "live-delta":  return `${green("live-delta")} ${dim("(webhook → Framer 까지 즉시 자동)")}`
+        case "full":        return `${green("full")} ${dim("(옛 webhook 자동)")}`
+        case "stage1-only": return `${gray("stage1-only")} ${dim("(옛 수동)")}`
+        default: return mode ? gray(`알 수 없음: ${mode}`) : null
+    }
 }
 
 function timeAgo(iso) {
@@ -1410,7 +1428,23 @@ async function pickAndRun(worker, caps, directFnId) {
         console.log()
     } else {
         const rl = createInterface({ input: process.stdin, output: process.stdout })
+
+        // 메뉴 진입할 때마다 현재 sync mode 동적 조회 — 함수 실행 후 복귀했을 때도 최신 상태 반영.
+        // /sync/mode 는 가벼운 엔드포인트라 매 사이클 호출해도 부담 없음. 실패하면 모드 라인만 생략.
+        let currentMode = null
+        let modeLine = null
+        try {
+            const res = await fetch(`${worker.url}/sync/mode`, { signal: AbortSignal.timeout(3_000) })
+            if (res.ok) {
+                const { mode } = await res.json()
+                currentMode = mode
+                const label = syncModeLabel(mode)
+                if (label) modeLine = `  ${dim("현재 모드:")} ${label}`
+            }
+        } catch { /* 워커 다운/타임아웃 — 메뉴는 정상 표시, 모드 라인만 생략 */ }
+
         console.log(bold(`  실행할 기능 (${caps.configured ? green("설정됨") : red("미설정")}):`) )
+        if (modeLine) console.log(modeLine)
         console.log()
         const EXIT_ITEM = { id: "__exit__", label: "종료" }
         fn = await selectFromList(
@@ -1418,8 +1452,17 @@ async function pickAndRun(worker, caps, directFnId) {
             [...caps.functions, EXIT_ITEM],
             f => {
                 if (f.id === "__exit__") return dim("종료  workerCtl 끝내기")
-                const base = `${bold(f.label)}  ${dim(f.description ?? "")}`
-                return f.constraint ? base + `  ${yellow("[" + f.constraint + "]")}` : base
+                // sync-mode-toggle 항목엔 현재 모드를 *그 줄에서* 보여준다.
+                // 옛 워커 description 의 "현재 모드는 /status … 에서 확인" stale 문구는 strip — 이제 inline 에서 보여주므로 불필요.
+                let desc = f.description ?? ""
+                let extra = ""
+                if (f.id === "sync-mode-toggle" && currentMode) {
+                    desc = desc.replace(/\s*현재 모드는 \/status[^.]*\.?\s*$/, "")
+                    const label = syncModeLabel(currentMode) ?? currentMode
+                    extra = `  ${dim("· 현재:")} ${label}`
+                }
+                const base = `${bold(f.label)}  ${dim(desc)}`
+                return f.constraint ? base + extra + `  ${yellow("[" + f.constraint + "]")}` : base + extra
             }
         )
         rl.close()
