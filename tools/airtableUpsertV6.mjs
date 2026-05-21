@@ -136,13 +136,13 @@ room_sea_low,바다 숨소리가 가까운 방,rooms,season-spring|theme-sea
 
 콘텐츠 작업 (자료조사 → 카피 → CSV → push) 의 워크플로우와 카피 작성 원칙은 V6 도구의 책임 밖. 자주 진화하는 가이드 — 별도 capability doc 에 박혀 있음:
 
-**`tools/capabilities/airtable-content-workflow.md`**
+**\`tools/capabilities/airtable-content-workflow.md\`**
 - 콘텐츠 워크플로우 8단계 (자료조사부터 push 까지)
 - 카피 작성 원칙 (공통/차별, 본질/수단, 메뉴판 패턴 등)
 - contextInject 통해 자동 주입됨 (콘텐츠/호텔/브랜드 키워드)
 
 **raw URL** (사나/외부 LLM 참조용):
-`https://raw.githubusercontent.com/clavier438/clavier-scripts/main/tools/capabilities/airtable-content-workflow.md`
+\`https://raw.githubusercontent.com/clavier438/clavier-scripts/main/tools/capabilities/airtable-content-workflow.md\`
 
 V6 = push 도구 (안정). 워크플로우 = 별도 doc (진화). 둘 다 같은 git repo 안.
 
