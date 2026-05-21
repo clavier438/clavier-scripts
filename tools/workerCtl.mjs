@@ -1430,12 +1430,14 @@ async function pickAndRun(worker, caps, directFnId) {
         const rl = createInterface({ input: process.stdin, output: process.stdout })
 
         // 메뉴 진입할 때마다 현재 sync mode 동적 조회 — 함수 실행 후 복귀했을 때도 최신 상태 반영.
-        // /sync/mode 는 가벼운 엔드포인트라 매 사이클 호출해도 부담 없음. 실패하면 라인만 생략.
+        // /sync/mode 는 가벼운 엔드포인트라 매 사이클 호출해도 부담 없음. 실패하면 모드 라인만 생략.
+        let currentMode = null
         let modeLine = null
         try {
             const res = await fetch(`${worker.url}/sync/mode`, { signal: AbortSignal.timeout(3_000) })
             if (res.ok) {
                 const { mode } = await res.json()
+                currentMode = mode
                 const label = syncModeLabel(mode)
                 if (label) modeLine = `  ${dim("현재 모드:")} ${label}`
             }
@@ -1450,8 +1452,17 @@ async function pickAndRun(worker, caps, directFnId) {
             [...caps.functions, EXIT_ITEM],
             f => {
                 if (f.id === "__exit__") return dim("종료  workerCtl 끝내기")
-                const base = `${bold(f.label)}  ${dim(f.description ?? "")}`
-                return f.constraint ? base + `  ${yellow("[" + f.constraint + "]")}` : base
+                // sync-mode-toggle 항목엔 현재 모드를 *그 줄에서* 보여준다.
+                // 옛 워커 description 의 "현재 모드는 /status … 에서 확인" stale 문구는 strip — 이제 inline 에서 보여주므로 불필요.
+                let desc = f.description ?? ""
+                let extra = ""
+                if (f.id === "sync-mode-toggle" && currentMode) {
+                    desc = desc.replace(/\s*현재 모드는 \/status[^.]*\.?\s*$/, "")
+                    const label = syncModeLabel(currentMode) ?? currentMode
+                    extra = `  ${dim("· 현재:")} ${label}`
+                }
+                const base = `${bold(f.label)}  ${dim(desc)}`
+                return f.constraint ? base + extra + `  ${yellow("[" + f.constraint + "]")}` : base + extra
             }
         )
         rl.close()
