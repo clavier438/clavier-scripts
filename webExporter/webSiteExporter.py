@@ -23,6 +23,7 @@ import os
 import plistlib
 import random
 import re
+import shutil
 import subprocess
 import io
 import sys
@@ -149,8 +150,17 @@ def sanitize_filename(url: str) -> str:
     name = re.sub(r"_+", "_", name).strip("_.")
     return name or "index"
 
+# 출력 디렉터리에 site 별 로그 1 파일 — run() 시작 시 set.
+_LOG_FILE: str | None = None
+
 def log(msg: str):
     print(msg, flush=True)
+    if _LOG_FILE:
+        try:
+            with open(_LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(msg + "\n")
+        except Exception:
+            pass
 
 # ── 메모리 헬퍼 (/proc/meminfo 기반, psutil 의존성 X) ──────
 def _read_meminfo() -> dict | None:
@@ -249,8 +259,8 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
     )
     # nav 페이지가 인덱스(목록)면 페이지네이션 1~PAGINATION_PAGES까지 수집,
     # 각 인덱스 페이지에서 detail 링크 DETAIL_PER_INDEX 개 추가.
-    DETAIL_PER_INDEX  = 3
-    PAGINATION_PAGES  = 3
+    DETAIL_PER_INDEX  = int(os.environ.get("WEBEXP_DETAIL_PER_INDEX", "3"))
+    PAGINATION_PAGES  = int(os.environ.get("WEBEXP_PAGINATION_PAGES", "3"))
 
     seen    = set()
     ordered = []
@@ -1612,8 +1622,18 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
         return ok, fail, captured
 
 # ── 메인 ──────────────────────────────────────────────────
-async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int):
+async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False):
     os.makedirs(output_dir, exist_ok=True)
+
+    # site_name + 로그 파일: 같은 netloc 의 sub-path base 도 충돌 없도록 base_url 전체로 슬러그
+    # (예: hotel.muji.com/en, hotel.muji.com/beijing 이 같은 출력 디렉터리에 공존 가능)
+    site_name = sanitize_filename(base_url)
+    global _LOG_FILE
+    _LOG_FILE = os.path.join(output_dir, f"{site_name}.log")
+    try:
+        open(_LOG_FILE, "w", encoding="utf-8").close()
+    except Exception:
+        _LOG_FILE = None
 
     # 봇 차단 회피용 launch args — AutomationControlled 비활성화가 핵심.
     # Akamai/Cloudflare 등이 chromium 실행 플래그(--enable-automation 등)로 봇 판별.
@@ -1708,14 +1728,15 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
     total_ok   = sum(ok   for ok, _, _ in all_results)
     total_fail = sum(fail for _, fail, _ in all_results)
 
-    # ── 사이트 전체 단일 PDF: 페이지 순서 × 뷰포트 순서 (desktop→tablet→mobile) ──
-    site_name = sanitize_filename(urlparse(base_url).netloc or "site")
+    # ── 사이트 전체 단일 PDF: 뷰포트별 그룹 (desktop→tablet→mobile), 그룹 안에서 발견(페이지) 순서 ──
+    # site_name 은 run() 진입 시 base_url 전체로 슬러그됨 — 여기서는 그대로 사용
     out_pdf   = os.path.join(output_dir, f"{site_name}.pdf")
 
     # streaming 모드에서 frame 들은 export_url 안에서 이미 jpeg 로 저장됨.
     # 여기서는 metadata 수집만. PDF 빌드는 아래 streaming build (reportlab) 가 담당.
+    vp_rank = {name: i for i, (name, _) in enumerate(VIEWPORT_CONFIGS)}
     frames_index: list[dict] = []
-    for url, (_, _, captured) in zip(pages, all_results):
+    for page_idx, (url, (_, _, captured)) in enumerate(zip(pages, all_results)):
         for entry in captured:
             frame_path = entry["frame_path"]
             try:
@@ -1726,11 +1747,14 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
             frames_index.append({
                 "url": url,
                 "viewport": entry["vp_name"],
+                "page_idx": page_idx,
                 "path": frame_path,
                 "width": entry["width"],
                 "height": entry["height"],
                 "size_bytes": size_bytes,
             })
+    # 디바이스 우선 그룹핑: 같은 viewport 끼리 모으고, 그 안에서 발견(랜딩→카테고리…) 순서 유지
+    frames_index.sort(key=lambda e: (vp_rank.get(e["viewport"], 99), e["page_idx"]))
 
     if frames_index:
         # streaming PDF build — reportlab 이 frame 단위 page write + 즉시 메모리 release.
@@ -1759,6 +1783,14 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
             log(f"\n✓ 단일 PDF: {os.path.basename(out_pdf)}  ({len(frames_index)} 페이지, {kb}KB) [PIL]")
         set_finder_tags(out_pdf, ["web", "all"])
 
+        # frames 정리 — PDF 빌드 성공 후 디폴트로 raw frame 삭제 (출력 디렉터리에는 .pdf + .log 만 남음).
+        # 디버깅·재빌드용으로 frame 을 보존하려면 --keep-frames.
+        if not keep_frames:
+            frames_dir = os.path.join(output_dir, "frames")
+            if os.path.isdir(frames_dir):
+                shutil.rmtree(frames_dir, ignore_errors=True)
+                log("  frames/ 삭제 (디폴트, --keep-frames 로 보존 가능)")
+
     log(f"\n완료!  성공: {total_ok} / 실패: {total_fail}")
     log(f"출력: {os.path.abspath(output_dir)}")
 
@@ -1770,10 +1802,11 @@ if __name__ == "__main__":
     parser.add_argument("--max-pages",   "-m", type=int, default=50,   help="최대 페이지 수")
     parser.add_argument("--scroll-time", "-s", type=int, default=60,   help="스크롤 타임아웃(초, 내부 고정값과 별개)")
     parser.add_argument("--concurrency", "-c", type=int, default=2,    help="URL 동시 처리 수 (작은 사이트 ban 잦으면 1, 큰 사이트는 3)")
+    parser.add_argument("--keep-frames",       action="store_true",     help="PDF 빌드 후 frames/ 보존 (디폴트: 삭제 — 출력 디렉터리에는 PDF+로그만)")
     args = parser.parse_args()
 
     if not urlparse(args.url).scheme:
         print("[ERROR] URL에 https:// 를 포함해주세요")
         sys.exit(1)
 
-    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency))
+    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames))
