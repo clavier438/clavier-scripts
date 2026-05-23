@@ -412,10 +412,48 @@ async function actionStatus(api, baseId) {
   }
 }
 
+// ─────────────────────────── config 마법사
+async function ensureConfig(dataDir) {
+  const configPath = join(dataDir, 'upsert.config.json');
+
+  if (existsSync(configPath)) {
+    const cfg = JSON.parse(readFileSync(configPath, 'utf8'));
+    console.log(`\n  ${gray('현재 config:')} ${JSON.stringify(cfg)}`);
+    const keep = await ask(`  이 설정 유지? ${gray('(Y/n): ')}`);
+    if (keep.toLowerCase() !== 'n') return;
+  }
+
+  console.log(`\n${bold('── upsert.config.json 설정 ──')}  ${gray('Enter = 기본값')}`);
+
+  const modeAns = await ask(`  mode? ${gray('[upsert/replace]')}  (${cyan('upsert')}): `);
+  const mode = modeAns.trim() === 'replace' ? 'replace' : 'upsert';
+
+  const cfg = { mode, linkSeparator: '|' };
+
+  if (mode === 'replace') {
+    const fk = await ask(`  formulaKeyField — Airtable 포뮬러 slug 필드명  (${cyan('slug')}): `);
+    cfg.formulaKeyField = fk.trim() || 'slug';
+  } else {
+    const mk = await ask(`  matchKey — 레코드 식별에 쓸 필드명  (${cyan('slugKey')}): `);
+    cfg.matchKey = mk.trim() || 'slugKey';
+  }
+
+  const sep = await ask(`  linkSeparator — 다중 링크 구분자  (${cyan('|')}): `);
+  cfg.linkSeparator = sep.trim() || '|';
+
+  writeFileSync(configPath, JSON.stringify(cfg, null, 2));
+  console.log(`  ${green('✓')} 저장 완료  ${gray(JSON.stringify(cfg))}`);
+}
+
 // ─────────────────────────── main
 async function main() {
+  console.log(`\n${bold('airtableCtl')}  ${gray('Airtable Upsert V6')}`);
+  console.log(`  ${cyan('replace')} — CSV 전체 교체, slugKey 불필요  ${dim('→ mode: "replace"')}`);
+  console.log(`  ${cyan('upsert')}  — matchKey 기준 update-or-create  ${dim('→ 기본값')}`);
+  console.log(`  ${gray('config 파일 없으면 data_dir 선택 후 자동으로 질문합니다.')}`);
+
   const pat = process.env.AIRTABLE_PAT;
-  if (!pat) { console.error(red('AIRTABLE_PAT 없음 — Doppler 또는 ~/.clavier/env 확인')); process.exit(1); }
+  if (!pat) { console.error(red('\nAIRTABLE_PAT 없음 — Doppler 또는 ~/.clavier/env 확인')); process.exit(1); }
   const api = createClient(pat);
 
   const cache = loadCache();
@@ -423,6 +461,8 @@ async function main() {
   if (!baseId) { rl.close(); return; }
   let dataDir = await chooseDir(cache);
   if (!dataDir) { rl.close(); return; }
+
+  await ensureConfig(dataDir);
 
   pushRecent(cache.bases, baseId);
   pushRecent(cache.dirs, dataDir);
@@ -448,6 +488,7 @@ async function main() {
     console.log(`  ${cyan('[3]')} base 상태 (record count)`);
     console.log(`  ${cyan('[4]')} base 변경`);
     console.log(`  ${cyan('[5]')} data_dir 변경`);
+    console.log(`  ${cyan('[6]')} config 재설정`);
     if (!isReplaceMode) console.log(`  ${cyan('[m]')} mode toggle ${gray('(strict ↔ extend)')}`);
     console.log(`  ${cyan('[0]')} 종료`);
     const ans = await ask(`${gray('> ')}`);
@@ -457,7 +498,11 @@ async function main() {
       else if (ans === '2') await actionUpsert(api, baseId, dataDir, extend);
       else if (ans === '3') await actionStatus(api, baseId);
       else if (ans === '4') { const b = await chooseBase(cache); if (b) { baseId = b; pushRecent(cache.bases, b); saveCache(cache); } }
-      else if (ans === '5') { const d = await chooseDir(cache); if (d) { dataDir = d; pushRecent(cache.dirs, d); saveCache(cache); } }
+      else if (ans === '5') {
+        const d = await chooseDir(cache);
+        if (d) { dataDir = d; await ensureConfig(dataDir); pushRecent(cache.dirs, d); saveCache(cache); }
+      }
+      else if (ans === '6') await ensureConfig(dataDir);
       else if (ans === 'm' && !isReplaceMode) { extend = !extend; console.log(`  mode → ${extend ? yellow('extend') : cyan('strict')}`); }
       else console.log(red(`잘못된 선택: ${ans}`));
     } catch (e) {
