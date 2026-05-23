@@ -170,6 +170,32 @@ export async function pass2Links(api, baseId, tableName, tableSchema, rows, recI
   return updates.length;
 }
 
+// ─────────────────────────── Pass 1 (replace 모드): 전체 삭제 → 재생성 → 포뮬러 맵
+// returns: { deletedCount, keyToId: formulaValue→recId, recIds: row-order recId[] }
+export async function pass1Replace(api, baseId, tableName, tableSchema, rows, formulaKeyField) {
+  // 1. 기존 레코드 전부 삭제
+  const existing = await api.listRecords(baseId, tableSchema.id, { fields: [] });
+  if (existing.length > 0) {
+    await api.batchDelete(baseId, tableSchema.id, existing.map(r => r.id));
+  }
+
+  // 2. 새 레코드 생성 (링크 컬럼 제외, fields-only)
+  const payload = rows.map(({ fields }) => ({ fields }));
+  const created = await api.batchCreate(baseId, tableSchema.id, payload);
+
+  // 3. 전체 fetch → 포뮬러 값 읽기 (Airtable이 INSERT 직후 이미 계산해 둠)
+  const allRecords = await api.listRecords(baseId, tableSchema.id);
+  const keyToId = {};
+  for (const rec of allRecords) {
+    const key = rec.fields[formulaKeyField];
+    if (key) keyToId[key] = rec.id;
+  }
+
+  // 4. 생성 순서 그대로 recId 배열 (pass2Links 에 row-order로 전달)
+  const recIds = created.map(r => r.id);
+  return { deletedCount: existing.length, keyToId, recIds };
+}
+
 // ─────────────────────────── slugKey field 보장 (없으면 생성)
 export async function ensureMatchKeyField(api, baseId, tableSchema, matchKey, opts = {}) {
   const existing = tableSchema.fields.find(f => f.name === matchKey);

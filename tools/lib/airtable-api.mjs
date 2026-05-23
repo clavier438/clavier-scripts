@@ -86,6 +86,14 @@ export function createClient(pat) {
       }
       return results;
     },
+
+    async batchDelete(baseId, tableId, recordIds) {
+      for (const batch of chunk(recordIds, 10)) {
+        const params = new URLSearchParams();
+        batch.forEach(id => params.append('records[]', id));
+        await call('DELETE', `${API}/${baseId}/${tableId}?${params}`);
+      }
+    },
   };
 }
 

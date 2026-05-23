@@ -23,7 +23,7 @@ import { fileURLToPath } from 'url';
 import { createClient } from './lib/airtable-api.mjs';
 import {
   loadDataDir, analyzeSchema, transformRow,
-  pass1Upsert, pass2Links, ensureMatchKeyField,
+  pass1Upsert, pass1Replace, pass2Links, ensureMatchKeyField,
 } from './lib/airtable-upsert.mjs';
 
 const DOPPLER_PROJECT = 'clavier';
@@ -220,12 +220,20 @@ async function chooseDir(cache) {
 
 // ─────────────────────────── 기능 함수
 async function actionDryRun(api, baseId, dataDir, extend) {
-  console.log(`\n${bold('── DRY-RUN ──')}  ${dim(`base=${baseId} dir=${basename(dataDir)} mode=${extend ? 'extend' : 'strict'}`)}`);
+  const { config } = loadDataDir(dataDir);
+  const modeLabel = config.mode === 'replace' ? red('REPLACE') : (extend ? 'extend' : 'strict');
+  console.log(`\n${bold('── DRY-RUN ──')}  ${dim(`base=${baseId} dir=${basename(dataDir)} mode=${modeLabel}`)}`);
   await runUpsert(api, baseId, dataDir, { dryRun: true, extend });
 }
 
 async function actionUpsert(api, baseId, dataDir, extend) {
-  console.log(`\n${bold('── UPSERT (LIVE) ──')}  ${dim(`base=${baseId} dir=${basename(dataDir)} mode=${extend ? 'extend' : 'strict'}`)}`);
+  const { config } = loadDataDir(dataDir);
+  const isReplace = config.mode === 'replace';
+  const modeLabel = isReplace ? red('REPLACE') : (extend ? 'extend' : 'strict');
+  console.log(`\n${bold(isReplace ? '── REPLACE (LIVE) ──' : '── UPSERT (LIVE) ──')}  ${dim(`base=${baseId} dir=${basename(dataDir)} mode=${modeLabel}`)}`);
+  if (isReplace) {
+    console.log(red(`  ⚠ 모든 레코드를 삭제하고 CSV로 재생성합니다.`));
+  }
   const confirm = await ask(`${yellow('정말 실행할까? (y/N): ')}`);
   if (confirm.toLowerCase() !== 'y') { console.log(gray(`취소`)); return; }
   await runUpsert(api, baseId, dataDir, { dryRun: false, extend });
@@ -233,6 +241,9 @@ async function actionUpsert(api, baseId, dataDir, extend) {
 
 async function runUpsert(api, baseId, dataDir, opts) {
   const { config, tables: data } = loadDataDir(dataDir);
+  const isReplace = config.mode === 'replace';
+  if (isReplace) return runReplaceMode(api, baseId, data, config, opts);
+
   console.log(`  ${gray(`config.matchKey=${config.matchKey} linkSeparator="${config.linkSeparator}" tables=${Object.keys(data).join(',')}`)}`);
 
   let schema = analyzeSchema(await api.getSchema(baseId));
@@ -244,12 +255,10 @@ async function runUpsert(api, baseId, dataDir, opts) {
     const matchKey = data[tableName].matchKey;
     const created = await ensureMatchKeyField(api, baseId, tSchema, matchKey, opts);
     console.log(`    ${cyan(tableName)}.${matchKey}: ${created ? green('CREATED') : gray('exists')}`);
-    // dry-run/live 모두: schema 에 가상 추가 — transformRow 가 matchKey 컬럼 인식
     if (created && !tSchema.fields.some(f => f.name === matchKey)) {
       tSchema.fields.push({ name: matchKey, type: 'singleLineText' });
     }
   }
-  // extend mode — CSV 헤더에 base 에 없는 컬럼 있으면 singleLineText 로 자동 생성
   if (opts.extend) {
     console.log(gray('  · extend mode — new fields'));
     for (const [tableName, t] of Object.entries(data)) {
@@ -300,7 +309,6 @@ async function runUpsert(api, baseId, dataDir, opts) {
     console.log(`    ${cyan(tableName)}: ${rows.length} upserted ${opts.dryRun ? gray('(dry)') : green('✓')}`);
   }
 
-  // link target 매핑 확장 — base 의 기존 record 까지 포함 (sisoso items 가 mukayu group 에 link 같은 거)
   console.log(gray('  · link target 매핑 (기존 base record 포함)'));
   for (const tableName of Object.keys(schema.tablesByName)) {
     const tSchema = schema.tablesByName[tableName];
@@ -325,6 +333,74 @@ async function runUpsert(api, baseId, dataDir, opts) {
   }
 
   console.log(`\n  ${opts.dryRun ? yellow('DRY-RUN 완료') : green('UPSERT 완료')}`);
+}
+
+async function runReplaceMode(api, baseId, data, config, opts) {
+  const formulaKeyField = config.formulaKeyField;
+  if (!formulaKeyField) throw new Error('replace 모드: upsert.config.json에 "formulaKeyField" 필요 (포뮬러 slug 필드명)');
+
+  const schema = analyzeSchema(await api.getSchema(baseId));
+  console.log(`  ${gray(`mode=replace formulaKeyField=${formulaKeyField} linkSeparator="${config.linkSeparator}" tables=${Object.keys(data).join(',')}`)}`);
+
+  // transform rows (링크 컬럼 포함해서 분리해둠 — pass2 에서 사용)
+  console.log(gray('  · transform CSV rows'));
+  const transformed = {};
+  for (const [tableName, t] of Object.entries(data)) {
+    if (!schema.tablesByName[tableName]) { console.log(`    ${yellow(tableName)}: base에 없는 테이블 ${gray('(skip)')}`); continue; }
+    transformed[tableName] = t.rows.map(row => {
+      const { fields, linkKeys } = transformRow(tableName, row, schema, schema.linksByTable, config.linkSeparator);
+      return { fields, linkKeys };
+    });
+    console.log(`    ${cyan(tableName)}: ${transformed[tableName].length} rows`);
+  }
+
+  // Pass 1: 테이블별 전체 삭제 → 재생성 → 포뮬러 맵 확보
+  console.log(gray(`  · Pass 1 — 전체 삭제 → 재생성 → 포뮬러 key 매핑`));
+  const allKeyToId = {};
+  const rowRecIds = {};  // tableName → recId[] (row 순서 그대로, pass2 용)
+
+  for (const [tableName, rows] of Object.entries(transformed)) {
+    if (rows.length === 0) continue;
+    const tSchema = schema.tablesByName[tableName];
+    if (opts.dryRun) {
+      const existing = await api.listRecords(baseId, tSchema.id, { fields: [] });
+      console.log(`    ${cyan(tableName)}: would DELETE ${existing.length} → CREATE ${rows.length} ${gray('(dry)')}`);
+      allKeyToId[tableName] = {};
+      rowRecIds[tableName] = rows.map((_, i) => `[dry-${i}]`);
+    } else {
+      const { deletedCount, keyToId, recIds } = await pass1Replace(api, baseId, tableName, tSchema, rows, formulaKeyField);
+      allKeyToId[tableName] = keyToId;
+      rowRecIds[tableName] = recIds;
+      console.log(`    ${cyan(tableName)}: DELETED ${deletedCount} → CREATED ${rows.length} → formula map: ${Object.keys(keyToId).length} keys ${green('✓')}`);
+    }
+  }
+
+  // 링크 target 매핑 — CSV에 없는 테이블도 포뮬러 key로 인덱싱 (교차 링크용)
+  console.log(gray('  · 포뮬러 key 매핑 (링크 target 테이블 포함)'));
+  for (const tableName of Object.keys(schema.tablesByName)) {
+    if (allKeyToId[tableName]) continue;
+    const tSchema = schema.tablesByName[tableName];
+    if (!tSchema.fields.some(f => f.name === formulaKeyField)) continue;
+    const all = await api.listRecords(baseId, tSchema.id);
+    allKeyToId[tableName] = {};
+    for (const r of all) {
+      const k = r.fields[formulaKeyField];
+      if (k) allKeyToId[tableName][k] = r.id;
+    }
+    console.log(`    ${cyan(tableName)}: ${Object.keys(allKeyToId[tableName]).length} keys ${gray('(link target)')}`);
+  }
+
+  // Pass 2: 링크 컬럼 연결
+  console.log(gray('  · Pass 2 — link resolve'));
+  for (const [tableName, rows] of Object.entries(transformed)) {
+    if (rows.length === 0) continue;
+    const tSchema = schema.tablesByName[tableName];
+    const recIds = rowRecIds[tableName];
+    const cnt = await pass2Links(api, baseId, tableName, tSchema, rows, recIds, allKeyToId, schema.linksByTable, opts);
+    console.log(`    ${cyan(tableName)}: ${cnt} link updates ${opts.dryRun ? gray('(dry)') : (cnt ? green('✓') : gray('—'))}`);
+  }
+
+  console.log(`\n  ${opts.dryRun ? yellow('DRY-RUN 완료 (replace 모드)') : green('REPLACE 완료')}`);
 }
 
 async function actionStatus(api, baseId) {
@@ -352,20 +428,27 @@ async function main() {
   pushRecent(cache.dirs, dataDir);
   saveCache(cache);
 
-  let extend = false;  // mode: strict (default) ↔ extend
+  let extend = false;
 
   while (true) {
+    const { config: dirConfig } = loadDataDir(dataDir);
+    const isReplaceMode = dirConfig.mode === 'replace';
+
     console.log(`\n${bold('━━━ airtableCtl ━━━')}`);
     console.log(`  ${dim('base: ')} ${cyan(baseId)}`);
     console.log(`  ${dim('dir:  ')} ${cyan(dataDir)}`);
-    console.log(`  ${dim('mode: ')} ${extend ? yellow('extend (새 field 자동 생성)') : cyan('strict (안전)')}`);
+    if (isReplaceMode) {
+      console.log(`  ${dim('mode: ')} ${red('REPLACE')} ${gray(`(formulaKey=${dirConfig.formulaKeyField || '?'}) ← config.json`)}`);
+    } else {
+      console.log(`  ${dim('mode: ')} ${extend ? yellow('extend (새 field 자동 생성)') : cyan('strict (안전)')}`);
+    }
     console.log(``);
     console.log(`  ${cyan('[1]')} dry-run preview`);
-    console.log(`  ${cyan('[2]')} upsert 실행 ${yellow('(live)')}`);
+    console.log(`  ${cyan('[2]')} ${isReplaceMode ? red('replace 실행 (전체 삭제 후 재생성)') : `upsert 실행 ${yellow('(live)')}`}`);
     console.log(`  ${cyan('[3]')} base 상태 (record count)`);
     console.log(`  ${cyan('[4]')} base 변경`);
     console.log(`  ${cyan('[5]')} data_dir 변경`);
-    console.log(`  ${cyan('[m]')} mode toggle ${gray('(strict ↔ extend)')}`);
+    if (!isReplaceMode) console.log(`  ${cyan('[m]')} mode toggle ${gray('(strict ↔ extend)')}`);
     console.log(`  ${cyan('[0]')} 종료`);
     const ans = await ask(`${gray('> ')}`);
     try {
@@ -375,7 +458,7 @@ async function main() {
       else if (ans === '3') await actionStatus(api, baseId);
       else if (ans === '4') { const b = await chooseBase(cache); if (b) { baseId = b; pushRecent(cache.bases, b); saveCache(cache); } }
       else if (ans === '5') { const d = await chooseDir(cache); if (d) { dataDir = d; pushRecent(cache.dirs, d); saveCache(cache); } }
-      else if (ans === 'm') { extend = !extend; console.log(`  mode → ${extend ? yellow('extend') : cyan('strict')}`); }
+      else if (ans === 'm' && !isReplaceMode) { extend = !extend; console.log(`  mode → ${extend ? yellow('extend') : cyan('strict')}`); }
       else console.log(red(`잘못된 선택: ${ans}`));
     } catch (e) {
       console.log(red(`\n에러: ${e.message}`));
