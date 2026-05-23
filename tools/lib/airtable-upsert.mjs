@@ -189,6 +189,10 @@ export async function pass1Replace(api, baseId, tableName, tableSchema, rows, fo
   for (const rec of allRecords) {
     const key = rec.fields[formulaKeyField];
     if (key) keyToId[key] = rec.id;
+    // name 으로도 인덱싱 — 다른 테이블이 slug 대신 name 으로 링크 참조할 때 fallback
+    // (items 슬러그가 topic 링크 의존 포뮬러라 Pass 1 직후엔 불완전할 수 있음)
+    const nameKey = rec.fields['name'];
+    if (nameKey && !keyToId[nameKey]) keyToId[nameKey] = rec.id;
   }
 
   // 4. 생성 순서 그대로 recId 배열 (pass2Links 에 row-order로 전달)

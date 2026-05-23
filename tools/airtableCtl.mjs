@@ -386,6 +386,8 @@ async function runReplaceMode(api, baseId, data, config, opts) {
     for (const r of all) {
       const k = r.fields[formulaKeyField];
       if (k) allKeyToId[tableName][k] = r.id;
+      const nameK = r.fields['name'];
+      if (nameK && !allKeyToId[tableName][nameK]) allKeyToId[tableName][nameK] = r.id;
     }
     console.log(`    ${cyan(tableName)}: ${Object.keys(allKeyToId[tableName]).length} keys ${gray('(link target)')}`);
   }
