@@ -431,8 +431,7 @@ async function ensureConfig(dataDir) {
   const cfg = { mode, linkSeparator: '|' };
 
   if (mode === 'replace') {
-    const fk = await ask(`  formulaKeyField — Airtable 포뮬러 slug 필드명  (${cyan('slug')}): `);
-    cfg.formulaKeyField = fk.trim() || 'slug';
+    cfg.formulaKeyField = 'slug';
   } else {
     const mk = await ask(`  matchKey — 레코드 식별에 쓸 필드명  (${cyan('slugKey')}): `);
     cfg.matchKey = mk.trim() || 'slugKey';
