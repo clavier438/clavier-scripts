@@ -188,21 +188,27 @@ async function chooseBase(cache) {
 }
 
 async function chooseDir(cache) {
+  const cwd = process.cwd();
   while (true) {
-    console.log(`\n${bold('── data_dir 선택 ──')}`);
+    console.log(`\n${bold('── data_dir 선택 ──')}  ${dim(cwd)}`);
+    console.log(`  ${cyan('[.]')} 현재 디렉토리`);
     if (cache.dirs.length) {
       cache.dirs.forEach((d, i) => {
         const exists = existsSync(d);
         console.log(`  ${cyan(`[${i + 1}]`)} ${d} ${exists ? '' : red('(없음)')}`);
       });
     }
-    console.log(`  ${cyan('[n]')} 새 경로 입력`);
+    console.log(`  ${cyan('[n]')} 경로 입력 ${gray('(절대 · 상대 · ~ 모두 가능)')}`);
     console.log(`  ${cyan('[0]')} 종료`);
     const ans = await ask(`${gray('> ')}`);
     if (ans === '0') return null;
+    if (ans === '.') return cwd;
     if (ans === 'n' || !ans) {
       const input = await ask(`${gray('경로: ')}`);
-      const dir = resolve(input.replace(/^~/, homedir()));
+      let rawPath = input.trim();
+      if ((rawPath.startsWith("'") && rawPath.endsWith("'")) || (rawPath.startsWith('"') && rawPath.endsWith('"'))) rawPath = rawPath.slice(1, -1);
+      rawPath = rawPath.replace(/\\ /g, ' ').replace(/^~/, homedir());
+      const dir = resolve(rawPath);
       if (!existsSync(dir) || !statSync(dir).isDirectory()) { console.log(red(`디렉토리 없음: ${dir}`)); continue; }
       return dir;
     }
