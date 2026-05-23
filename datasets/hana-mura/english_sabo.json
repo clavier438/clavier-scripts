@@ -1,0 +1,97 @@
+{
+  "url": "https://www.hana-mura.com/english/sabo/",
+  "slug": "english_sabo",
+  "scraped_at": "2026-05-23T14:03:12.530091+00:00",
+  "meta": {
+    "title": "SABO ｜ Japan Ishikawa Pref. Japanese inn (Ryokan) Onsen Hanamurasaki",
+    "description": null,
+    "og_image": "https://www.hana-mura.com/wp/wp-content/uploads/2023/06/ogp.jpeg",
+    "og_type": "website",
+    "lang": "ja",
+    "canonical": "https://www.hana-mura.com/english/sabo/"
+  },
+  "sections": [
+    {
+      "index": 0,
+      "classes": "sabo-wrapper",
+      "heading": {
+        "tag": "h3",
+        "text": "SABO"
+      },
+      "body": "Our sabo, or tea room, is a special space for quiet reflection that invites you to connect with yourself and others through tea. We serve sencha, Kaga regional roasted tea, Japanese black tea, and original tea-based cocktails (chashu), all presented in thoughtfully crafted teaware created in collaboration with local artisans. Experience the spirit of chanoyu, Japan’s centuries-old tradition of hospitality, reimagined in a refined and contemporary style. At sabo, we offer a diverse menu starting with tea, alongside a selection of alcoholic beverages and sweets. Open to both ryokan guests and the general public. Plum Wine with Japanese Black Tea Sencha Gin & Tonic Matcha Beer Original Blended Tea Roasted Kaga Bōcha (Roasted Twig Tea) Local Ishikawa Black Tea Local Ishikawa Sencha Seasonal Fresh Tea Blend etc... RESERVE Enjoy a serene afternoon at Hanamurasaki with our exclusive Japanese-style afternoon tea.This thoughtfully curated experience features delicate vegetable sushi, seasonal wagashi (Japanese sweets), and a selection of premium Japanese teas. Each element is crafted to highlight the beauty of Japanese culinary tradition while offering a moment of pure relaxation. RESERVE",
+      "images": [
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/sabo-img1.jpeg",
+          "alt": "Menu"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/sabo-img2.jpeg",
+          "alt": "Afternoon tea"
+        }
+      ],
+      "links": [
+        {
+          "text": "RESERVE",
+          "href": "https://www.tablecheck.com/en/shops/hana-mura/reserve"
+        },
+        {
+          "text": "RESERVE",
+          "href": "https://www.hana-mura.com/english/local-experience/japanese-afternoon-tea-lunch/"
+        }
+      ]
+    }
+  ],
+  "footer": {
+    "nav_links": [
+      {
+        "text": "hana@hana-mura.com",
+        "href": "mailto:hana@hana-mura.com"
+      },
+      {
+        "text": "CUISINE",
+        "href": "https://www.hana-mura.com/english/cuisine/"
+      },
+      {
+        "text": "GUEST ROOMS",
+        "href": "https://www.hana-mura.com/english/guest-rooms/"
+      },
+      {
+        "text": "SABO",
+        "href": "https://www.hana-mura.com/english/sabo/"
+      },
+      {
+        "text": "OUR STORY",
+        "href": "https://www.hana-mura.com/english/our-story/"
+      },
+      {
+        "text": "LOCAL EXPERIENCE",
+        "href": "https://www.hana-mura.com/english/local-experience/"
+      },
+      {
+        "text": "ACCESS",
+        "href": "https://www.hana-mura.com/english/#access"
+      },
+      {
+        "text": "CONTACT",
+        "href": "https://www.hana-mura.com/contact/"
+      },
+      {
+        "text": "JP",
+        "href": "https://www.hana-mura.com/sabo/"
+      },
+      {
+        "text": "EN",
+        "href": "https://www.hana-mura.com/english/"
+      }
+    ],
+    "social": [
+      {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/hanamurasaki_official/"
+      }
+    ],
+    "phone": "922-0114",
+    "copyright": "©Hanamurasaki JP / EN ©Hanamurasaki",
+    "raw_text": "HANAMURASAKI 〒 922-0114 1-Ho17-1, Higashimachi Yamanaka Onsen, Kaga, Ishikawa, Japan Mail: hana@hana-mura.com CUISINE GUEST ROOMS SABO OUR STORY LOCAL EXPERIENCE ACCESS CONTACT Instagram ©Hanamurasaki JP / EN ©Hanamurasaki"
+  }
+}

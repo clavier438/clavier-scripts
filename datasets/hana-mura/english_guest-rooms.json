@@ -1,0 +1,169 @@
+{
+  "url": "https://www.hana-mura.com/english/guest-rooms/",
+  "slug": "english_guest-rooms",
+  "scraped_at": "2026-05-23T14:03:06.787064+00:00",
+  "meta": {
+    "title": "GUEST ROOMS ｜ Japan Ishikawa Pref. Japanese inn (Ryokan) Onsen Hanamurasaki",
+    "description": null,
+    "og_image": "https://www.hana-mura.com/wp/wp-content/uploads/2023/06/ogp.jpeg",
+    "og_type": "website",
+    "lang": "ja",
+    "canonical": "https://www.hana-mura.com/english/guest-rooms/"
+  },
+  "sections": [
+    {
+      "index": 0,
+      "classes": "guest-room-wrapper",
+      "heading": {
+        "tag": "h3",
+        "text": "GUEST ROOMS"
+      },
+      "body": "From every room, you can see Kakusenkei gorge. The grandeur of nature and a sense of serenity that can only be found in Yamanaka Onsen flows through the guest rooms. We encourage guests to relax their bodies and minds in the healing space, where ancient elegance and modern comfort are woven together. A generous suite that feels almost like a public space, yet it remains yours alone. The open-air bath and sauna are complemented by original artwork, created in collaboration with local artists. This private retreat invites you to unwind in a moment where art and wellbeing gently come together. RESERVE A modern suite that quietly reimagines the enduring beauty of traditional Japanese architecture. A calm and inviting space shaped by the play of light and shadow, featuring a sunken kotatsu table crafted by a lacquer artist. With a private onsen and sauna, this suite offers a setting for slow, restorative time. RESERVE Nearly twice the size of a standard room, this suite includes a private open-air bath and sauna. Take in views of the Yamanaka Onsen valley as you relax in a space where comfort and openness come together. RESERVE Spanning a generous 120 square meters, this authentic Japanese room beautifully captures the essence of traditional architecture and serene living. The main room features tatami flooring, offering a peaceful retreat where you can fully relax. The adjoining bedroom is furnished with comfortable Western-style beds, providing an ideal blend of Japanese tradition and modern comfort. RESERVE The essence of Japanese architectural beauty is captured in this spacious and tranquil room. Featuring traditional tatami flooring and authentic futon bedding, it offers a serene setting where you can fully rest and refresh yourself. Enjoy the landscape and its seasonal changes, framed by the stunning views of Kakusenkei Gorge. RESERVE",
+      "images": [
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/art-room1.jpg",
+          "alt": "Art Suite Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/art-room2.jpg",
+          "alt": "Art Suite Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/art-room3.jpg",
+          "alt": "Art Suite Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/art-room4.jpg",
+          "alt": "Art Suite Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/art-room5.jpg",
+          "alt": "Art Suite Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/modern-room1.jpg",
+          "alt": "Modern Suite Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/modern-room2.jpg",
+          "alt": "Modern Suite Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/modern-room3.jpg",
+          "alt": "Modern Suite Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/modern-room4.jpg",
+          "alt": "Modern Suite Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/universal-room1.jpg",
+          "alt": "Universal Suite Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/universal-room2.jpg",
+          "alt": "Universal Suite Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/standard-room-img1.jpeg",
+          "alt": "Superior Japanese Room with Beds"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/standard-room-img2.jpeg",
+          "alt": "Superior Japanese Room with Beds"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/japanese-style-room-img1.jpeg",
+          "alt": "Authentic Japanese Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/japanese-style-room-img2.jpeg",
+          "alt": "Authentic Japanese Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/japanese-style-room-img3.jpeg",
+          "alt": "Authentic Japanese Room"
+        },
+        {
+          "src": "https://www.hana-mura.com/wp/wp-content/themes/hanamurasaki/assets/images/japanese-style-room-img4.jpeg",
+          "alt": "Authentic Japanese Room"
+        }
+      ],
+      "links": [
+        {
+          "text": "RESERVE",
+          "href": "https://reserve.489ban.net/client/hana-mura/4/plan/availability/room/#content"
+        },
+        {
+          "text": "RESERVE",
+          "href": "https://reserve.489ban.net/client/hana-mura/4/plan/availability/room/#content"
+        },
+        {
+          "text": "RESERVE",
+          "href": "https://reserve.489ban.net/client/hana-mura/4/plan/availability/room/#content"
+        },
+        {
+          "text": "RESERVE",
+          "href": "https://reserve.489ban.net/client/hana-mura/4/plan/availability/room/#content"
+        },
+        {
+          "text": "RESERVE",
+          "href": "https://reserve.489ban.net/client/hana-mura/4/plan/availability/room/#content"
+        }
+      ]
+    }
+  ],
+  "footer": {
+    "nav_links": [
+      {
+        "text": "hana@hana-mura.com",
+        "href": "mailto:hana@hana-mura.com"
+      },
+      {
+        "text": "CUISINE",
+        "href": "https://www.hana-mura.com/english/cuisine/"
+      },
+      {
+        "text": "GUEST ROOMS",
+        "href": "https://www.hana-mura.com/english/guest-rooms/"
+      },
+      {
+        "text": "SABO",
+        "href": "https://www.hana-mura.com/english/sabo/"
+      },
+      {
+        "text": "OUR STORY",
+        "href": "https://www.hana-mura.com/english/our-story/"
+      },
+      {
+        "text": "LOCAL EXPERIENCE",
+        "href": "https://www.hana-mura.com/english/local-experience/"
+      },
+      {
+        "text": "ACCESS",
+        "href": "https://www.hana-mura.com/english/#access"
+      },
+      {
+        "text": "CONTACT",
+        "href": "https://www.hana-mura.com/contact/"
+      },
+      {
+        "text": "JP",
+        "href": "https://www.hana-mura.com/guest-rooms/"
+      },
+      {
+        "text": "EN",
+        "href": "https://www.hana-mura.com/english/"
+      }
+    ],
+    "social": [
+      {
+        "platform": "instagram",
+        "url": "https://www.instagram.com/hanamurasaki_official/"
+      }
+    ],
+    "phone": "922-0114",
+    "copyright": "©Hanamurasaki JP / EN ©Hanamurasaki",
+    "raw_text": "HANAMURASAKI 〒 922-0114 1-Ho17-1, Higashimachi Yamanaka Onsen, Kaga, Ishikawa, Japan Mail: hana@hana-mura.com CUISINE GUEST ROOMS SABO OUR STORY LOCAL EXPERIENCE ACCESS CONTACT Instagram ©Hanamurasaki JP / EN ©Hanamurasaki"
+  }
+}
