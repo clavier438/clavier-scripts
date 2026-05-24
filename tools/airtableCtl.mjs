@@ -15,7 +15,6 @@ import "./lib/freshness.mjs"
 
 import { createInterface } from 'readline';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'fs';
-import { execSync, spawnSync } from 'child_process';
 import { dirname, join, resolve, basename } from 'path';
 import { homedir } from 'os';
 import { fileURLToPath } from 'url';
@@ -25,49 +24,28 @@ import {
   loadDataDir, analyzeSchema, transformRow,
   pass1Upsert, pass2Links, ensureMatchKeyField,
 } from './lib/airtable-upsert.mjs';
+import { ensureDoppler } from './lib/doppler-wrap.mjs';
+import { bold, dim, cyan, green, yellow, red, gray } from './lib/cli-color.mjs';
+import { extractBaseId } from './lib/airtable-input.mjs';
 
 const DOPPLER_PROJECT = 'clavier';
 const DOPPLER_CONFIG = 'prd';
 
-// ─────────────────────────── Doppler self-relaunch
-if (!process.env.AIRTABLE_CTL_DOPPLER_INJECTED) {
-  let dopplerOk = false;
-  try { execSync('doppler --version', { stdio: 'ignore', timeout: 2000 }); dopplerOk = true; } catch {}
-  if (dopplerOk) {
-    const r = spawnSync('doppler',
-      ['run', '--project', DOPPLER_PROJECT, '--config', DOPPLER_CONFIG, '--',
-       process.execPath, ...process.argv.slice(1)],
-      { stdio: 'inherit', env: { ...process.env, AIRTABLE_CTL_DOPPLER_INJECTED: '1' } });
-    if (!r.error) process.exit(r.status ?? 0);
-  }
-}
-// ~/.clavier/env 폴백
-try {
-  const envFile = join(homedir(), '.clavier', 'env');
-  readFileSync(envFile, 'utf8').split('\n').forEach(line => {
-    line = line.trim();
-    if (!line || line.startsWith('#') || !line.includes('=')) return;
-    const [k, ...rest] = line.split('=');
-    const key = k.trim(); let val = rest.join('=').trim();
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) val = val.slice(1, -1);
-    if (!process.env[key]) process.env[key] = val;
-  });
-} catch {}
+// ─────────────────────────── Doppler self-relaunch + ~/.clavier/env 폴백
+// lib/doppler-wrap.mjs 가 두 단계 다 처리.
+ensureDoppler({
+  project: DOPPLER_PROJECT,
+  config: DOPPLER_CONFIG,
+  sentinelEnv: 'AIRTABLE_CTL_DOPPLER_INJECTED',
+  fallbackEnvFile: '~/.clavier/env',
+});
 
 // ─────────────────────────── 경로 상수 (스크립트 위치 기준)
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = dirname(SCRIPT_DIR);
 const DATASETS_DIR = join(REPO_ROOT, 'datasets');
 
-// ─────────────────────────── 색상
-const c = { reset:'\x1b[0m', bold:'\x1b[1m', dim:'\x1b[2m', cyan:'\x1b[36m', green:'\x1b[32m', yellow:'\x1b[33m', red:'\x1b[31m', gray:'\x1b[90m' };
-const bold = s => `${c.bold}${s}${c.reset}`;
-const dim = s => `${c.dim}${s}${c.reset}`;
-const cyan = s => `${c.cyan}${s}${c.reset}`;
-const green = s => `${c.green}${s}${c.reset}`;
-const yellow = s => `${c.yellow}${s}${c.reset}`;
-const red = s => `${c.red}${s}${c.reset}`;
-const gray = s => `${c.gray}${s}${c.reset}`;
+// 색상 helper 는 lib/cli-color.mjs 에서 import (상단)
 
 // ─────────────────────────── readline
 const rl = createInterface({ input: process.stdin, output: process.stdout });
@@ -90,11 +68,7 @@ function pushRecent(arr, item, max = 5) {
   if (arr.length > max) arr.length = max;
 }
 
-// ─────────────────────────── base ID 정규화
-function extractBaseId(input) {
-  const m = String(input).match(/\bapp[A-Za-z0-9]{14}\b/);
-  return m ? m[0] : null;
-}
+// base ID 정규화는 lib/airtable-input.mjs 의 extractBaseId 사용 (상단 import)
 
 // ─────────────────────────── help
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
