@@ -54,6 +54,11 @@ try {
   });
 } catch {}
 
+// ─────────────────────────── 경로 상수 (스크립트 위치 기준)
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = dirname(SCRIPT_DIR);
+const DATASETS_DIR = join(REPO_ROOT, 'datasets');
+
 // ─────────────────────────── 색상
 const c = { reset:'\x1b[0m', bold:'\x1b[1m', dim:'\x1b[2m', cyan:'\x1b[36m', green:'\x1b[32m', yellow:'\x1b[33m', red:'\x1b[31m', gray:'\x1b[90m' };
 const bold = s => `${c.bold}${s}${c.reset}`;
@@ -188,30 +193,51 @@ async function chooseBase(cache) {
 }
 
 async function chooseDir(cache) {
-  const cwd = process.cwd();
+  // datasets/ 하위 폴더 목록 (있으면)
+  const datasetSubs = existsSync(DATASETS_DIR)
+    ? readdirSync(DATASETS_DIR).filter(n => statSync(join(DATASETS_DIR, n)).isDirectory())
+    : [];
+
   while (true) {
-    console.log(`\n${bold('── data_dir 선택 ──')}  ${dim(cwd)}`);
-    console.log(`  ${cyan('[.]')} 현재 디렉토리`);
+    console.log(`\n${bold('── data_dir 선택 ──')}  ${dim(`base: ${REPO_ROOT}`)}`);
+
+    // datasets/ 하위 폴더 (d1, d2, ...)
+    if (datasetSubs.length) {
+      datasetSubs.forEach((name, i) => console.log(`  ${cyan(`[d${i + 1}]`)} datasets/${name}`));
+    }
+
+    // 최근 사용 디렉토리
     if (cache.dirs.length) {
       cache.dirs.forEach((d, i) => {
         const exists = existsSync(d);
         console.log(`  ${cyan(`[${i + 1}]`)} ${d} ${exists ? '' : red('(없음)')}`);
       });
     }
-    console.log(`  ${cyan('[n]')} 경로 입력 ${gray('(절대 · 상대 · ~ 모두 가능)')}`);
+
+    console.log(`  ${cyan('[n]')} 경로 입력 ${gray(`(상대경로는 ${REPO_ROOT} 기준)`)}`);
     console.log(`  ${cyan('[0]')} 종료`);
     const ans = await ask(`${gray('> ')}`);
     if (ans === '0') return null;
-    if (ans === '.') return cwd;
+
+    // datasets/ 하위 폴더 선택
+    const dm = ans.match(/^d(\d+)$/i);
+    if (dm) {
+      const idx = parseInt(dm[1], 10) - 1;
+      if (idx >= 0 && idx < datasetSubs.length) return join(DATASETS_DIR, datasetSubs[idx]);
+      console.log(red(`잘못된 선택`)); continue;
+    }
+
     if (ans === 'n' || !ans) {
       const input = await ask(`${gray('경로: ')}`);
       let rawPath = input.trim();
       if ((rawPath.startsWith("'") && rawPath.endsWith("'")) || (rawPath.startsWith('"') && rawPath.endsWith('"'))) rawPath = rawPath.slice(1, -1);
       rawPath = rawPath.replace(/\\ /g, ' ').replace(/^~/, homedir());
-      const dir = resolve(rawPath);
+      // 상대경로는 REPO_ROOT 기준으로 resolve
+      const dir = rawPath.startsWith('/') ? rawPath : resolve(REPO_ROOT, rawPath);
       if (!existsSync(dir) || !statSync(dir).isDirectory()) { console.log(red(`디렉토리 없음: ${dir}`)); continue; }
       return dir;
     }
+
     const n = parseInt(ans, 10);
     if (n >= 1 && n <= cache.dirs.length && existsSync(cache.dirs[n - 1])) return cache.dirs[n - 1];
     console.log(red(`잘못된 선택`));
