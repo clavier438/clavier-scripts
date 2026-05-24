@@ -102,6 +102,8 @@ Layer 2 — Platform 확장 (opt-in per environment)
 | **시스템 상태** | `clavier0/clavier-hq` | `iCloud/0/code/projects/clavier-hq/` (MISSION/STATUS/QUEUE/DECISIONS) |
 
 > **environment-peer 모델 (2026-05-03~, 이전 "canonical 클론 원칙" 폐기)**: 위 표의 경로는 **Mac peer 의 실용 예시**일 뿐 유일 클론이 아님. OCI peer 는 `~/clavier-scripts/`, `~/platform-workers/` 등 자체 경로를 사용. silent drift 방어는 "canonical 강제" 가 아니라 "모든 환경이 시작 시 fetch+status, 종료 시 commit+push" — CONVENTIONS "다중 환경 커밋 위생" 섹션 참조. DECISIONS.md "environment-peer 모델" ADR 참조.
+>
+> **콜로니 self-install (2026-05-24~, clavier-hq DECISIONS ADR)**: Mac peer 표준 콜로니 위치 = `~/dev/clavier/` 컨테이너 (4 repo sibling: clavier-hq / clavier-scripts / platform-workers / clavier-vault-site). 호스트 어댑터 (`~/bin`·`~/.claude/settings.json`·`~/.claude/memory`·LaunchAgent) install = `bash clavier-hq/bootstrap.sh ensure` 한 줄 (멱등 desired-state). `tools/claude-hooks/<event>.sh` 폴더가 settings.json hook 등록 *정의* (SvelteKit 정신) — 파일 추가/삭제 = 즉시 등록/제거. `hooks/post-merge` 가 `git pull` 직후 ensure 자동 호출 (M1 메커니즘). drift 할 대상 0.
 
 ---
 

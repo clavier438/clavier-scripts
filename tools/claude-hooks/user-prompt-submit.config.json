@@ -3,55 +3,55 @@
     "domain": "worker",
     "keywords": ["worker", "워커", "platform-workers", "framer-sync", "worker-ctl", "workerCtl", "refresh-schema", "wrangler", "control-tower", "hotelAgency", "sisoso.*sync", "sync.*sisoso"],
     "files": [
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/framer-sync/ARCHITECTURE.md",
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/SYSTEM_ENV.md",
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/WORKER_STATUS.md",
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/QUEUE.md"
+      "platform-workers/framer-sync/ARCHITECTURE.md",
+      "clavier-hq/SYSTEM_ENV.md",
+      "clavier-hq/WORKER_STATUS.md",
+      "clavier-hq/QUEUE.md"
     ]
   },
   {
     "domain": "airtable",
     "keywords": ["airtable", "에어테이블", "9\\.0\\.", "9\\.1\\.", "mukayu", "sisoso", "hotelAgency", "atCreate", "AIRTABLE_PAT", "scripting", "createFieldAsync", "updateOptionsAsync", "doppler.*airtable", "베이스", "테이블", "필드", "레코드", "셀렉트", "formula", "rollup", "lookup", "multipleRecordLinks", "singleSelect", "multipleSelects", "multipleLookupValues", "autoNumber", "richText", "longText", "aiText", "multipleAttachments", "filterByFormula", "typecast", "REGEX_REPLACE", "meta/bases", "api\\.airtable\\.com", "airtable\\.com/developers", "app[A-Za-z0-9]{14}", "tbl[A-Za-z0-9]{14}", "fld[A-Za-z0-9]{14}", "rec[A-Za-z0-9]{14}", "sel[A-Za-z0-9]{14}", "viw[A-Za-z0-9]{14}", "airtableCtl", "airtableUpsertV6", "performUpsert", "slugKey", "upsert", "콘텐츠.*에어테이블", "에어테이블.*콘텐츠", "에어테이블.*올려", "에어테이블.*박아", "에어테이블.*채워", "호텔.*콘텐츠", "stay.*콘텐츠", "숙소.*콘텐츠", "브랜드.*컨셉", "페이지.*카피", "카피.*작성", "stayfolio", "스테이폴리오"],
     "files": [
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/airtable.md",
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/airtable-scripting.md",
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/airtable-v6.md",
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/airtable-content-workflow.md"
+      "clavier-scripts/tools/capabilities/airtable.md",
+      "clavier-scripts/tools/capabilities/airtable-scripting.md",
+      "clavier-scripts/tools/capabilities/airtable-v6.md",
+      "clavier-scripts/tools/capabilities/airtable-content-workflow.md"
     ]
   },
   {
     "domain": "airtable-webhooks",
     "keywords": ["webhook", "macSecret", "macSecretBase64", "X-Airtable-Content-MAC", "hmac-sha256", "changedTablesById", "createdRecordsById", "changedRecordsById", "destroyedRecordIds", "webhook:manage", "notificationUrl", "airtable_webhook_cursor", "airtable.*realtime", "실시간.*동기화"],
     "files": [
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/airtable-webhooks.md"
+      "clavier-scripts/tools/capabilities/airtable-webhooks.md"
     ]
   },
   {
     "domain": "github",
     "keywords": ["github", "깃허브", "gh secret", "gh pr", "gh workflow", "gh api", "gh release", "github.*action", "pull request", "workflow.*run"],
     "files": [
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/github.md"
+      "clavier-scripts/tools/capabilities/github.md"
     ]
   },
   {
     "domain": "cloudflare",
     "keywords": ["cloudflare", "클라우드플레어", "wrangler", "worker.*deploy", "d1 database", "kv namespace", "r2 bucket", "CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "hyperdrive", "cf token"],
     "files": [
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/cloudflare.md"
+      "clavier-scripts/tools/capabilities/cloudflare.md"
     ]
   },
   {
     "domain": "framer",
     "keywords": ["ManagedCollection", "mc\\.add", "mc\\.get", "mc\\.remove", "setFields", "getItemIds", "addItems", "removeItems", "framer.*plugin", "framer code component"],
     "files": [
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/framer.md"
+      "clavier-scripts/tools/capabilities/framer.md"
     ]
   },
   {
     "domain": "doppler",
     "keywords": ["doppler", "doppler.*config", "doppler.*secret", "doppler run", "DOPPLER_TOKEN"],
     "files": [
-      "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/tools/capabilities/doppler.md"
+      "clavier-scripts/tools/capabilities/doppler.md"
     ]
   }
 ]

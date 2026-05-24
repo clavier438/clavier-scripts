@@ -109,6 +109,8 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 
 **sibling-first 자동 탐색 (2026-05-03~)**: Layer 1 도구는 관련 repo 위치를 ① env override → ② sibling 디렉토리(`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 fallback 순으로 찾음. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs) / inline (.sh). OCI 부트는 `clavier-scripts`/`clavier-hq`/`platform-workers` 를 형제로 clone — zero-config. ARCHITECTURE.md "이 repo 안 파일의 Layer 분류" 표 참조.
 
+**콜로니 self-install (2026-05-24~, clavier-hq DECISIONS ADR)**: Mac peer 위치 = `~/dev/clavier/` 컨테이너 (4 repo sibling). 호스트 어댑터(`~/bin`·`~/.claude/settings.json`·`~/.claude/memory`·LaunchAgent) install = `bash clavier-hq/bootstrap.sh ensure` 한 줄. 멱등 desired-state — 어디서 어느 상태에서 돌려도 같은 결과. `tools/claude-hooks/<event>.sh` 폴더가 settings.json hook 등록 *정의* (SvelteKit 정신) — 파일 추가/삭제 = 즉시 등록/제거. drift 할 대상 0. `hooks/post-merge` 가 `git pull` 직후 ensure 자동 호출.
+
 ## Airtable Scripting 작업 시작 전 (2026-05-05~) ★ 강제
 
 Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.md` 자동 주입**됨 (UserPromptSubmit hook). 거기에 Table 클래스 / Field options / createFieldAsync 의 정확한 시그니처 (Airtable/blocks SDK source 매일 mirror).

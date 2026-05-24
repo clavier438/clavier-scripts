@@ -22,6 +22,7 @@
 - [피드백: 데이터 소스 직접 읽기](feedback_data_source.md) — CSV/JSON 파일이 있으면 하드코딩 말고 파일 파싱해서 사용할 것
 - [피드백: 공식 문서 우선 원칙](feedback_docs_first.md) — 새 API 연동 시 공식 docs/예제 먼저, 바퀴 재발명 금지
 - [피드백: 레퍼런스 클래스 탐색 방법론](feedback_reference_class.md) — 구현 전 동작 중인 케이스 먼저 탐색, 소스코드 직접 획득 우선, 한계 평가 후 합의하고 시작
+- [피드백: 설치 전 타겟 지원 검증](feedback_verify_before_install.md) — brew/npm/pip 설치 직전 그 도구가 사용자 타겟(앱/플랫폼) 지원하는지 docs 1회 검증
 - [사용자 프로필](user_profile.md) — 역할, 목표, 작업 스타일 (응대 방식 조정용)
 - [프로젝트: hotelAgency_ops](project_hotel_agency_ops.md) — Notion→Airtable 마이그레이션, Worker 배포 완료, Framer 연동 대기 중
 - [프로젝트: platform-workers](project_platform_workers.md) — CF Workers 모음 repo (framer-sync + sisoso-api), Framer 두 경로 모두 지원, 새 프로젝트 추가 절차 포함
