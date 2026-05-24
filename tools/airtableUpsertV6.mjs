@@ -22,6 +22,21 @@ import {
   pass2Links,
   ensureMatchKeyField,
 } from './lib/airtable-upsert.mjs';
+import { ensureDoppler } from './lib/doppler-wrap.mjs';
+import { bold, dim, cyan, green, yellow, red } from './lib/cli-color.mjs';
+import { extractBaseId } from './lib/airtable-input.mjs';
+
+// === Doppler self-respawn (workerCtl/airtableCtl 와 동등 UX) ===
+// AIRTABLE_PAT 이미 set 이면 skip (예: shell 에서 직접 export, doppler 자식 등).
+// 그 외엔 doppler run 으로 자기 자신 spawn → 사용자에게 `doppler run --` 강요 X.
+// lib/doppler-wrap.mjs 가 ENOENT/오프라인 시 silent — 아래 PAT 체크에서 명확한 에러.
+ensureDoppler({
+  project: 'clavier',
+  config: 'prd',
+  sentinelEnv: 'AIRTABLE_UPSERT_V6_DOPPLER_INJECTED',
+  requiredEnvs: ['AIRTABLE_PAT'],
+  fallbackEnvFile: '~/.clavier/env',
+});
 
 // ─────────────────────────────────────────────────────────────────────────
 // CAPABILITY_DOC — SSOT. pre-commit 이 이 const 를 capabilities/airtable-v6.md 로 generate.
@@ -197,39 +212,48 @@ for (const a of args) {
   else if (a === '--print-capability') { process.stdout.write(CAPABILITY_DOC); process.exit(0); }
   else positional.push(a);
 }
-const [baseId, dataDir] = positional;
+const [baseIdRaw, dataDir] = positional;
+// base ID = raw ID 또는 URL 둘 다 받음 (workerCtl/backup/airtableCtl 와 동등 UX)
+const baseId = baseIdRaw ? (extractBaseId(baseIdRaw) ?? baseIdRaw) : null;
 if (!baseId || !dataDir) {
-  console.error(`Usage: AIRTABLE_PAT=... node airtableUpsertV6.mjs <base_id> <data_dir> [--dry-run] [--extend]`);
-  console.error(`       node airtableUpsertV6.mjs --help              (사용 규칙 출력)`);
-  console.error(`       node airtableUpsertV6.mjs --print-capability  (capability doc — pre-commit 이 호출)`);
+  console.error(red('Usage:') + ` AIRTABLE_PAT=... node airtableUpsertV6.mjs <base_id|base_url> <data_dir> [--dry-run] [--extend]`);
+  console.error(`       node airtableUpsertV6.mjs --help              ${dim('(사용 규칙 출력)')}`);
+  console.error(`       node airtableUpsertV6.mjs --print-capability  ${dim('(capability doc — pre-commit 이 호출)')}`);
   process.exit(1);
 }
-if (!fs.existsSync(dataDir)) { console.error(`data_dir not found: ${dataDir}`); process.exit(1); }
+if (!fs.existsSync(dataDir)) { console.error(red(`✗ data_dir not found: ${dataDir}`)); process.exit(1); }
 
 const pat = process.env.AIRTABLE_PAT;
-if (!pat) { console.error('AIRTABLE_PAT environ not set'); process.exit(1); }
+if (!pat) {
+  console.error(red('✗ AIRTABLE_PAT environ not set.'));
+  console.error(dim('   doppler config (project=clavier, config=prd) 에 AIRTABLE_PAT 있는지 확인.'));
+  console.error(dim('   doppler 미설치 시: brew install dopplerhq/cli/doppler && doppler login'));
+  process.exit(1);
+}
 
 // ─────────────────────────── main
 const api = createClient(pat);
 
-const modeLabel = opts.extend ? '[EXTEND]' : '[strict]';
-console.log(`base: ${baseId}  dataDir: ${dataDir}  ${modeLabel}  ${opts.dryRun ? '[DRY-RUN]' : ''}`);
+const modeLabel = opts.extend ? yellow('[EXTEND]') : dim('[strict]');
+const dryLabel  = opts.dryRun ? yellow('[DRY-RUN]') : '';
+console.log(`${bold('base')}: ${cyan(baseId)}  ${bold('dataDir')}: ${dataDir}  ${modeLabel} ${dryLabel}`);
+if (baseIdRaw !== baseId) console.log(dim(`  (입력에서 base ID 추출: "${baseIdRaw.slice(0, 50)}${baseIdRaw.length > 50 ? '…' : ''}")`));
 
 // 1) load data + schema
 const { config, tables: data } = loadDataDir(dataDir);
-console.log(`config.matchKey=${config.matchKey} linkSeparator="${config.linkSeparator}" tables=${Object.keys(data).join(',')}`);
+console.log(dim(`config.matchKey=${config.matchKey} linkSeparator="${config.linkSeparator}" tables=${Object.keys(data).join(',')}`));
 
 const rawSchema = await api.getSchema(baseId);
 const schema = analyzeSchema(rawSchema);
 
 // 2) matchKey field 보장
-console.log('\n── ensure matchKey field ──');
+console.log(bold(cyan('\n── ensure matchKey field ──')));
 for (const tableName of Object.keys(data)) {
   const tSchema = schema.tablesByName[tableName];
-  if (!tSchema) { console.warn(`  ${tableName}: base에 없는 테이블 — skip`); continue; }
+  if (!tSchema) { console.warn(yellow(`  ${tableName}: base에 없는 테이블 — skip`)); continue; }
   const matchKey = data[tableName].matchKey;
   const created = await ensureMatchKeyField(api, baseId, tSchema, matchKey, opts);
-  console.log(`  ${tableName}.${matchKey}: ${created ? 'CREATED' : 'exists'}`);
+  console.log(`  ${tableName}.${matchKey}: ${created ? green('CREATED') : dim('exists')}`);
   // schema 에 가상 추가 (dry-run/live 모두 일관) — transformRow 가 matchKey 컬럼 인식하도록
   if (created && !tSchema.fields.some(f => f.name === matchKey)) {
     tSchema.fields.push({ name: matchKey, type: 'singleLineText' });
@@ -238,7 +262,7 @@ for (const tableName of Object.keys(data)) {
 
 // 2-bis) extend mode — CSV 헤더에 base 에 없는 컬럼 있으면 singleLineText 로 자동 생성
 if (opts.extend) {
-  console.log('\n── extend mode — new fields ──');
+  console.log(bold(cyan('\n── extend mode — new fields ──')));
   for (const [tableName, t] of Object.entries(data)) {
     const tSchema = schema.tablesByName[tableName];
     if (!tSchema) continue;
@@ -248,7 +272,7 @@ if (opts.extend) {
     const newCols = [...csvHeaders].filter(h => !existing.has(h));
     for (const col of newCols) {
       if (opts.dryRun) {
-        console.log(`  [DRY] ${tableName}.${col}: would CREATE (singleLineText)`);
+        console.log(`  ${yellow('[DRY]')} ${tableName}.${col}: would CREATE (singleLineText)`);
         tSchema.fields.push({ name: col, type: 'singleLineText' });  // 가상 추가
       } else {
         await api.createField(baseId, tSchema.id, {
@@ -257,10 +281,10 @@ if (opts.extend) {
           description: 'Auto-created by V6 extend mode',
         });
         tSchema.fields.push({ name: col, type: 'singleLineText' });
-        console.log(`  ${tableName}.${col}: CREATED (singleLineText)`);
+        console.log(`  ${tableName}.${col}: ${green('CREATED')} (singleLineText)`);
       }
     }
-    if (newCols.length === 0) console.log(`  ${tableName}: 모든 CSV 컬럼이 base 에 이미 존재`);
+    if (newCols.length === 0) console.log(dim(`  ${tableName}: 모든 CSV 컬럼이 base 에 이미 존재`));
   }
 }
 
@@ -279,11 +303,13 @@ for (const [tableName, t] of Object.entries(data)) {
     const { fields, linkKeys } = transformRow(tableName, row, schema, schema.linksByTable, config.linkSeparator);
     return { fields, linkKeys, matchKeyValue: fields[t.matchKey] };
   }).filter(r => r.matchKeyValue);
-  console.log(`  ${tableName}: ${transformed[tableName].length} rows (${t.rows.length - transformed[tableName].length} skipped without matchKey)`);
+  const skipped = t.rows.length - transformed[tableName].length;
+  const skipNote = skipped > 0 ? yellow(` (${skipped} skipped without matchKey)`) : '';
+  console.log(`  ${tableName}: ${green(transformed[tableName].length + ' rows')}${skipNote}`);
 }
 
 // 4) Pass 1 — fields-only upsert
-console.log('\n── Pass 1: fields-only upsert ──');
+console.log(bold(cyan('\n── Pass 1: fields-only upsert ──')));
 const allKeyToId = {};
 for (const [tableName, rows] of Object.entries(transformed)) {
   const tSchema = schema.tablesByName[tableName];
@@ -291,12 +317,12 @@ for (const [tableName, rows] of Object.entries(transformed)) {
   const matchKey = data[tableName].matchKey;
   const keyToId = await pass1Upsert(api, baseId, tableName, tSchema, rows, matchKey, opts);
   allKeyToId[tableName] = keyToId;
-  console.log(`  ${tableName}: ${rows.length} upserted`);
+  console.log(`  ${tableName}: ${green(rows.length + ' upserted')}`);
 }
 
 // 4-bis) link target 매핑 확장 — base 의 기존 record 까지 포함
 // (link 가 기존 base record 를 가리키는 케이스 = 가장 흔함. sisoso items 가 mukayu group 에 link 같은 거.)
-console.log('\n── link target 매핑 (기존 base record 포함) ──');
+console.log(bold(cyan('\n── link target 매핑 (기존 base record 포함) ──')));
 for (const tableName of Object.keys(schema.tablesByName)) {
   const tSchema = schema.tablesByName[tableName];
   const matchKey = data[tableName]?.matchKey || config.matchKey;
@@ -308,11 +334,11 @@ for (const tableName of Object.keys(schema.tablesByName)) {
     const k = r.fields[matchKey];
     if (k && !allKeyToId[tableName][k]) allKeyToId[tableName][k] = r.id;
   }
-  console.log(`  ${tableName}: ${Object.keys(allKeyToId[tableName]).length} keys`);
+  console.log(`  ${tableName}: ${dim(Object.keys(allKeyToId[tableName]).length + ' keys')}`);
 }
 
 // 5) Pass 2 — link resolution
-console.log('\n── Pass 2: link resolve + patch ──');
+console.log(bold(cyan('\n── Pass 2: link resolve + patch ──')));
 for (const [tableName, rows] of Object.entries(transformed)) {
   const tSchema = schema.tablesByName[tableName];
   if (!tSchema || rows.length === 0) continue;
@@ -320,7 +346,8 @@ for (const [tableName, rows] of Object.entries(transformed)) {
   const keyToId = allKeyToId[tableName];
   const recIds = rows.map(r => keyToId[r.matchKeyValue]);
   const cnt = await pass2Links(api, baseId, tableName, tSchema, rows, recIds, allKeyToId, schema.linksByTable, opts);
-  console.log(`  ${tableName}: ${cnt} link updates`);
+  const cntLabel = cnt > 0 ? green(cnt + ' link updates') : dim('0 link updates');
+  console.log(`  ${tableName}: ${cntLabel}`);
 }
 
-console.log(`\n${opts.dryRun ? 'DRY-RUN DONE.' : 'DONE.'}`);
+console.log(`\n${opts.dryRun ? yellow('DRY-RUN DONE.') : green(bold('DONE.'))}`);
