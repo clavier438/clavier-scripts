@@ -1,0 +1,46 @@
+{
+  "worker": "framer-sync",
+  "version": "2.3.0",
+  "configured": true,
+  "airtableBaseId": "appWubp1dkpUMvfeQ",
+  "hasAirtableToken": true,
+  "framerProjectUrl": "https://framer.com/projects/Aware-Cougar--Ux7Z4HyRfulGrxXyZcya-8a1aS",
+  "hasFramerApiKey": true,
+  "gtmContainerId": null,
+  "syncMode": "push-full",
+  "webhookMode": "push-full",
+  "tables": [
+    {
+      "name": "Content",
+      "fields": 7,
+      "slugField": "Title"
+    },
+    {
+      "name": "Tags",
+      "fields": 3,
+      "slugField": "slug"
+    },
+    {
+      "name": "Notes",
+      "fields": 2,
+      "slugField": "slug"
+    }
+  ],
+  "sync": {
+    "stage1": {
+      "at": "2026-05-22T03:02:16.908Z",
+      "by": "push-managed",
+      "collections": 3,
+      "rows": 31
+    },
+    "webhookReceived": {
+      "at": "2026-05-19T12:03:06.413Z"
+    },
+    "webhookRefreshed": {
+      "at": "2026-05-24T11:51:44.186Z"
+    }
+  },
+  "conversion": null,
+  "transformChain": "\n┌─ 필드 변환 체인 ─────────────────────────────────────────────────\n│\n│ ▸ Content  (7 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   Title                 singleLineText        string          string\n│   Slug                  singleLineText        string          string\n│   Summary               multilineText         string          string\n│   Body                  multilineText         string          string\n│   Category              singleSelect          enum            string\n│   Status                singleSelect          enum            string\n│   RelatedTags           multipleRecordLinks   multiCollection…string\n│\n│ ▸ Tags  (3 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   Name                  singleLineText        string          string\n│   slug                  singleLineText        string          string\n│   Content               multipleRecordLinks   multiCollection…string\n│\n│ ▸ Notes  (2 fields)\n│   FIELD                 AIRTABLE              D1              FRAMER\n│   ────────────────────────────────────────────────────────────────────────\n│   Title                 singleLineText        string          string\n│   slug                  singleLineText        string          string\n└──────────────────────────────────────────────────────────────────",
+  "snapshotAt": "2026-05-24T23:38:06.058Z"
+}
