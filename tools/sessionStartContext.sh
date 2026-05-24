@@ -17,18 +17,40 @@ if [ -d "$HQ/.git" ]; then
     git -C "$HQ" pull --quiet 2>/dev/null || true
 fi
 
-read_file() {
-    if [ -f "$1" ]; then
-        cat "$1"
-    else
-        echo "(파일 없음: $1)"
-    fi
+# ## 헤더에 marker가 포함된 섹션 추출 (다음 ## 까지, 최대 limit줄)
+extract_section() {
+    local file="$1" marker="$2" limit="${3:-9999}"
+    awk -v m="$marker" -v lim="$limit" '
+        /^## /{if(p) exit; p=(index($0, m)>0)}
+        p{print; c++; if(c>=lim) exit}
+    ' "$file"
 }
 
-combined=$(printf '# === clavier-hq/MISSION.md (방향) ===\n%s\n\n# === clavier-hq/STATUS.md (현재 상태) ===\n%s\n\n# === clavier-hq/QUEUE.md (지금 할 일) ===\n%s' \
-  "$(read_file "$HQ/MISSION.md")" \
-  "$(read_file "$HQ/STATUS.md")" \
-  "$(read_file "$HQ/QUEUE.md")")
+# MISSION: 첫 20줄 (STL 원칙 핵심)
+mission=$(head -20 "$HQ/MISSION.md" 2>/dev/null || echo "(파일 없음: MISSION.md)")
+
+# STATUS: 첫 30줄 (프로젝트 현황 테이블 포함)
+status=$(head -30 "$HQ/STATUS.md" 2>/dev/null || echo "(파일 없음: STATUS.md)")
+
+# QUEUE: 진행 중(🟢) 섹션 전체 + P0(🔴) 섹션 첫 20줄
+queue_active=$(extract_section "$HQ/QUEUE.md" "🟢")
+queue_p0=$(extract_section "$HQ/QUEUE.md" "🔴" 20)
+
+combined="# === MISSION (STL 원칙 요약) ===
+$mission
+
+# === STATUS (현재 상태) ===
+$status
+
+# === QUEUE 진행 중 ===
+$queue_active"
+
+if [ -n "$queue_p0" ]; then
+    combined="$combined
+
+# === QUEUE P0 즉시 시정 (상위 20줄) ===
+$queue_p0"
+fi
 
 # 시스템 자동화 실측 도면 — systemMap.mjs 가 ~/Library/LaunchAgents 를 직접 렌더.
 # 손으로 쓴 현황 도면(사본)은 반드시 drift → 매 세션 *생성*해 주입한다
