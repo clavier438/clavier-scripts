@@ -18,18 +18,19 @@
  *                      이 상태는 정상이 아님; 사용자 수동 조사 필요)
  *       이미 동기    → 침묵 통과
  *       offline      → 노란 경고 + 통과
- *   - branch != main:
- *       fetch origin main
- *       origin/main 이 HEAD 보다 앞서 있으면 → 노란 경고 (블록 X, 작업 흐름 보존)
- *       "프로덕션 픽스가 누락됐을 가능성 — merge origin/main 권장" 알림
- *       offline 이면 침묵 통과
+ *   - branch != main (scripts repo):
+ *       CLAVIER_TEST_BRANCH=1 → 노란 경고만 하고 통과 (명시적 테스트 모드)
+ *       그 외 → main checkout + ff-only pull 후 재실행 (main 이외 경로 완전 차단)
+ *       offline → 노란 경고 + 통과
+ *   - branch != main (platform-workers 등):
+ *       origin/main 보다 뒤처지면 노란 경고만 (블록 X)
  *
  * 한 프로세스에 한 번만 수행 (env guard). 자식 프로세스에도 전파됨.
  * `CLAVIER_LOCAL_DEV=1` 으로 dev-escape 가능 (의도적 stale 실행).
  * git hook 내부 (GIT_DIR set) 에서는 skip — 재귀 방지.
  */
 
-import { execSync } from "child_process"
+import { execSync, spawnSync } from "child_process"
 import { fileURLToPath } from "url"
 import { dirname, resolve } from "path"
 import { findPlatformWorkers } from "./repoPaths.mjs"
@@ -121,23 +122,52 @@ function checkRepo(repo, label) {
     }
 
     // branch != main — feature branch.
-    // origin/main 에 현재 브랜치가 아직 안 받은 commit 있으면 경고만 (블록 X).
-    // 프로덕션 픽스가 main 에 들어갔는데 feature 브랜치 로컬 코드로 실행하다 빠뜨리는 함정 차단.
-    if (!fetched) return  // 오프라인 — 침묵 통과
+    // CLAVIER_TEST_BRANCH=1 이면 테스트 목적으로 명시한 것 → 경고만 하고 통과.
+    // 그 외 scripts repo 는 자동으로 main 전환 후 재실행 — feature branch 로 실수 실행 경로 차단.
+    if (process.env.CLAVIER_TEST_BRANCH === "1") {
+        process.stderr.write(`\x1b[33m⚑  test-branch[${label}]: '${branch}' 기준으로 실행 (CLAVIER_TEST_BRANCH=1)\x1b[0m\n`)
+        return
+    }
+
+    if (label !== "scripts") {
+        // platform-workers 등 — 경고만 (재실행 주체가 아님)
+        if (!fetched) return
+        try {
+            const behind = Number(execSync(
+                `git -C "${repo}" rev-list --count HEAD..origin/main`,
+                { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+            ).trim())
+            if (behind > 0) {
+                process.stderr.write(
+                    `\n\x1b[33m! freshness[${label}]: '${branch}' 가 origin/main 보다 ${behind} commit 부족.\x1b[0m\n` +
+                    `\x1b[33m    테스트 목적이면 유지. 아니면:  git -C "${repo}" checkout main\x1b[0m\n\n`,
+                )
+            }
+        } catch { /* best-effort */ }
+        return
+    }
+
+    // scripts repo, non-main → main 으로 자동 전환 후 재실행
+    if (!fetched) {
+        process.stderr.write(`\x1b[33m! freshness[${label}]: 오프라인 — main 전환 불가. '${branch}' 로 진행\x1b[0m\n`)
+        return
+    }
 
     try {
-        const behindMain = Number(execSync(
-            `git -C "${repo}" rev-list --count HEAD..origin/main`,
-            { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
-        ).trim())
-        if (behindMain > 0) {
-            process.stderr.write(
-                `\n\x1b[33m! freshness[${label}]: '${branch}' 가 origin/main 보다 ${behindMain} commit 부족.\x1b[0m\n` +
-                `\x1b[33m    프로덕션 픽스가 누락됐을 가능성. 권장:  git -C "${repo}" merge origin/main\x1b[0m\n` +
-                `\x1b[33m    누락 commit 확인:  git -C "${repo}" log HEAD..origin/main --oneline\x1b[0m\n\n`,
-            )
-        }
+        execSync(`git -C "${repo}" checkout main`, { stdio: ["ignore", "ignore", "ignore"] })
+        execSync(`git -C "${repo}" pull --ff-only --quiet origin main`, { stdio: ["ignore", "ignore", "ignore"] })
     } catch {
-        /* 무시 — 경고는 best-effort */
+        process.stderr.write(
+            `\n\x1b[31m‼️  freshness[${label}]: main 전환 실패 — uncommitted changes 가 있을 수 있음.\x1b[0m\n` +
+            `\x1b[31m    테스트 목적이면: CLAVIER_TEST_BRANCH=1 <command>\x1b[0m\n\n`,
+        )
+        process.exit(1)
     }
+
+    // main 으로 전환됐으니 현재 프로세스 종료 후 main 버전으로 재실행
+    process.stderr.write(`\x1b[36mℹ freshness: '${branch}' → main 전환 후 재실행\x1b[0m\n`)
+    const env = { ...process.env }
+    delete env._CLAVIER_FRESHNESS_OK
+    const result = spawnSync(process.execPath, process.argv.slice(1), { stdio: "inherit", env })
+    process.exit(result.status ?? 0)
 }
