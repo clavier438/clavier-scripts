@@ -9,11 +9,15 @@
 
 . "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
 
-ICLOUD="/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0"
-HQ="$ICLOUD/code/projects/clavier-hq"
+# clavier-hq 위치 — sibling-first 자동 탐색 (CONCEPTS #15).
+# env override > sibling 디렉토리 > 못 찾으면 silent skip (도면 빠진 채로 진행).
+_SELF_DIR_SH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_SCRIPTS_ROOT="$(cd "$_SELF_DIR_SH/.." && pwd)"
+HQ="${CLAVIER_HQ:-$_SCRIPTS_ROOT/../clavier-hq}"
+[ -d "$HQ/.git" ] || HQ=""   # 못 찾으면 head/extract 가 silent 빈 결과 반환
 
 # clavier-hq 최신 상태로 업데이트 (네트워크 실패해도 진행)
-if [ -d "$HQ/.git" ]; then
+if [ -n "$HQ" ] && [ -d "$HQ/.git" ]; then
     git -C "$HQ" pull --quiet 2>/dev/null || true
 fi
 
@@ -26,6 +30,12 @@ extract_section() {
     ' "$file"
 }
 
+# HQ 못 찾았으면 모든 추출이 빈 결과 — silent skip (도면이라도 주입되게)
+if [ -z "$HQ" ]; then
+    mission="(clavier-hq 못 찾음 — bootstrap ensure 또는 CLAVIER_HQ env 설정 필요)"
+    status=""; queue_active=""; queue_p0=""
+else
+
 # MISSION: 첫 20줄 (STL 원칙 핵심)
 mission=$(head -20 "$HQ/MISSION.md" 2>/dev/null || echo "(파일 없음: MISSION.md)")
 
@@ -35,6 +45,7 @@ status=$(head -30 "$HQ/STATUS.md" 2>/dev/null || echo "(파일 없음: STATUS.md
 # QUEUE: 진행 중(🟢) 섹션 전체 + P0(🔴) 섹션 첫 20줄
 queue_active=$(extract_section "$HQ/QUEUE.md" "🟢")
 queue_p0=$(extract_section "$HQ/QUEUE.md" "🔴" 20)
+fi  # HQ 없음 분기 끝
 
 combined="# === MISSION (STL 원칙 요약) ===
 $mission

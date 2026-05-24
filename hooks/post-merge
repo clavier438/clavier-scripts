@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# post-merge — git pull / 머지 직후 콜로니 bootstrap ensure 자동 호출.
+#
+# 왜: tools/ 추가·삭제·이동이 있으면 ~/bin wrapper 즉시 재생성돼야 한다.
+# "installScripts 돌리는 걸 *기억해서* 다시 돌려야 한다" = 권유. 권유는 새고
+# stale wrapper 가 silent fail (DECISIONS 2026-05-12~24 12일 backfill 사고).
+#
+# 본 훅이 git 이벤트로 그 권유를 흡수 — *git pull 한 사람*이 *반드시* ~/bin 도
+# 같이 갱신되는 상태 (DECISIONS 2026-05-24 본 ADR M1 메커니즘).
+#
+# 작동 조건: 콜로니 컨테이너 안 (~/dev/clavier/clavier-scripts 등 sibling 위치)
+#           + clavier-hq/bootstrap.sh 존재.
+# OCI/web 환경 — bootstrap.sh 가 sibling-first 로 자동 발견 + 같은 동작.
+# 없으면 silent skip (Layer 2 모델 호환).
+
+set -uo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+[ -z "$REPO_ROOT" ] && exit 0
+
+# sibling-first 로 clavier-hq + bootstrap.sh 발견
+HQ="${CLAVIER_HQ:-$REPO_ROOT/../clavier-hq}"
+BOOTSTRAP="$HQ/bootstrap.sh"
+
+[ -f "$BOOTSTRAP" ] || exit 0   # 콜로니 아님 — skip
+
+echo ""
+echo "────────────────────────────────────────────────────────────────"
+echo "  [post-merge] git pull/merge 감지 — bootstrap ensure 자동 실행"
+echo "────────────────────────────────────────────────────────────────"
+
+# 무한 재귀 방지 (bootstrap 이 setup.sh → installScripts.sh 호출하는데
+# 그 중간에 또 git pull 발생할 수 있음. 마커로 single-run 강제)
+if [ -n "${_CLAVIER_BOOTSTRAP_RUNNING:-}" ]; then
+    echo "  bootstrap 이미 실행 중 — skip (재귀 방지)"
+    exit 0
+fi
+export _CLAVIER_BOOTSTRAP_RUNNING=1
+
+bash "$BOOTSTRAP" ensure
+rc=$?
+
+if [ $rc -ne 0 ]; then
+    echo ""
+    echo "‼️  bootstrap ensure 실패 (exit $rc). 수동 점검:" >&2
+    echo "    bash $BOOTSTRAP status" >&2
+fi
+
+exit 0   # post-merge 는 절대 git 동작 막지 않음

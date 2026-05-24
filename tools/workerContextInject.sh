@@ -19,6 +19,11 @@ command -v jq >/dev/null || exit 0
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="$SCRIPT_DIR/contextInject.json"
 
+# 콜로니 root — sibling-first 자동 탐색 (CONCEPTS #15).
+# contextInject.json 의 files 는 *콜로니 상대경로* (예: "clavier-hq/SYSTEM_ENV.md").
+# host-agnostic JSON + .sh 에서 prepend.
+COLONY="${CLAVIER_COLONY:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+
 [ -f "$CONFIG" ] || exit 0
 
 input=$(cat)
@@ -52,11 +57,16 @@ combined="$header"
 
 while IFS= read -r filepath; do
     [ -z "$filepath" ] && continue
-    label=$(basename "$(dirname "$filepath")")/$(basename "$filepath")
-    if [ -f "$filepath" ]; then
-        content=$(cat "$filepath")
+    # 절대경로면 그대로, 상대경로면 콜로니 root 기준 (sibling-first).
+    case "$filepath" in
+        /*) abspath="$filepath" ;;
+        *)  abspath="$COLONY/$filepath" ;;
+    esac
+    label=$(basename "$(dirname "$abspath")")/$(basename "$abspath")
+    if [ -f "$abspath" ]; then
+        content=$(cat "$abspath")
     else
-        content="(파일 없음: $filepath)"
+        content="(파일 없음: $abspath)"
     fi
     combined=$(printf '%s\n\n## %s\n\n%s' "$combined" "$label" "$content")
 done <<< "$matched_files"
