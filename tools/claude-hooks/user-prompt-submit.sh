@@ -8,21 +8,23 @@
 # 출력: hookSpecificOutput JSON (Claude Code UserPromptSubmit hook 규약)
 # 키워드 미매칭 시: silent exit (컨텍스트 주입 없음)
 #
-# 도메인 설정: tools/contextInject.json (OCP — 새 도메인 = JSON 편집만)
+# 도메인 설정: tools/claude-hooks/user-prompt-submit.config.json
+# (옆에 둠 — SvelteKit 정신: 같은 hook 의 코드와 데이터를 폴더로 결속.
+# OCP — 새 도메인 = JSON 편집만)
 
 # jq 없으면 silent exit (JSON 조립 불가)
 
-. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/../lib/freshness.sh"
 
 command -v jq >/dev/null || exit 0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG="$SCRIPT_DIR/contextInject.json"
+CONFIG="$SCRIPT_DIR/user-prompt-submit.config.json"
 
 # 콜로니 root — sibling-first 자동 탐색 (CONCEPTS #15).
-# contextInject.json 의 files 는 *콜로니 상대경로* (예: "clavier-hq/SYSTEM_ENV.md").
+# config.json 의 files 는 *콜로니 상대경로* (예: "clavier-hq/SYSTEM_ENV.md").
 # host-agnostic JSON + .sh 에서 prepend.
-COLONY="${CLAVIER_COLONY:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+COLONY="${CLAVIER_COLONY:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"   # claude-hooks → tools → scripts-root → colony
 
 [ -f "$CONFIG" ] || exit 0
 

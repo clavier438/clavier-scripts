@@ -7,12 +7,12 @@
 #
 # 출력: hookSpecificOutput JSON (Claude Code SessionStart hook 규약)
 
-. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/../lib/freshness.sh"
 
 # clavier-hq 위치 — sibling-first 자동 탐색 (CONCEPTS #15).
 # env override > sibling 디렉토리 > 못 찾으면 silent skip (도면 빠진 채로 진행).
 _SELF_DIR_SH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-_SCRIPTS_ROOT="$(cd "$_SELF_DIR_SH/.." && pwd)"
+_SCRIPTS_ROOT="$(cd "$_SELF_DIR_SH/../.." && pwd)"   # claude-hooks → tools → scripts-root
 HQ="${CLAVIER_HQ:-$_SCRIPTS_ROOT/../clavier-hq}"
 [ -d "$HQ/.git" ] || HQ=""   # 못 찾으면 head/extract 가 silent 빈 결과 반환
 
@@ -67,11 +67,12 @@ fi
 # 손으로 쓴 현황 도면(사본)은 반드시 drift → 매 세션 *생성*해 주입한다
 # (DECISIONS 2026-05-18 "생성형 도면"). 생성 실패는 침묵 아닌 시끄러운 마커로.
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-sysmap=$(node "$SELF_DIR/systemMap.mjs" 2>&1)
+SYSMAP_MJS="$SELF_DIR/../systemMap.mjs"   # claude-hooks → tools/systemMap.mjs
+sysmap=$(node "$SYSMAP_MJS" 2>&1)
 if [ $? -ne 0 ] || [ -z "$sysmap" ]; then
     sysmap="# === ⚠️ 시스템 자동화 도면 생성 실패 ===
 systemMap.mjs 실행 실패. 현재 자동화 상태를 신뢰하지 말 것.
-\`node '$SELF_DIR/systemMap.mjs'\` 를 직접 실행해 진단."
+\`node '$SYSMAP_MJS'\` 를 직접 실행해 진단."
 fi
 combined="$combined
 

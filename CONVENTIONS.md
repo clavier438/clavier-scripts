@@ -14,7 +14,9 @@
 - `clavier-scripts`: Mac/OCI/web 공용 스크립트
 - `oci-scripts`: OCI 서버 전용
 
-**SSOT = GitHub(code) + Doppler(runtime config) 둘 뿐.** 로컬 클론은 모두 휘발성 peer — 어느 환경(Mac iCloud / OCI VM / Claude web 세션 / 새 노트북 / 미래의 라즈베리파이 등)에 클론되어 있든 동등. "canonical 클론 1개" 규칙은 폐기됨 (2026-05-03 ADR "environment-peer 모델"). 실용 경로(예: Mac 의 `~/Library/Mobile Documents/.../scripts/`, OCI 의 `~/oci-scripts/`)는 그 환경의 편의일 뿐 아키텍처적 진실이 아님.
+**SSOT = GitHub(code) + Doppler(runtime config) 둘 뿐.** 로컬 클론은 모두 휘발성 peer — 어느 환경(Mac iCloud / OCI VM / Claude web 세션 / 새 노트북 / 미래의 라즈베리파이 등)에 클론되어 있든 동등. "canonical 클론 1개" 규칙은 폐기됨 (2026-05-03 ADR "environment-peer 모델"). 실용 경로(예: Mac 의 `~/dev/clavier/`, OCI 의 `~/clavier-scripts/`)는 그 환경의 편의일 뿐 아키텍처적 진실이 아님.
+
+**2026-05-24 갱신** (clavier-hq DECISIONS "콜로니 self-install"): Mac peer 표준 콜로니 위치 = `~/dev/clavier/` 컨테이너 (4 repo sibling). 호스트 어댑터 install = `bash clavier-hq/bootstrap.sh ensure` (멱등). `tools/claude-hooks/<event>.sh` 폴더가 settings.json hook 등록 *정의* (SvelteKit 정신). 옛 iCloud `~/Library/Mobile Documents/.../scripts/` 경로 폐기.
 
 **silent drift 방어막** (canonical 폐기 후 대체 메커니즘):
 1. 모든 환경이 세션 시작 시 `git fetch && git status` + ahead/behind 0/0 확인 (아래 "다중 환경 커밋 위생" 섹션)
