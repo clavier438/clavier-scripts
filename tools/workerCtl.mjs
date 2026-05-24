@@ -19,6 +19,9 @@ import { dirname, join } from "path"
 import { homedir } from "os"
 import { findPlatformWorkers, findClavierHq } from "./lib/repoPaths.mjs"
 import { DOPPLER_PROJECT, getWorkerEnv, listWorkerEnvs } from "./lib/workerEnvMap.mjs"
+import { ensureDoppler } from "./lib/doppler-wrap.mjs"
+import { bold, dim, cyan, green, yellow, red, gray } from "./lib/cli-color.mjs"
+import { extractBaseId as extractAirtableBaseId } from "./lib/airtable-input.mjs"
 
 // framer-sync 코드 본체 경로 (wrangler 명령 실행 기준 디렉토리)
 // sibling-first 자동 탐색 (environment-peer 모델, DECISIONS 2026-05-03)
@@ -44,35 +47,14 @@ function shellWrangler(cmd, config = "prd") {
 }
 
 // === 시크릿 단일 진실 소스 = Doppler (CLAUDE.md 2026-04-28~) ===
-// doppler 사용 가능하면 self-relaunch 로 정확한 env 주입.
-// 실패 시(오프라인·login 안 됨) ~/.clavier/env 폴백.
-if (!process.env.WORKERCTL_DOPPLER_INJECTED) {
-    let dopplerOk = false
-    try { execSync("doppler --version", { stdio: "ignore", timeout: 2000 }); dopplerOk = true }
-    catch { /* doppler 없음 → 폴백 */ }
-    if (dopplerOk) {
-        const r = spawnSync("doppler",
-            ["run", "--project", "clavier", "--config", "prd", "--", process.execPath, ...process.argv.slice(1)],
-            { stdio: "inherit", env: { ...process.env, WORKERCTL_DOPPLER_INJECTED: "1" } })
-        if (!r.error) process.exit(r.status ?? 0)
-    }
-}
-
-// ~/.clavier/env 폴백 — Doppler 미사용 시
-try {
-    const envFile = join(homedir(), ".clavier", "env")
-    readFileSync(envFile, "utf8").split("\n").forEach(line => {
-        line = line.trim()
-        if (!line || line.startsWith("#") || !line.includes("=")) return
-        const [k, ...rest] = line.split("=")
-        const key = k.trim()
-        let val = rest.join("=").trim()
-        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-            val = val.slice(1, -1)
-        }
-        if (!process.env[key]) process.env[key] = val
-    })
-} catch { /* ~/.clavier/env 없으면 shell env 사용 */ }
+// doppler 사용 가능하면 self-relaunch 로 정확한 env 주입. 실패 시(오프라인·
+// login 안 됨) ~/.clavier/env 폴백. lib/doppler-wrap.mjs 가 두 가지 다 처리.
+ensureDoppler({
+    project: "clavier",
+    config: "prd",
+    sentinelEnv: "WORKERCTL_DOPPLER_INJECTED",
+    fallbackEnvFile: "~/.clavier/env",
+})
 
 const __dir = dirname(fileURLToPath(import.meta.url))
 
@@ -86,24 +68,7 @@ const WORKERS_CACHE_DIR = join(homedir(), ".cache", "clavier")
 const WORKERS_CACHE_FILE = join(WORKERS_CACHE_DIR, "workers.json")
 const WORKERS_CACHE_TTL_MS = 60_000
 
-// ── 색상 유틸 ──────────────────────────────────────────────────────────────
-const c = {
-    reset:  "\x1b[0m",
-    bold:   "\x1b[1m",
-    dim:    "\x1b[2m",
-    cyan:   "\x1b[36m",
-    green:  "\x1b[32m",
-    yellow: "\x1b[33m",
-    red:    "\x1b[31m",
-    gray:   "\x1b[90m",
-}
-const bold   = s => `${c.bold}${s}${c.reset}`
-const dim    = s => `${c.dim}${s}${c.reset}`
-const cyan   = s => `${c.cyan}${s}${c.reset}`
-const green  = s => `${c.green}${s}${c.reset}`
-const yellow = s => `${c.yellow}${s}${c.reset}`
-const red    = s => `${c.red}${s}${c.reset}`
-const gray   = s => `${c.gray}${s}${c.reset}`
+// 색상 유틸은 lib/cli-color.mjs 에서 import (파일 상단)
 
 // ── Framer 프로젝트 ↔ 토큰 매핑 (Doppler FRAMER_PROJECTS JSON) ─────────────
 // 한 Framer 프로젝트는 (projectUrl, apiToken) 쌍을 항상 함께 가진다.
@@ -134,13 +99,10 @@ function extractFramerProjectId(url) {
     return m ? m[1] : null
 }
 
-// Airtable Base ID 정규화 — raw base ID(appXXX) 든 base URL 이든 ID 만 뽑는다.
-// Framer URL 칸은 extractFramerProjectId 로 추출하는데 Airtable 칸은 verbatim 저장이라,
-// 사용자가 URL 을 붙여넣으면 그게 그대로 base ID 로 박혀 워커 스키마 fetch 가 404.
-function extractAirtableBaseId(input) {
-    const m = String(input).match(/\bapp[A-Za-z0-9]{14}\b/)
-    return m ? m[0] : null
-}
+// Airtable Base ID 정규화는 lib/airtable-input.mjs 의 extractBaseId 사용
+// (상단 import 의 extractAirtableBaseId alias).
+// — Framer URL 칸은 extractFramerProjectId 로 추출하는데 Airtable 칸은 verbatim 저장이라,
+//   사용자가 URL 을 붙여넣으면 그게 그대로 base ID 로 박혀 워커 스키마 fetch 가 404.
 
 // Airtable Base 사전검증 — /configure 를 POST 하기 전에 base 가 실재하는지 직접 확인.
 // 잘못된 base 가 워커 config 를 poison 해 워커 전체가 죽는 사고 방지 (2026-05-15).

@@ -34,33 +34,24 @@ import "./lib/freshness.mjs"
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, renameSync } from "fs"
 import { join } from "path"
 import { homedir } from "os"
-import { fileURLToPath } from "url"
-import { spawnSync } from "child_process"
+import { ensureDoppler } from "./lib/doppler-wrap.mjs"
+import { bold, dim, cyan, green, yellow, red } from "./lib/cli-color.mjs"
+import { extractBaseId } from "./lib/airtable-input.mjs"
 
-// ── ANSI color ───────────────────────────────────────────────────────────
-const COLOR = { reset:"\x1b[0m", green:"\x1b[32m", yellow:"\x1b[33m", red:"\x1b[31m", dim:"\x1b[2m", bold:"\x1b[1m", cyan:"\x1b[36m" }
-const c = (col, s) => `${COLOR[col]}${s}${COLOR.reset}`
+// 기존 c(col, s) 시그니처 보존용 thin wrapper — lib helper 위에 얹힘.
+// (이 파일은 30+ 곳에서 c("red", ...) 식 호출 — 한꺼번에 named helper 로 변경하면 risk.)
+const c = (col, s) => ({ bold, dim, cyan, green, yellow, red })[col]?.(s) ?? String(s)
 
 // ── Doppler auto-wrap ────────────────────────────────────────────────────
-// AIRTABLE_PAT 없으면 자동으로 `doppler run --project clavier --config prd --` 으로
-// self-respawn. 이미 export 됐거나 한 번 wrap 거친 경우 skip.
-if (!process.env.AIRTABLE_PAT && !process.env.AIRTABLE_API_KEY && !process.env._AIRTABLE_BACKUP_WRAPPED) {
-    const scriptPath = fileURLToPath(import.meta.url)
-    const r = spawnSync(
-        "doppler",
-        ["run", "--project", "clavier", "--config", "prd", "--", "node", scriptPath, ...process.argv.slice(2)],
-        { stdio: "inherit", env: { ...process.env, _AIRTABLE_BACKUP_WRAPPED: "1" } },
-    )
-    if (r.error) {
-        if (r.error.code === "ENOENT") {
-            console.error(c("red", "✗ doppler 명령 못 찾음. 설치: brew install dopplerhq/cli/doppler"))
-        } else {
-            console.error(c("red", `✗ doppler 실행 실패: ${r.error.message}`))
-        }
-        process.exit(1)
-    }
-    process.exit(r.status ?? 1)
-}
+// AIRTABLE_PAT/AIRTABLE_API_KEY 둘 중 하나라도 set 이면 skip (이미 환경 갖춰짐).
+// 그 외엔 `doppler run --project clavier --config prd --` 으로 self-respawn.
+// lib/doppler-wrap.mjs 가 doppler ENOENT 시 silent 폴백 → PAT 체크 (아래) 에서 잡음.
+ensureDoppler({
+    project: "clavier",
+    config: "prd",
+    sentinelEnv: "_AIRTABLE_BACKUP_WRAPPED",
+    requiredEnvs: ["AIRTABLE_PAT", "AIRTABLE_API_KEY"],
+})
 
 // ── CLI 파싱 ─────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2)
@@ -96,12 +87,7 @@ function argValue(name) {
     const i = argv.indexOf(name)
     return i >= 0 && argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[i + 1] : null
 }
-// Airtable base id = "app" + 14 alphanumeric.
-function extractBaseId(input) {
-    if (!input) return null
-    const m = String(input).match(/app[A-Za-z0-9]{14}/)
-    return m ? m[0] : null
-}
+// Airtable base id 추출은 lib/airtable-input.mjs (상단 import). app + 14 alphanumeric.
 const FILTER_BASE_RAW = argValue("--base")
 const FILTER_BASE = FILTER_BASE_RAW ? extractBaseId(FILTER_BASE_RAW) : null
 if (FILTER_BASE_RAW && !FILTER_BASE) {
@@ -149,8 +135,9 @@ const TARGET_WS = {
 
 const PAT = process.env.AIRTABLE_PAT ?? process.env.AIRTABLE_API_KEY
 if (!PAT) {
-    // 도달하면 doppler config 에 AIRTABLE_PAT 자체가 없는 것
+    // 도달 = doppler self-respawn 실패 (없거나 login 안 됨) + AIRTABLE_PAT/API_KEY 환경 X
     console.error(c("red", "✗ AIRTABLE_PAT 못 받음 — doppler config (project=clavier, config=prd) 에 AIRTABLE_PAT 있는지 확인"))
+    console.error(c("dim",  "   doppler 미설치 시: brew install dopplerhq/cli/doppler && doppler login"))
     process.exit(1)
 }
 
