@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.clavier.watcher_screenshots</string>
+
+    <key>WatchPaths</key>
+    <array>
+        <string>/Users/clavier/Pictures/Screenshots</string>
+    </array>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/clavier/Pictures/auto_import_screenshots.sh</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/clavier/Library/Logs/watcher_screenshots.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/clavier/Library/Logs/watcher_screenshots_error.log</string>
+</dict>
+</plist>
