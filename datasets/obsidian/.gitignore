@@ -1,0 +1,10 @@
+# 이미지·바이너리 제외
+*.heic
+*.jpeg
+*.jpg
+*.png
+*.gif
+*.webp
+*.svg
+*.canvas
+*.pdf
