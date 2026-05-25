@@ -21,6 +21,10 @@
 #     같은 Mac 안 두 번째 클론에서 commit 시도하면 차단 + canonical 위치 안내.
 #     → "사용자가 모르는 stale 클론에서 작업한 결과가 push 됨" 시나리오 닫힘.
 #     ~/bin 없는 환경 (OCI/web) → skip (environment-peer 모델 호환).
+#
+# (5) Doppler --config 리터럴 차단 (P7, Ray Dalio 2026-05-25).
+#     `--config prd` (또는 stg/dev) 리터럴 = multi-worker drift 위험. 정답 = `--config "${DOPPLER_CONFIG:-prd}"`.
+#     diff 의 *신규 추가 라인* 만 검사 — 기존 코드는 점진 마이그레이션. `${DOPPLER_CONFIG` 사용 패턴은 escape hatch.
 
 # ── (1) main 직접 커밋 차단 ──────────────────────────────────────────────
 branch="$(git symbolic-ref --short HEAD 2>/dev/null)"
@@ -172,4 +176,39 @@ if [ -d "$HOME/bin" ]; then
         echo "" >&2
         exit 1
     fi
+fi
+
+# ── (5) Doppler --config 리터럴 차단 (P7) ───────────────────────────────
+#       정답 = `--config "${DOPPLER_CONFIG:-prd}"`. 리터럴 prd/stg/dev 는 multi-worker drift.
+#       *신규 추가 라인* (`^+` in unified diff, `^+++` 헤더 제외) 만 검사.
+#       `${DOPPLER_CONFIG` 사용 라인은 통과 (escape hatch).
+doppler_violations=()
+while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    case "$line" in
+        +++*) continue ;;
+        +*)
+            content="${line#+}"
+            case "$content" in
+                *'${DOPPLER_CONFIG'*) continue ;;
+            esac
+            if echo "$content" | grep -qE -- '--config[= ]+(prd|stg|dev)([^a-zA-Z_]|$)'; then
+                doppler_violations+=("$content")
+            fi
+            ;;
+    esac
+done < <(git diff --cached --no-color -U0 -- 'tools/*' 'daemons/*' 2>/dev/null)
+
+if [ ${#doppler_violations[@]} -gt 0 ]; then
+    echo "" >&2
+    echo "‼️  Doppler --config 리터럴 추가 차단 (P7, PRINCIPLES.md) — multi-worker drift 위험:" >&2
+    echo "" >&2
+    for v in "${doppler_violations[@]}"; do
+        echo "    + $v" >&2
+    done
+    echo "" >&2
+    echo "  → 정답: --config \"\${DOPPLER_CONFIG:-prd}\"" >&2
+    echo "  → 예외 escape: \${DOPPLER_CONFIG 사용 시 통과" >&2
+    echo "" >&2
+    exit 1
 fi
