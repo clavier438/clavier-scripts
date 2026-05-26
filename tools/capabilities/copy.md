@@ -10,7 +10,7 @@
 
 ## 한 줄
 
-호텔/브랜드 카피를 **`copy` 한 도구로 짠다**. 폴더 안 `input/` 의 모든 `.md` 를 재귀 walk → 정렬 → concat → claude → `output/`. md 모드 / airtable 모드는 인자만 다름.
+호텔/브랜드 카피를 **`copy` 한 도구로 짠다**. 폴더 안 `input/<숫자>/*.md` 만 순서대로 concat → claude → `output/`. md 모드 / airtable 모드는 인자만 다름.
 
 > 카피 작성 원칙·8단계 워크플로우는 **`airtable-content-workflow.md`** 에 별도 — 사용자가 "○○ 호텔 콘텐츠 만들어" 류 발화 시 그것도 같이 주입됨 (airtable 도메인).
 
@@ -33,13 +33,22 @@
 ```
 <프로젝트 폴더>/
 ├── README.md     ← 사람용. 도구 무시.
-├── input/        ← 안에 뭐든. 폴더 깊이 자유. 모든 .md 재귀 walk → 정렬 → concat.
+├── input/
+│   ├── 1/        ← 이름이 자연수인 폴더만 봄
+│   │   └── *.md  ← 한 폴더 안에 .md 자유 (사용자 컨벤션은 1개)
+│   ├── 2/
+│   ├── 3/
+│   └── ...       ← 그 외 (input/foo.md, input/extra/) 모두 무시
 └── output/       ← output_v<NN>.md + output_v<NN>.prompt.md (자동 생성)
 ```
 
 폴더 위치 = 어디든 OK. `~/dev/clavier/works/copy/<프로젝트>/`, iCloud Obsidian, 임의 경로 — 절대경로 인자만 받음.
 
-**input/ 안 정렬 규칙**: 폴더 → 하위 폴더 재귀, 같은 폴더 안 파일은 알파벳/숫자순. 사용자가 순서 통제하려면 파일명을 `00-system.md`, `10-core.md`, `20-brand.md`, `30-instruction.md` 처럼 앞 숫자로 박으면 됨. (도구는 그 의미 모름. 정렬만.)
+**input/ 안 정렬 규칙** (사용자 결정 2026-05-26):
+- `input/` 직속 자식 중 **이름이 자연수인 폴더만** 처리. 자연수순 (`1` → `2` → `10` → `11`).
+- 각 숫자 폴더 안 `.md` 알파벳순. **하위 폴더 재귀 안 함**.
+- `input/` 직속 `.md`, 비-숫자 폴더 (`templates/`, `_meta/` 등) 모두 무시.
+- 순수 `\n\n` concat. **파일명·폴더명 헤딩 안 박힘**. 파일명은 사용자 보관·분류용 (버전·태그 자유), LLM 한테는 안 전달.
 
 `output/` 안 `output_v<NN>.md` 의 NN 은 기존 max + 1 자동 증가. 덮어쓰기 X.
 
@@ -71,7 +80,7 @@ copy <folder> --target <URL> --ref <URL> -i "..."  # 풀 자동
 
 ## 동작
 
-1. `input/` 재귀 walk → `.md` 만 → 경로 정렬 → `\n\n` concat.
+1. `input/` 안 숫자 이름 폴더만 자연수순 → 각 폴더 안 `.md` 알파벳순 → `\n\n` concat (헤딩 없음).
 2. `--ref` 있으면: 그 Airtable 의 schema + 모든 records fetch → `<reference-airtable>` 태그로 감싸 위에 이어붙임.
 3. `--target` 있으면: 그 Airtable schema fetch → `<target-airtable>` 태그로 이어붙임 + JSON 형식 안내 자동 첨부 (record vs base 모드별).
 4. `-i` 있으면: `<instruction>` 태그로 끝에 첨부.
@@ -111,17 +120,19 @@ copy <folder> --target <URL> --ref <URL> -i "..."  # 풀 자동
 ## 새 프로젝트 시작 절차
 
 ```bash
-mkdir -p <프로젝트>/input
+mkdir -p <프로젝트>/input/{1,2,3,4,5}
 cd <프로젝트>
 
-# input/ 안에 뭐든 — 폴더 구조 자유. 예:
+# 숫자 폴더 안에 .md 1개씩 (사용자 컨벤션). 파일명은 사용자 보관·분류용:
 #   input/
-#   ├── 00-system.md       ← "너는 호텔 카피라이터다. 다음 원칙을 따른다..."
-#   ├── 10-core.md         ← Layer 1 원칙
-#   ├── 20-brand.md        ← Layer 2 모범답안 / 어체
-#   ├── 30-facts.md        ← 시험지 (사실·IA)
-#   └── 40-format.md       ← 답안 형식 명시
-# 또는 한 파일에 다 박아도 OK — 도구는 모름.
+#   ├── 1/system.md       ← "너는 호텔 카피라이터다. 다음 원칙을 따른다..."
+#   ├── 2/core.md         ← Layer 1 원칙
+#   ├── 3/brand.md        ← Layer 2 모범답안 / 어체
+#   ├── 4/facts.md        ← 시험지 (사실·IA)
+#   └── 5/format.md       ← 답안 형식 명시
+#
+# 파일명은 자유 (`brand-v2.md` `brand-2026.md` 도 OK) — LLM 한테 안 보임.
+# 한 숫자 폴더에 .md 여러 개 둬도 동작 (알파벳순 concat).
 
 copy <프로젝트> -i "룸 섹션만 작성"
 # → output/output_v01.md       (카피 본문)
@@ -152,7 +163,7 @@ copy <folder> --ref "https://airtable.com/appREFERENCE/" --target "https://airta
 ## 알려진 함정
 
 1. **응답 안 펜스 (` ``` `) 가능성**. 도구가 자동으로 strip 하지만, 응답이 펜스 + 다른 텍스트 섞이면 JSON 파싱 실패 → 그래도 prompt.md 는 저장됨 (재시도 가능).
-2. **input/ 안 정렬 의도하지 않은 순서**. 도구는 알파벳/숫자순만. 사용자가 의도한 순서 = 파일명 prefix (`00-`, `10-`, ...) 로 통제.
+2. **layer 순서는 폴더 번호로**. 도구는 `input/<숫자>/` 폴더만 자연수순 봄. 파일명 prefix 가 아니라 **폴더 번호** (1, 2, 3, ...) 가 순서 결정. `input/` 직속 `.md` 나 비-숫자 폴더 (`templates/`, `00-system.md`) 는 무시됨.
 3. **target schema 와 응답 테이블명 mismatch**. base 모드에서 응답 JSON 의 키가 schema 의 테이블 name 과 정확히 일치 안 하면 → "테이블 'X' 없음 — skip" 경고 후 그 테이블만 건너뜀.
 4. **`copy-layers/` 글로벌 fallback 폐기 (2026-05-26~)**. 옛 도구에서 쓰던 `~/dev/clavier/clavier-scripts/copy-layers/{1-core,2-brand,3-section}/` 자동 로드는 새 도구에 없음. 그 자산을 쓰려면 작업 폴더 `input/` 안에 (또는 심링크) 두면 됨.
 
@@ -160,7 +171,9 @@ copy <folder> --ref "https://airtable.com/appREFERENCE/" --target "https://airta
 
 ## 자주 잘못 알기 쉬운 것
 
-- ❌ "도구가 폴더 안 `Layer 1`, `Layer 2` 구분해 처리" → **거짓**. 도구는 input/ 안 모든 `.md` 를 정렬 후 concat 만. 슬롯·라벨·분기 0.
+- ❌ "도구가 폴더 안 `Layer 1`, `Layer 2` 구분해 처리" → **거짓**. 도구는 `input/<숫자>/*.md` 를 자연수순 + 알파벳순으로 concat 만. 슬롯·라벨·분기 0.
+- ❌ "input/ 직속 .md 도 처리됨" → **거짓** (2026-05-26~). 숫자 이름 폴더 안에 들어가야만 봄. 직속 `.md` 와 비-숫자 폴더는 무시.
+- ❌ "파일명·폴더명이 프롬프트에 헤딩으로 들어감" → **거짓**. 순수 `\n\n` concat. 파일명은 사용자 보관·분류용이라 LLM 한테는 안 전달.
 - ❌ "system prompt 슬롯에 별도 시스템 지시" → **거짓** (2026-05-26~). claude CLI `--system-prompt` 인자 미사용. 모든 텍스트 user 로. 시스템 역할은 사용자가 `input/` 안 `.md` 에 박음.
 - ❌ "어체 락이 자동 주입됨" → **거짓** (2026-05-26~). 어체 통제는 사용자가 `input/` 안에 명시 (예: `00-tone.md` 에 "이 어체로 그대로 작성합니다").
 - ❌ "`output.md` 덮어쓰기됨" → **거짓**. `output_v<NN>.md` 다음 빈 번호로 자동 증가.
