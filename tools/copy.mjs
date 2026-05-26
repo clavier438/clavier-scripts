@@ -10,7 +10,7 @@
  * 폴더 컨벤션:
  *   <folder>/
  *   ├── README.md     ← 사람용. 도구 무시.
- *   ├── input/        ← 안에 뭐든. 재귀 walk, 모든 .md concat.
+ *   ├── input/        ← 직속 "숫자 폴더" 만 자연수순. 그 안 .md 알파벳순 concat.
  *   └── output/       ← output_v<NN>.md + output_v<NN>.prompt.md (자동 생성)
  *
  * 사용:
@@ -75,7 +75,10 @@ ${cyan("사용:")}
 ${cyan("폴더 컨벤션:")}
   <folder>/
   ├── README.md     ← 사람용. 도구 무시.
-  ├── input/        ← 안에 뭐든. 폴더 깊이 자유. 모든 .md 재귀 walk → 정렬 → concat.
+  ├── input/
+  │   ├── 1/        ← 이름이 자연수인 폴더만 봄
+  │   ├── 2/        ← 그 안 .md 알파벳순 concat
+  │   └── ...       ← 직속 .md / 비-숫자 폴더는 무시
   └── output/       ← output_v<NN>.md + output_v<NN>.prompt.md (자동 생성)
 
 ${cyan("정신:")}
@@ -83,7 +86,7 @@ ${cyan("정신:")}
   Layer 1·2·3 슬롯, 어체 락, system head — 코드는 모름. 사용자가 input/ 안 .md 로 표현.
 
 ${cyan("동작:")}
-  1. input/ 재귀 walk → .md 정렬 → "\\n\\n" concat
+  1. input/<숫자>/*.md 자연수순 + 알파벳순 → "\\n\\n" concat (헤딩 없음)
   2. --ref 있으면: 그 Airtable schema + records 자동 fetch → 이어붙임
   3. --target 있으면: 그 Airtable schema fetch → 이어붙임 + JSON 출력 안내
   4. -i 있으면: 자유 명령 끝에 첨부
