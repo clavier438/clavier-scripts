@@ -42,7 +42,7 @@
 └── output/       ← output_v<NN>.md + output_v<NN>.prompt.md (자동 생성)
 ```
 
-폴더 위치 = 어디든 OK. `~/dev/clavier/works/copy/<프로젝트>/`, iCloud Obsidian, 임의 경로 — 절대경로 인자만 받음.
+폴더 위치 = 어디든 OK. 사용자 실위치: **`~/projects/tests/<프로젝트>/`** (symlink → `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/projects/tests/`, iPhone Obsidian 과 sync). 절대경로/`~` 시작 인자만 받음.
 
 **input/ 안 정렬 규칙** (사용자 결정 2026-05-26):
 - `input/` 직속 자식 중 **이름이 자연수인 폴더만** 처리. 자연수순 (`1` → `2` → `10` → `11`).
