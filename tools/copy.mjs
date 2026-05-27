@@ -34,7 +34,7 @@ import {
   parseAirtableUrl, fetchSchema, fetchSchemaAndRecords,
   patchRecord, createOrPatchRecords, tableIdByName, compactSchema,
 } from "./lib/copy/airtable.mjs";
-import { nextVersion, savePrompt, runClaude, stripCodeFence } from "./lib/copy/runner.mjs";
+import { nextVersion, savePrompt, saveSystemPrompt, runClaude, stripCodeFence } from "./lib/copy/runner.mjs";
 import { fillAirtableArgs, pickFolder } from "./lib/copy/menu.mjs";
 
 const CACHE_DIR = join(homedir(), ".cache", "clavier");
@@ -230,9 +230,11 @@ if (!targetData) {
 const userPrompt = parts.join("\n\n");
 
 // ── output 경로 + prompt 저장 (claude 실패해도 입력은 남음) ──
+const SYSTEM_PROMPT = "";
 const outputDir = join(folder, "output");
-const { version, mdPath, promptPath } = nextVersion(outputDir);
+const { version, mdPath, promptPath, systemPath } = nextVersion(outputDir);
 savePrompt(promptPath, userPrompt, MODEL);
+saveSystemPrompt(systemPath, SYSTEM_PROMPT, MODEL);
 
 console.log();
 console.log(dim(`prompt saved: ${promptPath}  (${Buffer.byteLength(userPrompt, "utf8")}B, ${version})`));
@@ -324,3 +326,4 @@ console.log();
 console.log(dim(`version: ${version}`));
 console.log(dim(`output:  ${mdPath}`));
 console.log(dim(`prompt:  ${promptPath}`));
+console.log(dim(`system:  ${systemPath}`));
