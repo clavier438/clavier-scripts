@@ -28,6 +28,39 @@
 
 ---
 
+## 스크립트 매커니즘
+
+`copy.mjs` = concat 엔진 뿐. Layer 개념·슬롯·분기는 코드에 없음.
+
+```
+input/<숫자>/*.md  자연수 폴더순 + 알파벳 파일순
+                   └→ \n\n concat
+                      (--ref)    Airtable records 이어붙임
+                      (--target) Airtable schema 이어붙임
+                      (-i)       <instruction> 태그로 끝에
+                   └→ claude CLI (--system-prompt X, 전부 user 로)
+                   └→ output_v<NN>.md          ← 결과물
+                      output_v<NN>.prompt.md   ← 실제 들어간 프롬프트 (감사·재현)
+```
+
+버전 자동 증가, 덮어쓰기 없음. `_` 접두사 `.md` 무시 (사용자 메모용).
+
+---
+
+## 버전 진화
+
+| 버전 | 도구 | 레이어 | 핵심 변화 |
+|---|---|---|---|
+| 1.0.0 | `gen.sh` (bash) | 2 (core + brand) | 시소소 전용. system/user 분리. 경로 하드코딩 |
+| 2.0.0 | 수동 블록 | 2 (Brand Voice + task) | 단순화 시도 |
+| 3.0.0 | `copyMd.mjs` | 3 (core / brand / contents) | **폴더 기반 최초 도입** |
+| 4.0.0 | `copyMd.mjs` | 3 (Foundation / Context / Execution) | Self-review 체크리스트 추가 |
+| anthropic4layer (5.0.0) | `copy.mjs` | 4 (Anthropic 공식) | Role·Input·Thinking·Output. **system 슬롯 완전 폐기** |
+
+**도구 흐름**: `gen.sh` → `copyMd.mjs` → `copy.mjs` (md + airtable 통합, 2026-05-26~)
+
+---
+
 ## 폴더 컨벤션
 
 ```
