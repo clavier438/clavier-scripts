@@ -33,7 +33,21 @@
 import { execSync, spawnSync } from "child_process"
 import { fileURLToPath } from "url"
 import { dirname, resolve } from "path"
+import { setDefaultResultOrder } from "node:dns"
 import { findPlatformWorkers } from "./repoPaths.mjs"
+
+// ── IPv4-first 시스템 invariant ────────────────────────────────────────────
+// Node 22 의 undici fetch 는 happy-eyeballs autoSelectFamily 가 macOS 에서 신뢰 못 함.
+// 시스템 IPv6 라우팅이 죽었을 때 (Wi-Fi/VPN/ISP 사고로 흔히 일어남)
+// fetch 가 즉시 ETIMEDOUT 으로 떨어지고 IPv4 로 fallback 안 함. curl 은 됨.
+//
+// freshness.mjs 가 모든 .mjs tool 의 첫 import (pre-commit hook (2) 가 강제) →
+// 여기 한 줄로 "모든 도구의 모든 fetch 가 IPv4 부터" invariant 가 박힘. drift 불가.
+//
+// 이력: 2026-05-27 copy.mjs v26 push 가 같은 사고로 실패해 거기에 박혔으나
+//       workerCtl 까지 전파 안 돼 같은 날 두 번째로 사용자가 30분 헤맴.
+//       그 외로운 박힘 → 단일 자리로 통합 (clavier-hq RAY_DALIO_QUEUE 2026-05-28).
+setDefaultResultOrder("ipv4first")
 
 ;(function ensureFresh() {
     if (process.env._CLAVIER_FRESHNESS_OK === "1") return
