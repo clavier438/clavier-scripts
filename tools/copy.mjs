@@ -124,7 +124,7 @@ const folderArg = positional[0];
 const instructionArg = arg("--instruction", "-i");
 let target = arg("--target");
 let ref = arg("--ref");
-const MODEL = arg("--model") || "sonnet";
+const MODEL = arg("--model") || "haiku";
 
 // ── 폴더 결정 (없으면 메뉴) ──
 const cache = loadCache();

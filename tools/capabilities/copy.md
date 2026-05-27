@@ -28,6 +28,39 @@
 
 ---
 
+## 스크립트 매커니즘
+
+`copy.mjs` = concat 엔진 뿐. Layer 개념·슬롯·분기는 코드에 없음.
+
+```
+input/<숫자>/*.md  자연수 폴더순 + 알파벳 파일순
+                   └→ \n\n concat
+                      (--ref)    Airtable records 이어붙임
+                      (--target) Airtable schema 이어붙임
+                      (-i)       <instruction> 태그로 끝에
+                   └→ claude CLI (--system-prompt X, 전부 user 로)
+                   └→ output_v<NN>.md          ← 결과물
+                      output_v<NN>.prompt.md   ← 실제 들어간 프롬프트 (감사·재현)
+```
+
+버전 자동 증가, 덮어쓰기 없음. `_` 접두사 `.md` 무시 (사용자 메모용).
+
+---
+
+## 버전 진화
+
+| 버전 | 도구 | 레이어 | 핵심 변화 |
+|---|---|---|---|
+| 1.0.0 | `gen.sh` (bash) | 2 (core + brand) | 시소소 전용. system/user 분리. 경로 하드코딩 |
+| 2.0.0 | 수동 블록 | 2 (Brand Voice + task) | 단순화 시도 |
+| 3.0.0 | `copyMd.mjs` | 3 (core / brand / contents) | **폴더 기반 최초 도입** |
+| 4.0.0 | `copyMd.mjs` | 3 (Foundation / Context / Execution) | Self-review 체크리스트 추가 |
+| anthropic4layer (5.0.0) | `copy.mjs` | 4 (Anthropic 공식) | Role·Input·Thinking·Output. **system 슬롯 완전 폐기** |
+
+**도구 흐름**: `gen.sh` → `copyMd.mjs` → `copy.mjs` (md + airtable 통합, 2026-05-26~)
+
+---
+
 ## 폴더 컨벤션
 
 ```
@@ -47,6 +80,7 @@
 **input/ 안 정렬 규칙** (사용자 결정 2026-05-26):
 - `input/` 직속 자식 중 **이름이 자연수인 폴더만** 처리. 자연수순 (`1` → `2` → `10` → `11`).
 - 각 숫자 폴더 안 `.md` 알파벳순. **하위 폴더 재귀 안 함**.
+- **`_` 접두사 `.md` 무시** (예: `_readme.md`, `_notes.md`) — 사용자 설명·메모용. 같은 폴더에 두면 작업 편한데 프롬프트 오염 X.
 - `input/` 직속 `.md`, 비-숫자 폴더 (`templates/`, `_meta/` 등) 모두 무시.
 - 순수 `\n\n` concat. **파일명·폴더명 헤딩 안 박힘**. 파일명은 사용자 보관·분류용 (버전·태그 자유), LLM 한테는 안 전달.
 

@@ -7,6 +7,8 @@
 // - input/ 직속 자식 중 *이름이 자연수* 인 폴더만 봄.
 // - 폴더 이름 숫자순 (1, 2, 3, 10, 11, ...) 정렬.
 // - 각 폴더 안 .md 알파벳순 (한 level — 하위 폴더 재귀 X).
+// - *밑줄 (_) 접두사 .md 무시* — 사용자 설명·메모용 (LLM 에 안 들어감).
+//   예: _readme.md, _notes.md. 같은 폴더에 두면 작업 편한데 프롬프트 오염 X.
 // - input/ 직속 .md, 비-숫자 폴더, 하위 폴더 모두 무시.
 // - 순수 "\n\n" concat. 파일명·폴더명 헤딩 박지 않음.
 
@@ -34,6 +36,7 @@ export function loadInputFolder(folder) {
     const layerDir = join(folder, layer);
     const mdNames = readdirSync(layerDir)
       .filter(n => n.endsWith(".md"))
+      .filter(n => !n.startsWith("_"))  // _ 접두사 = 사용자 메모, LLM 무시
       .filter(n => {
         try { return statSync(join(layerDir, n)).isFile(); }
         catch { return false; }

@@ -11,6 +11,8 @@
 - [피드백: 단계적 수정 방식](feedback_incremental_fixes.md) — 문제 하나씩 fix→확인→커밋 순서로 진행, 한꺼번에 고치지 말 것
 - [피드백: 옵션 메뉴 금지](feedback_no_quick_options.md) — "진행/처리/그냥 해" 발화 시 빠른길 vs 정석 옵션 제시 X, 원칙대로 끝까지
 - [피드백: 판단 책임 떠넘기기 금지](feedback_ownership.md) — 보고·승인요청 남발 X, 코드 판단은 Claude가 직접 결정·책임 (사용자는 비전문가)
+- [피드백: 위임-후-끝까지-책임](feedback_followthrough.md) — spawn task/백그라운드 작업도 위치 파악·진행 추적·완료 보고까지 Claude 책임 (사용자는 모니터링 X)
+- [레퍼런스: scheduled-tasks sleep silent fail](reference_scheduled_tasks_sleep_fail.md) — macOS sleep 중 cron 발화 못 함, briefings/* + pmset 으로 진단, pmset repeat 으로 해결
 - [피드백: 현재 상태는 묻기 전에 먼저](feedback_status_upfront.md) — 도구/브리핑 설계 시 상태를 별도 조회 뒤에 숨기지 말고 진입 즉시 표시
 - [피드백: git 기능 적극 제안](feedback_git_workflow.md) — 브랜치/태그/stash 등을 사용자가 묻기 전에 먼저 제안할 것
 - [피드백: 깃 커밋 범위](feedback_git.md) — git commit은 관리 repo(scripts/oci/platform-workers)에 한정
