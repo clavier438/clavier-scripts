@@ -1,0 +1,16 @@
+/* 카피작업: 단순 줄바꿈 vs 단락 바꿈 시각 구분 (편집 화면 전용)
+   - 같은 단락 안 (엔터 1번): line-height 1.45
+   - 단락 사이 (빈 줄 1개): min-height 1.8rem
+   Reading mode 는 카피 작업에 쓰지 않으므로 룰 없음. */
+
+.markdown-source-view.mod-cm6 .cm-line {
+  line-height: 1.45;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* 빈 줄 자체를 키워 단락 사이 spacer 로 */
+.markdown-source-view.mod-cm6 .cm-line:has(br:only-child),
+.markdown-source-view.mod-cm6 .cm-line:empty {
+  min-height: 1.8rem;
+}
