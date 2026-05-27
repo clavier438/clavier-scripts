@@ -23,17 +23,19 @@ CONFIG="$SCRIPT_DIR/user-prompt-submit.config.json"
 
 # 콜로니 root — sibling-first 자동 탐색 (CONCEPTS #15).
 # config.json 의 files 는 *콜로니 상대경로* (예: "clavier-hq/SYSTEM_ENV.md").
+# recipe 의 shell 명령은 $COLONY 환경변수 사용 가능.
 # host-agnostic JSON + .sh 에서 prepend.
 COLONY="${CLAVIER_COLONY:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"   # claude-hooks → tools → scripts-root → colony
+export COLONY
 
 [ -f "$CONFIG" ] || exit 0
 
 input=$(cat)
 prompt=$(echo "$input" | jq -r '.prompt // ""')
 
-# contextInject.json에서 도메인별 키워드·파일 목록을 읽어 매칭
-matched_files=""
+# config 에서 도메인별 키워드 매칭 → idx 캡처
 matched_domain=""
+matched_idx=""
 
 domain_count=$(jq 'length' "$CONFIG")
 for i in $(seq 0 $((domain_count - 1))); do
@@ -44,7 +46,7 @@ for i in $(seq 0 $((domain_count - 1))); do
         kw=$(jq -r ".[$i].keywords[$j]" "$CONFIG")
         if echo "$prompt" | grep -qiE "$kw"; then
             matched_domain="$domain"
-            matched_files=$(jq -r ".[$i].files[]" "$CONFIG")
+            matched_idx="$i"
             break 2
         fi
     done
@@ -53,13 +55,17 @@ done
 # 키워드 미매칭 시 silent exit
 [ -z "$matched_domain" ] && exit 0
 
-# 파일 내용 수집 (존재하는 파일만)
-header="# === [worker context auto-inject — 워커 키워드 감지] ==="
+# 매칭된 도메인의 files (정적 .md) + recipe (shell 명령) 둘 다 수집.
+# recipe = 생성형 도큐. head/git log 등으로 코드·커밋 본체에서 직접 추출 → drift 0.
+matched_files=$(jq -r ".[$matched_idx].files[]? // empty" "$CONFIG")
+matched_recipe=$(jq -r ".[$matched_idx].recipe[]? // empty" "$CONFIG")
+
+header="# === [auto-inject: 도메인=$matched_domain — UserPromptSubmit hook] ==="
 combined="$header"
 
+# files — 정적 .md cat
 while IFS= read -r filepath; do
     [ -z "$filepath" ] && continue
-    # 절대경로면 그대로, 상대경로면 콜로니 root 기준 (sibling-first).
     case "$filepath" in
         /*) abspath="$filepath" ;;
         *)  abspath="$COLONY/$filepath" ;;
@@ -72,6 +78,17 @@ while IFS= read -r filepath; do
     fi
     combined=$(printf '%s\n\n## %s\n\n%s' "$combined" "$label" "$content")
 done <<< "$matched_files"
+
+# recipe — shell 명령 실행. $COLONY 사용 가능. 5초 cap.
+while IFS= read -r cmd; do
+    [ -z "$cmd" ] && continue
+    if command -v timeout >/dev/null; then
+        output=$(timeout 5 bash -c "$cmd" 2>&1)
+    else
+        output=$(bash -c "$cmd" 2>&1)
+    fi
+    combined=$(printf '%s\n\n## $ %s\n\n%s' "$combined" "$cmd" "$output")
+done <<< "$matched_recipe"
 
 # 100KB 캡 — 초과 시 잘라내고 경고 추가
 MAX_BYTES=102400

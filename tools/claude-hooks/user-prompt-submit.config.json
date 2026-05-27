@@ -2,8 +2,13 @@
   {
     "domain": "copy",
     "keywords": ["카피작업", "카피\\s*작성", "카피\\s*다듬", "카피\\s*리뷰", "copy\\s*work", "copy\\.mjs", "tools/copy", "lib/copy/", "모범답안", "output_v\\d+", "시험지\\s*\\(카피\\)"],
-    "files": [
-      "clavier-scripts/tools/capabilities/copy.md"
+    "recipe": [
+      "head -23 $COLONY/clavier-scripts/tools/copy.mjs",
+      "head -14 $COLONY/clavier-scripts/tools/lib/copy/input-loader.mjs",
+      "head -5 $COLONY/clavier-scripts/tools/lib/copy/runner.mjs",
+      "head -5 $COLONY/clavier-scripts/tools/lib/copy/airtable.mjs",
+      "head -5 $COLONY/clavier-scripts/tools/lib/copy/menu.mjs",
+      "git -C $COLONY/clavier-scripts log -20 --oneline -- tools/copy.mjs tools/lib/copy/"
     ]
   },
   {
