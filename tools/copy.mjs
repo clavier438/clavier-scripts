@@ -44,6 +44,7 @@ import { pickFolder, airtableMenuTick, confirm, pickCsvDir, closeAsk } from "./l
 import { parseMultiCsv, writeCsvDir, buildCsvInstruction } from "./lib/copy/csv.mjs";
 import { createClient } from "./lib/airtable-api.mjs";
 import { executeUpsert } from "./lib/airtable-upsert.mjs";
+import { takeSnapshot, buildDiffPreview } from "./lib/copy/snapshot.mjs";
 import { basename, dirname } from "path";
 import { readdirSync } from "fs";
 
@@ -403,6 +404,18 @@ async function runAction(action) {
       `target: ${target}\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\`\n`,
     );
     if (targetParsed.recordId) {
+      // 단일 record PATCH — snapshot 도 그 record 만.
+      const client = createClient(process.env.AIRTABLE_PAT);
+      const outDir = join(folder, "output");
+      const t = targetData.schema.tables.find(t => t.id === targetParsed.tableId);
+      const { path: snapPath } = await takeSnapshot(client, targetData.baseId, targetData.schema, [t?.name].filter(Boolean), outDir);
+      console.log(`  ${green(`✓ snapshot`)}` + dim(`  ${basename(snapPath)}`));
+      console.log();
+      console.log(bold(yellow(`  ━ 변경 예정 (단일 record PATCH) ━`)));
+      console.log(`    ${targetParsed.recordId}  fields:`, JSON.stringify(payload).slice(0, 200));
+      console.log();
+      const ok = await confirm(`  위 변경 PATCH 진행?`);
+      if (!ok) { console.log(dim(`  취소 — snapshot 만 저장됨`)); return; }
       await patchRecord({
         baseId: targetData.baseId, tableId: targetParsed.tableId,
         recordId: targetParsed.recordId, fields: payload,
@@ -414,6 +427,27 @@ async function runAction(action) {
         console.error(red(`  ✗ base 모드는 { "테이블명": [...records...] } 형식 필요`));
         return;
       }
+
+      // ── 안전 장치: snapshot + diff preview + confirm ──
+      const affected = Object.keys(payload).filter(name => tableIdByName(targetData.schema, name) && Array.isArray(payload[name]));
+      if (affected.length === 0) {
+        console.error(red(`  ✗ 영향받는 테이블 없음 (target schema 와 매칭 안 됨)`));
+        return;
+      }
+      console.log(dim(`  snapshot 중... (영향 테이블 ${affected.length}: ${affected.join(", ")})`));
+      const client = createClient(process.env.AIRTABLE_PAT);
+      const outDir = join(folder, "output");
+      const { path: snapPath, snap } = await takeSnapshot(client, targetData.baseId, targetData.schema, affected, outDir);
+      console.log(`  ${green(`✓ snapshot`)}` + dim(`  ${basename(snapPath)}  (${Object.values(snap.tables).reduce((s, r) => s + r.length, 0)} records 보관)`));
+
+      console.log();
+      console.log(bold(yellow(`  ━ 변경 예정 ━`)));
+      console.log(buildDiffPreview(payload, snap));
+      console.log();
+      const ok = await confirm(`  위 변경을 PATCH/POST 진행?`);
+      if (!ok) { console.log(dim(`  취소 — snapshot 은 보관됨 (${basename(snapPath)})`)); return; }
+
+      // 실제 push
       for (const [tableName, records] of Object.entries(payload)) {
         const tableId = tableIdByName(targetData.schema, tableName);
         if (!tableId) { console.log(yellow(`  ⚠ 테이블 '${tableName}' 없음 — skip`)); continue; }
