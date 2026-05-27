@@ -26,11 +26,13 @@ export function nextVersion(outputDir, prefix = "output_v", model = "") {
   }
   const v = String(max + 1).padStart(2, "0");
   const suffix = model ? `_${model}` : "";
+  const stem = `${prefix}${v}${suffix}`;
   return {
     version: `v${v}`,
-    mdPath: join(outputDir, `${prefix}${v}${suffix}.md`),
-    promptPath: join(outputDir, `${prefix}${v}${suffix}.prompt.md`),
-    systemPath: join(outputDir, `${prefix}${v}${suffix}.system.md`),
+    mdPath: join(outputDir, `${stem}.md`),
+    promptPath: join(outputDir, `${stem}.prompt.md`),
+    systemPath: join(outputDir, `${stem}.system.md`),
+    csvDir: join(outputDir, stem),
   };
 }
 
