@@ -55,6 +55,7 @@ export function runClaude({
   return new Promise((resolve, reject) => {
     const args = [
       "-p",
+      "--system-prompt", "",
       "--output-format", outputFormat,
       "--model", model,
       "--disallowed-tools", disallowedTools,
