@@ -12,9 +12,10 @@ import { join } from "path";
  *
  * @returns {{version, mdPath, promptPath}}
  */
-export function nextVersion(outputDir, prefix = "output_v") {
+export function nextVersion(outputDir, prefix = "output_v", model = "") {
   if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
-  const re = new RegExp(`^${prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\d+)\\.md$`);
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`^${escaped}(\\d+)[^.]*\\.md$`);
   let max = 0;
   for (const f of readdirSync(outputDir)) {
     const m = f.match(re);
@@ -24,11 +25,12 @@ export function nextVersion(outputDir, prefix = "output_v") {
     }
   }
   const v = String(max + 1).padStart(2, "0");
+  const suffix = model ? `_${model}` : "";
   return {
     version: `v${v}`,
-    mdPath: join(outputDir, `${prefix}${v}.md`),
-    promptPath: join(outputDir, `${prefix}${v}.prompt.md`),
-    systemPath: join(outputDir, `${prefix}${v}.system.md`),
+    mdPath: join(outputDir, `${prefix}${v}${suffix}.md`),
+    promptPath: join(outputDir, `${prefix}${v}${suffix}.prompt.md`),
+    systemPath: join(outputDir, `${prefix}${v}${suffix}.system.md`),
   };
 }
 
