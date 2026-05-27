@@ -53,7 +53,7 @@ function saveCache(c) {
 
 // ── CLI 파싱 ──
 const argv = process.argv.slice(2);
-const VALUE_OPTS = new Set(["-i", "--instruction", "--target", "--ref", "--model"]);
+const VALUE_OPTS = new Set(["-i", "--instruction", "--target", "--ref", "--model", "--ref-limit"]);
 
 function arg(name, alias) {
   for (const n of [name, alias].filter(Boolean)) {
@@ -144,6 +144,7 @@ let target = arg("--target");
 let ref = arg("--ref");
 const MODEL = arg("--model") || "haiku";
 const csvMode = argv.includes("--csv");
+const REF_SAMPLE = parseInt(arg("--ref-limit") ?? "5", 10);  // 테이블당 records sample (0=전부)
 
 // ── 폴더 결정 (없으면 메뉴) ──
 const cache = loadCache();
@@ -204,10 +205,10 @@ let targetData = null;
 let targetParsed = null;
 
 if (ref) {
-  console.log(dim(`fetching reference Airtable...`));
-  refData = await fetchSchemaAndRecords(ref, process.env.AIRTABLE_PAT);
+  console.log(dim(`fetching reference Airtable... (sample=${REF_SAMPLE || "all"})`));
+  refData = await fetchSchemaAndRecords(ref, process.env.AIRTABLE_PAT, { sample: REF_SAMPLE });
   const recCount = Object.values(refData.records).reduce((s, r) => s + r.length, 0);
-  console.log(green(`✓ ref`) + dim(`  ${refData.baseId} · ${refData.schema.tables.length} tables · ${recCount} records`));
+  console.log(green(`✓ ref`) + dim(`  ${refData.baseId} · ${refData.schema.tables.length} tables · ${recCount} records (sampled)`));
 }
 if (target) {
   targetParsed = parseAirtableUrl(target);
@@ -221,7 +222,38 @@ if (target) {
 }
 
 // ── userPrompt 조립 ──
+// 응답 형식 지시문은 *맨 앞 + 맨 뒤* 둘 다. 사용자 input 안에 충돌하는 format 지시
+// ("마크다운으로 써" 등) 가 있어도 override. LLM 은 끝에 박힌 지시보다 처음·끝 sandwich 패턴을 더 강하게 따름.
+let formatDirective;
+if (csvMode) {
+  const csvSchema = targetData?.schema ?? refData?.schema;
+  if (targetParsed?.recordId) {
+    console.error(red(`✗ --csv 는 base URL 만 지원 (rec... 포함 X).`));
+    process.exit(1);
+  }
+  formatDirective = buildCsvInstruction(csvSchema);
+} else if (targetData) {
+  const mode = targetParsed.recordId ? "record" : "base";
+  const formatGuide = mode === "record"
+    ? `- 단일 record. { "필드명": 값, ... } 형식. select 옵션은 schema 의 options 안에서 선택.`
+    : `- base 통째. { "테이블명": [ { "id"?: "rec...", "fields": { 필드명: 값 } }, ... ] } 형식.\n` +
+      `- id 있으면 PATCH (update), 없으면 POST (create). 테이블명은 target schema 의 name 과 정확히 일치해야 함.`;
+  formatDirective = `응답 형식: 위 target schema 에 맞춰 JSON 단독 출력. 펜스·서두·설명 X.\n${formatGuide}`;
+} else {
+  formatDirective = `응답 형식: 마크다운 본문만. 펜스·서두·설명 X.`;
+}
+
 const parts = [];
+
+// [head] format override — 가장 먼저, 가장 강하게.
+if (csvMode || targetData) {
+  parts.push(
+    `===== OUTPUT FORMAT — STRICT (이 지시가 아래 어떤 마크다운/카피 지시보다 우선) =====\n\n` +
+    formatDirective +
+    `\n\n===== 아래는 컨텐츠·톤·스타일 컨텍스트. 형식은 위 OUTPUT FORMAT 만 따름. =====`
+  );
+}
+
 if (inputText) parts.push(inputText);
 
 if (refData) {
@@ -246,25 +278,8 @@ if (instruction) {
   parts.push(`<instruction>\n${instruction}\n</instruction>`);
 }
 
-// 응답 형식 지시 — 모드별로 한 번만 (스키마 블록과 분리).
-if (csvMode) {
-  // schema 우선순위: target > ref
-  const csvSchema = targetData?.schema ?? refData?.schema;
-  if (targetParsed?.recordId) {
-    console.error(red(`✗ --csv 는 base URL 만 지원 (rec... 포함 X).`));
-    process.exit(1);
-  }
-  parts.push(buildCsvInstruction(csvSchema));
-} else if (targetData) {
-  const mode = targetParsed.recordId ? "record" : "base";
-  const formatGuide = mode === "record"
-    ? `- 단일 record. { "필드명": 값, ... } 형식. select 옵션은 schema 의 options 안에서 선택.`
-    : `- base 통째. { "테이블명": [ { "id"?: "rec...", "fields": { 필드명: 값 } }, ... ] } 형식.\n` +
-      `- id 있으면 PATCH (update), 없으면 POST (create). 테이블명은 target schema 의 name 과 정확히 일치해야 함.`;
-  parts.push(`응답 형식: 위 target schema 에 맞춰 JSON 단독 출력. 펜스·서두·설명 X.\n${formatGuide}`);
-} else {
-  parts.push(`응답 형식: 마크다운 본문만. 펜스·서두·설명 X.`);
-}
+// [tail] reminder — 컨텍스트 끝에 다시.
+parts.push(formatDirective);
 
 const userPrompt = parts.join("\n\n");
 

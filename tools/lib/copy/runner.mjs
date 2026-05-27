@@ -87,7 +87,11 @@ export function runClaude({
     proc.on("error", reject);
     proc.on("exit", code => {
       const elapsedSec = (Date.now() - t0) / 1000;
-      if (code !== 0) return reject(new Error(`claude exit ${code}\n${stderr}`));
+      if (code !== 0) {
+        // claude 가 prompt-too-long 같은 api 에러일 때 stdout 에 JSON 으로 박힘. stderr 만 보면 안 보임.
+        const detail = stderr || stdout.slice(0, 500) || "(empty)";
+        return reject(new Error(`claude exit ${code}\n${detail}`));
+      }
       if (outputFormat === "json") {
         try {
           const result = JSON.parse(stdout);

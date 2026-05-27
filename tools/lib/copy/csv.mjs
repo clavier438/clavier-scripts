@@ -57,10 +57,31 @@ export function writeCsvDir(dir, tables) {
     const safe = name.replace(/[\/\\]/g, "_");
     const path = join(dir, `${safe}.csv`);
     writeFileSync(path, csv);
-    const rows = csv.split("\n").filter(l => l.trim()).length - 1; // -1 for header
-    written.push({ name, path, rows });
+    written.push({ name, path, rows: countCsvRows(csv) });
   }
   return written;
+}
+
+/**
+ * RFC 4180-aware row count — 따옴표 안 줄바꿈은 같은 row.
+ * 헤더 제외.
+ */
+function countCsvRows(text) {
+  let rows = 0, inQuote = false, sawContent = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '"') {
+      if (inQuote && text[i + 1] === '"') { i++; continue; }
+      inQuote = !inQuote;
+    } else if (c === "\n" && !inQuote) {
+      if (sawContent) rows++;
+      sawContent = false;
+    } else if (c !== "\r" && c.trim() !== "") {
+      sawContent = true;
+    }
+  }
+  if (sawContent) rows++;  // EOF 직전 마지막 row
+  return Math.max(0, rows - 1);  // -1 = header
 }
 
 /**
