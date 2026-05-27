@@ -36,6 +36,8 @@ import {
 } from "./lib/copy/airtable.mjs";
 import { nextVersion, savePrompt, saveSystemPrompt, runClaude, stripCodeFence } from "./lib/copy/runner.mjs";
 import { fillAirtableArgs, pickFolder } from "./lib/copy/menu.mjs";
+import { parseMultiCsv, writeCsvDir, buildCsvInstruction } from "./lib/copy/csv.mjs";
+import { basename } from "path";
 
 const CACHE_DIR = join(homedir(), ".cache", "clavier");
 const CACHE_FILE = join(CACHE_DIR, "copy.json");
@@ -68,9 +70,11 @@ ${cyan("사용:")}
   copy                                       폴더 메뉴 → md 모드
   copy <folder>                              md 모드 (input/ → output/)
   copy <folder> -i "지시"                    md 모드 + 자유 명령
-  copy <folder> --target <URL>               airtable 모드 (인터랙티브)
-  copy <folder> --target <URL> -i "지시"     airtable 즉시 실행
+  copy <folder> --target <URL>               airtable 모드 (인터랙티브 메뉴)
+  copy <folder> --target <URL> -i "지시"     airtable 즉시 push
   copy <folder> --ref <URL> --target <URL>   airtable + reference
+  copy <folder> --target <URL> --csv         CSV 폴더 출력 (airtableCtl 로 review→upsert)
+  copy <folder> --ref <URL> --csv            ref schema 로 CSV 폴더 출력
 
 ${cyan("폴더 컨벤션:")}
   <folder>/
@@ -88,18 +92,32 @@ ${cyan("정신:")}
 ${cyan("동작:")}
   1. input/<숫자>/*.md 자연수순 + 알파벳순 → "\\n\\n" concat (헤딩 없음)
   2. --ref 있으면: 그 Airtable schema + records 자동 fetch → 이어붙임
-  3. --target 있으면: 그 Airtable schema fetch → 이어붙임 + JSON 출력 안내
+  3. --target 있으면: 그 Airtable schema fetch → 이어붙임
   4. -i 있으면: 자유 명령 끝에 첨부
-  5. claude CLI 호출 (system 슬롯 X, 전부 user 로)
-  6. md 모드: output_v<NN>.md 저장
-     airtable 모드: JSON 파싱 → PATCH/POST (record 있으면 update, 없으면 create)
+  5. 응답 형식 지시:
+     - 기본 (--target 없음) → 마크다운 본문
+     - --target (base/record) → JSON (PATCH/POST)
+     - --csv → 멀티테이블 CSV (airtableCtl 호환)
+  6. claude CLI 호출 (system 슬롯 X, 전부 user 로)
+  7. 결과:
+     - md 모드: output_v<NN>_<model>.md
+     - airtable 모드: JSON 파싱 → PATCH/POST + .md 로그
+     - csv 모드: output_v<NN>_<model>/<table>.csv (airtableCtl 로 upsert 가능)
 
 ${cyan("옵션:")}
   -i, --instruction <text>   자유 명령 (input/ 다음에 첨부)
   --target <URL>             출력 대상 Airtable. rec... 포함 = 단일 record PATCH
   --ref <URL>                참조 Airtable (schema + records 함께)
-  --model <id>               claude 모델 (default: sonnet)
+  --csv                      CSV 모드. push 안 함. airtableCtl 로 review→upsert
+  --model <id>               claude 모델 (default: haiku)
   --help, -h                 이 도움말
+
+${cyan("CSV 모드 워크플로우:")}
+  copy <folder> --target <URL> --csv
+    → output_v<NN>_<model>/<table>.csv 생성 (push X)
+  airtableCtl
+    → base 선택 → data_dir = 위 폴더 → [1] dry-run → [2] upsert
+  ▶ 싸게 iterate: CSV 보고 not bad 면 그때 airtableCtl 로 upsert.
 
 ${cyan("인증:")}
   AIRTABLE_PAT  — Doppler clavier/prd 자동 주입 (airtable 모드 시)
@@ -125,6 +143,7 @@ const instructionArg = arg("--instruction", "-i");
 let target = arg("--target");
 let ref = arg("--ref");
 const MODEL = arg("--model") || "haiku";
+const csvMode = argv.includes("--csv");
 
 // ── 폴더 결정 (없으면 메뉴) ──
 const cache = loadCache();
@@ -142,17 +161,26 @@ if (!existsSync(folder) || !statSync(folder).isDirectory()) {
   process.exit(1);
 }
 
-const isAirtableMode = !!target;
+// ── 모드 분기 ──
+// directPushMode = --target 으로 즉시 PATCH/POST. CSV 면 절대 push X.
+// csvMode = --csv. push 안 하고 CSV 파일로 저장. airtableCtl 로 review→upsert.
+const directPushMode = !!target && !csvMode;
+const needsPat = !!target || !!ref;
 
-// ── airtable 모드: 인자 부족하면 인터랙티브 ──
-if (isAirtableMode && !instruction) {
+if (csvMode && !target && !ref) {
+  console.error(red(`✗ --csv 는 --target 또는 --ref 가 있어야 함 (스키마 출처 필요).`));
+  process.exit(1);
+}
+
+// ── airtable direct push 모드: 인자 부족하면 인터랙티브 ──
+if (directPushMode && !instruction) {
   const filled = await fillAirtableArgs({ folder, target, ref, instruction });
   if (!filled) { console.log(dim(`중단.`)); process.exit(0); }
   ({ target, ref, instruction } = filled);
 }
 
-// ── Doppler (airtable 모드 시 PAT 필요) ──
-if (isAirtableMode) {
+// ── Doppler (PAT 필요 시) ──
+if (needsPat) {
   ensureDoppler({
     project: "clavier",
     config: "prd",
@@ -207,15 +235,10 @@ if (refData) {
 
 if (targetData) {
   const mode = targetParsed.recordId ? "record" : "base";
-  const formatGuide = mode === "record"
-    ? `- 단일 record. { "필드명": 값, ... } 형식. select 옵션은 schema 의 options 안에서 선택.`
-    : `- base 통째. { "테이블명": [ { "id"?: "rec...", "fields": { 필드명: 값 } }, ... ] } 형식.\n` +
-      `- id 있으면 PATCH (update), 없으면 POST (create). 테이블명은 target schema 의 name 과 정확히 일치해야 함.`;
   parts.push(
     `<target-airtable url="${target}" baseId="${targetData.baseId}" mode="${mode}">\n` +
     `<schema>\n${JSON.stringify(compactSchema(targetData.schema), null, 2)}\n</schema>\n` +
-    `</target-airtable>\n\n` +
-    `응답 형식: 위 target schema 에 맞춰 JSON 단독 출력. 펜스·서두·설명 X.\n${formatGuide}`
+    `</target-airtable>`
   );
 }
 
@@ -223,7 +246,23 @@ if (instruction) {
   parts.push(`<instruction>\n${instruction}\n</instruction>`);
 }
 
-if (!targetData) {
+// 응답 형식 지시 — 모드별로 한 번만 (스키마 블록과 분리).
+if (csvMode) {
+  // schema 우선순위: target > ref
+  const csvSchema = targetData?.schema ?? refData?.schema;
+  if (targetParsed?.recordId) {
+    console.error(red(`✗ --csv 는 base URL 만 지원 (rec... 포함 X).`));
+    process.exit(1);
+  }
+  parts.push(buildCsvInstruction(csvSchema));
+} else if (targetData) {
+  const mode = targetParsed.recordId ? "record" : "base";
+  const formatGuide = mode === "record"
+    ? `- 단일 record. { "필드명": 값, ... } 형식. select 옵션은 schema 의 options 안에서 선택.`
+    : `- base 통째. { "테이블명": [ { "id"?: "rec...", "fields": { 필드명: 값 } }, ... ] } 형식.\n` +
+      `- id 있으면 PATCH (update), 없으면 POST (create). 테이블명은 target schema 의 name 과 정확히 일치해야 함.`;
+  parts.push(`응답 형식: 위 target schema 에 맞춰 JSON 단독 출력. 펜스·서두·설명 X.\n${formatGuide}`);
+} else {
   parts.push(`응답 형식: 마크다운 본문만. 펜스·서두·설명 X.`);
 }
 
@@ -232,7 +271,7 @@ const userPrompt = parts.join("\n\n");
 // ── output 경로 + prompt 저장 (claude 실패해도 입력은 남음) ──
 const SYSTEM_PROMPT = "";
 const outputDir = join(folder, "output");
-const { version, mdPath, promptPath, systemPath } = nextVersion(outputDir, "output_v", MODEL);
+const { version, mdPath, promptPath, systemPath, csvDir } = nextVersion(outputDir, "output_v", MODEL);
 savePrompt(promptPath, userPrompt, MODEL);
 saveSystemPrompt(systemPath, SYSTEM_PROMPT, MODEL);
 
@@ -255,7 +294,29 @@ if (r.isError) {
 const responseText = stripCodeFence(r.result);
 
 // ── 결과 처리 ──
-if (!targetData) {
+if (csvMode) {
+  // csv 모드 — 멀티테이블 파싱 후 폴더에 분리 저장. push X.
+  const tables = parseMultiCsv(responseText);
+  if (Object.keys(tables).length === 0) {
+    console.error(red(`✗ CSV 파싱 실패: === <테이블명> === 블록 못 찾음`));
+    console.error(dim(`raw 응답 (앞 500자):\n${responseText.slice(0, 500)}`));
+    writeFileSync(mdPath, `# CSV 파싱 실패\n\n\`\`\`\n${responseText}\n\`\`\`\n`);
+    process.exit(1);
+  }
+  const written = writeCsvDir(csvDir, tables);
+  writeFileSync(
+    mdPath,
+    `# CSV 출력 (${written.length} tables, ${written.reduce((s, w) => s + w.rows, 0)} rows)\n\n` +
+    `data_dir: \`${csvDir}\`\n\n` +
+    written.map(w => `- \`${basename(w.path)}\` — ${w.rows} rows`).join("\n") + "\n\n" +
+    `## Raw 응답\n\n\`\`\`\n${responseText}\n\`\`\`\n`,
+  );
+  console.log(green(`✓ CSV`) + dim(`  ${csvDir}/`));
+  written.forEach(w => console.log(dim(`    ${basename(w.path)}: ${w.rows} rows`)));
+  console.log();
+  console.log(`${cyan("→")} airtableCtl ${dim("로 review→upsert:")}`);
+  console.log(`  ${green("airtableCtl")}  ${dim(`→ base 선택 → dir=${csvDir} → [1] dry-run → [2] upsert`)}`);
+} else if (!targetData) {
   // md 모드
   writeFileSync(mdPath, responseText);
   console.log(green(`✓ saved`) + dim(`  ${mdPath}`));
@@ -324,6 +385,6 @@ saveCache(cache);
 
 console.log();
 console.log(dim(`version: ${version}`));
-console.log(dim(`output:  ${mdPath}`));
+console.log(dim(`output:  ${csvMode ? csvDir + "/" : mdPath}`));
 console.log(dim(`prompt:  ${promptPath}`));
 console.log(dim(`system:  ${systemPath}`));
