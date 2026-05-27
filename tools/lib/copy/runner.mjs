@@ -28,6 +28,7 @@ export function nextVersion(outputDir, prefix = "output_v") {
     version: `v${v}`,
     mdPath: join(outputDir, `${prefix}${v}.md`),
     promptPath: join(outputDir, `${prefix}${v}.prompt.md`),
+    systemPath: join(outputDir, `${prefix}${v}.system.md`),
   };
 }
 
@@ -38,6 +39,20 @@ export function savePrompt(promptPath, userPrompt, model) {
   writeFileSync(
     promptPath,
     `<!-- copy assembled prompt — ${new Date().toISOString()} -->\n<!-- model: ${model} -->\n\n${userPrompt}\n`,
+  );
+}
+
+/**
+ * system 슬롯 내역을 디스크에 저장 (감사·투명성).
+ * --system-prompt "" 적용 시 = 빈 문자열 → 외부 압력 없음 명시.
+ */
+export function saveSystemPrompt(systemPath, systemPrompt, model) {
+  const body = systemPrompt.trim()
+    ? systemPrompt
+    : "(시스템 프롬프트 없음 — --system-prompt \"\" 적용. 외부 컨텍스트 0.)";
+  writeFileSync(
+    systemPath,
+    `<!-- copy system prompt — ${new Date().toISOString()} -->\n<!-- model: ${model} -->\n\n${body}\n`,
   );
 }
 
