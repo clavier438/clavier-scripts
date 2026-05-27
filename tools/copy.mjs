@@ -232,7 +232,7 @@ const userPrompt = parts.join("\n\n");
 // ── output 경로 + prompt 저장 (claude 실패해도 입력은 남음) ──
 const SYSTEM_PROMPT = "";
 const outputDir = join(folder, "output");
-const { version, mdPath, promptPath, systemPath } = nextVersion(outputDir);
+const { version, mdPath, promptPath, systemPath } = nextVersion(outputDir, "output_v", MODEL);
 savePrompt(promptPath, userPrompt, MODEL);
 saveSystemPrompt(systemPath, SYSTEM_PROMPT, MODEL);
 
