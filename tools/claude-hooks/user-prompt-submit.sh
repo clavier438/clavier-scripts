@@ -16,6 +16,13 @@
 
 . "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/../lib/freshness.sh"
 
+# Claude Code 가 GUI 진입점에서 호출 시 ~/bin 이 PATH 에 없을 수 있음.
+# commands 필드(sisters 등) 가 ~/bin wrapper 로 박힌 경우 발견되도록 보강.
+case ":$PATH:" in
+    *":$HOME/bin:"*) ;;
+    *) export PATH="$HOME/bin:$PATH" ;;
+esac
+
 command -v jq >/dev/null || exit 0
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,8 +38,9 @@ COLONY="${CLAVIER_COLONY:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"   # claude-hooks
 input=$(cat)
 prompt=$(echo "$input" | jq -r '.prompt // ""')
 
-# contextInject.json에서 도메인별 키워드·파일 목록을 읽어 매칭
+# contextInject.json에서 도메인별 키워드·파일·명령 목록을 읽어 매칭
 matched_files=""
+matched_commands=""
 matched_domain=""
 
 domain_count=$(jq 'length' "$CONFIG")
@@ -44,7 +52,8 @@ for i in $(seq 0 $((domain_count - 1))); do
         kw=$(jq -r ".[$i].keywords[$j]" "$CONFIG")
         if echo "$prompt" | grep -qiE "$kw"; then
             matched_domain="$domain"
-            matched_files=$(jq -r ".[$i].files[]" "$CONFIG")
+            matched_files=$(jq -r ".[$i].files // [] | .[]" "$CONFIG")
+            matched_commands=$(jq -r ".[$i].commands // [] | .[]" "$CONFIG")
             break 2
         fi
     done
@@ -72,6 +81,19 @@ while IFS= read -r filepath; do
     fi
     combined=$(printf '%s\n\n## %s\n\n%s' "$combined" "$label" "$content")
 done <<< "$matched_files"
+
+# 명령 실행 결과 주입 (sisters 등 생성형 manifest).
+# 첫 단어가 PATH 에 있을 때만 시도 — 없으면 silent skip.
+# CLAVIER_LOCAL_DEV=1: 분석 도구는 stale 강제 검사 우회 (hook 은 정보 주입용,
+# fresh 강제는 사용자 직접 명령 실행 시 따로 동작).
+while IFS= read -r cmd; do
+    [ -z "$cmd" ] && continue
+    first=$(printf '%s' "$cmd" | awk '{print $1}')
+    command -v "$first" >/dev/null 2>&1 || continue
+    cmd_output=$(env NO_COLOR=1 CLAVIER_LOCAL_DEV=1 sh -c "$cmd" 2>/dev/null) || cmd_output=""
+    [ -z "$cmd_output" ] && continue
+    combined=$(printf '%s\n\n## $ %s\n\n```\n%s\n```' "$combined" "$cmd" "$cmd_output")
+done <<< "$matched_commands"
 
 # 100KB 캡 — 초과 시 잘라내고 경고 추가
 MAX_BYTES=102400

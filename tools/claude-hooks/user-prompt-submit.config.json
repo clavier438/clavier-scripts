@@ -4,6 +4,9 @@
     "keywords": ["카피작업", "카피\\s*작성", "카피\\s*다듬", "카피\\s*리뷰", "copy\\s*work", "copy\\.mjs", "tools/copy", "lib/copy/", "모범답안", "output_v\\d+", "시험지\\s*\\(카피\\)"],
     "files": [
       "clavier-scripts/tools/capabilities/copy.md"
+    ],
+    "commands": [
+      "sisters copy"
     ]
   },
   {
@@ -14,6 +17,9 @@
       "clavier-hq/SYSTEM_ENV.md",
       "clavier-hq/WORKER_STATUS.md",
       "clavier-hq/QUEUE.md"
+    ],
+    "commands": [
+      "sisters worker"
     ]
   },
   {
@@ -24,6 +30,9 @@
       "clavier-scripts/tools/capabilities/airtable-scripting.md",
       "clavier-scripts/tools/capabilities/airtable-v6.md",
       "clavier-scripts/tools/capabilities/airtable-content-workflow.md"
+    ],
+    "commands": [
+      "sisters airtable"
     ]
   },
   {
@@ -52,6 +61,9 @@
     "keywords": ["ManagedCollection", "mc\\.add", "mc\\.get", "mc\\.remove", "setFields", "getItemIds", "addItems", "removeItems", "framer.*plugin", "framer code component"],
     "files": [
       "clavier-scripts/tools/capabilities/framer.md"
+    ],
+    "commands": [
+      "sisters framer"
     ]
   },
   {
