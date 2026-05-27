@@ -1,0 +1,25 @@
+/* 카피작업: 단순 줄바꿈 vs 단락 바꿈 시각 구분
+   - 한 단락 안 (엔터 1번): 좁게
+   - 단락 사이 (빈 줄 1개): 넓게 */
+
+/* ── Live Preview / Source (편집 화면) ─────────── */
+.markdown-source-view.mod-cm6 .cm-line {
+  line-height: 1.45;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* 빈 줄 자체를 키워 단락 사이 spacer 로 */
+.markdown-source-view.mod-cm6 .cm-line:has(br:only-child),
+.markdown-source-view.mod-cm6 .cm-line:empty {
+  min-height: 1.8em;
+}
+
+/* ── Reading mode (읽기 화면) ──────────────────── */
+.markdown-reading-view p,
+.markdown-rendered p {
+  margin: 0 0 1.6em 0;
+  line-height: 1.5;
+}
+
+/* p 안의 <br> (스페이스 2칸+엔터 / `\` 줄바꿈) 은 line-height 따라감 */
