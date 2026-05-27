@@ -20,10 +20,7 @@ import { homedir } from 'os';
 import { fileURLToPath } from 'url';
 
 import { createClient } from './lib/airtable-api.mjs';
-import {
-  loadDataDir, analyzeSchema, transformRow,
-  pass1Upsert, pass2Links, ensureMatchKeyField,
-} from './lib/airtable-upsert.mjs';
+import { executeUpsert } from './lib/airtable-upsert.mjs';
 import { ensureDoppler } from './lib/doppler-wrap.mjs';
 import { bold, dim, cyan, green, yellow, red, gray } from './lib/cli-color.mjs';
 import { extractBaseId } from './lib/airtable-input.mjs';
@@ -231,100 +228,9 @@ async function actionUpsert(api, baseId, dataDir, extend) {
   await runUpsert(api, baseId, dataDir, { dryRun: false, extend });
 }
 
+// runUpsert orchestration → lib/airtable-upsert.mjs `executeUpsert` 로 이동 (family 모듈화, copy.mjs 도 사용).
 async function runUpsert(api, baseId, dataDir, opts) {
-  const { config, tables: data } = loadDataDir(dataDir);
-  console.log(`  ${gray(`config.matchKey=${config.matchKey} linkSeparator="${config.linkSeparator}" tables=${Object.keys(data).join(',')}`)}`);
-
-  let schema = analyzeSchema(await api.getSchema(baseId));
-
-  console.log(gray('  · ensure matchKey field'));
-  for (const tableName of Object.keys(data)) {
-    const tSchema = schema.tablesByName[tableName];
-    if (!tSchema) { console.log(`    ${yellow(tableName)}: base에 없는 테이블 ${gray('(skip)')}`); continue; }
-    const matchKey = data[tableName].matchKey;
-    const created = await ensureMatchKeyField(api, baseId, tSchema, matchKey, opts);
-    console.log(`    ${cyan(tableName)}.${matchKey}: ${created ? green('CREATED') : gray('exists')}`);
-    // dry-run/live 모두: schema 에 가상 추가 — transformRow 가 matchKey 컬럼 인식
-    if (created && !tSchema.fields.some(f => f.name === matchKey)) {
-      tSchema.fields.push({ name: matchKey, type: 'singleLineText' });
-    }
-  }
-  // extend mode — CSV 헤더에 base 에 없는 컬럼 있으면 singleLineText 로 자동 생성
-  if (opts.extend) {
-    console.log(gray('  · extend mode — new fields'));
-    for (const [tableName, t] of Object.entries(data)) {
-      const tSchema = schema.tablesByName[tableName];
-      if (!tSchema) continue;
-      const existing = new Set(tSchema.fields.map(f => f.name));
-      const csvHeaders = new Set();
-      for (const row of t.rows) Object.keys(row).forEach(k => csvHeaders.add(k));
-      const newCols = [...csvHeaders].filter(h => !existing.has(h));
-      for (const col of newCols) {
-        if (opts.dryRun) {
-          console.log(`    ${cyan(tableName)}.${col}: ${yellow('would CREATE')} ${gray('(singleLineText, dry)')}`);
-          tSchema.fields.push({ name: col, type: 'singleLineText' });
-        } else {
-          await api.createField(baseId, tSchema.id, {
-            name: col, type: 'singleLineText',
-            description: 'Auto-created by V6 extend mode',
-          });
-          tSchema.fields.push({ name: col, type: 'singleLineText' });
-          console.log(`    ${cyan(tableName)}.${col}: ${green('CREATED')} (singleLineText)`);
-        }
-      }
-    }
-  }
-
-  if (!opts.dryRun) schema = analyzeSchema(await api.getSchema(baseId));
-
-  console.log(gray('  · transform CSV rows'));
-  const transformed = {};
-  for (const [tableName, t] of Object.entries(data)) {
-    if (!schema.tablesByName[tableName]) continue;
-    transformed[tableName] = t.rows.map(row => {
-      const { fields, linkKeys } = transformRow(tableName, row, schema, schema.linksByTable, config.linkSeparator);
-      return { fields, linkKeys, matchKeyValue: fields[t.matchKey] };
-    }).filter(r => r.matchKeyValue);
-    const skipped = t.rows.length - transformed[tableName].length;
-    console.log(`    ${cyan(tableName)}: ${transformed[tableName].length} rows${skipped ? gray(` (${skipped} skipped — no matchKey)`) : ''}`);
-  }
-
-  console.log(gray('  · Pass 1 — fields-only upsert'));
-  const allKeyToId = {};
-  for (const [tableName, rows] of Object.entries(transformed)) {
-    if (rows.length === 0) continue;
-    const tSchema = schema.tablesByName[tableName];
-    const matchKey = data[tableName].matchKey;
-    const keyToId = await pass1Upsert(api, baseId, tableName, tSchema, rows, matchKey, opts);
-    allKeyToId[tableName] = keyToId;
-    console.log(`    ${cyan(tableName)}: ${rows.length} upserted ${opts.dryRun ? gray('(dry)') : green('✓')}`);
-  }
-
-  // link target 매핑 확장 — base 의 기존 record 까지 포함 (sisoso items 가 mukayu group 에 link 같은 거)
-  console.log(gray('  · link target 매핑 (기존 base record 포함)'));
-  for (const tableName of Object.keys(schema.tablesByName)) {
-    const tSchema = schema.tablesByName[tableName];
-    const matchKey = data[tableName]?.matchKey || config.matchKey;
-    if (!tSchema.fields.some(f => f.name === matchKey)) continue;
-    const all = await api.listRecords(baseId, tSchema.id);
-    allKeyToId[tableName] = allKeyToId[tableName] || {};
-    for (const r of all) {
-      const k = r.fields[matchKey];
-      if (k && !allKeyToId[tableName][k]) allKeyToId[tableName][k] = r.id;
-    }
-  }
-
-  console.log(gray('  · Pass 2 — link resolve'));
-  for (const [tableName, rows] of Object.entries(transformed)) {
-    if (rows.length === 0) continue;
-    const tSchema = schema.tablesByName[tableName];
-    const matchKey = data[tableName].matchKey;
-    const recIds = rows.map(r => allKeyToId[tableName][r.matchKeyValue]);
-    const cnt = await pass2Links(api, baseId, tableName, tSchema, rows, recIds, allKeyToId, schema.linksByTable, opts);
-    console.log(`    ${cyan(tableName)}: ${cnt} link updates ${opts.dryRun ? gray('(dry)') : (cnt ? green('✓') : gray('—'))}`);
-  }
-
-  console.log(`\n  ${opts.dryRun ? yellow('DRY-RUN 완료') : green('UPSERT 완료')}`);
+  return executeUpsert(api, baseId, dataDir, opts);
 }
 
 async function actionStatus(api, baseId) {

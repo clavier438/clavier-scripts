@@ -35,9 +35,12 @@ import {
   patchRecord, createOrPatchRecords, tableIdByName, compactSchema,
 } from "./lib/copy/airtable.mjs";
 import { nextVersion, savePrompt, saveSystemPrompt, runClaude, stripCodeFence } from "./lib/copy/runner.mjs";
-import { fillAirtableArgs, pickFolder } from "./lib/copy/menu.mjs";
+import { pickFolder, airtableMenuTick, confirm, pickCsvDir, closeAsk } from "./lib/copy/menu.mjs";
 import { parseMultiCsv, writeCsvDir, buildCsvInstruction } from "./lib/copy/csv.mjs";
-import { basename } from "path";
+import { createClient } from "./lib/airtable-api.mjs";
+import { executeUpsert } from "./lib/airtable-upsert.mjs";
+import { basename, dirname } from "path";
+import { readdirSync } from "fs";
 
 const CACHE_DIR = join(homedir(), ".cache", "clavier");
 const CACHE_FILE = join(CACHE_DIR, "copy.json");
@@ -163,25 +166,16 @@ if (!existsSync(folder) || !statSync(folder).isDirectory()) {
 }
 
 // ── 모드 분기 ──
-// directPushMode = --target 으로 즉시 PATCH/POST. CSV 면 절대 push X.
-// csvMode = --csv. push 안 하고 CSV 파일로 저장. airtableCtl 로 review→upsert.
-const directPushMode = !!target && !csvMode;
-const needsPat = !!target || !!ref;
+const isAirtableMode = !!target || !!ref;
+const SYSTEM_PROMPT = "";
 
 if (csvMode && !target && !ref) {
   console.error(red(`✗ --csv 는 --target 또는 --ref 가 있어야 함 (스키마 출처 필요).`));
   process.exit(1);
 }
 
-// ── airtable direct push 모드: 인자 부족하면 인터랙티브 ──
-if (directPushMode && !instruction) {
-  const filled = await fillAirtableArgs({ folder, target, ref, instruction });
-  if (!filled) { console.log(dim(`중단.`)); process.exit(0); }
-  ({ target, ref, instruction } = filled);
-}
-
 // ── Doppler (PAT 필요 시) ──
-if (needsPat) {
+if (isAirtableMode) {
   ensureDoppler({
     project: "clavier",
     config: "prd",
@@ -190,216 +184,274 @@ if (needsPat) {
   });
 }
 
-// ── input/ 로드 ──
-const inputDir = join(folder, "input");
-const { text: inputText, files: inputFiles } = loadInputFolder(inputDir);
-if (!existsSync(inputDir)) {
-  console.log(yellow(`⚠ ${inputDir} 없음 — input/ 폴더 만들어 .md 자료 박으세요.`));
-} else {
-  console.log(dim(`input/ — ${inputFiles.length} files, ${Buffer.byteLength(inputText, "utf8")} bytes`));
-}
-
-// ── airtable schemas ──
+// ── 상태 (메뉴 루프 동안 mutable) ──
+let MODEL_VAR = MODEL;
 let refData = null;
 let targetData = null;
 let targetParsed = null;
 
-if (ref) {
-  console.log(dim(`fetching reference Airtable... (sample=${REF_SAMPLE || "all"})`));
-  refData = await fetchSchemaAndRecords(ref, process.env.AIRTABLE_PAT, { sample: REF_SAMPLE });
-  const recCount = Object.values(refData.records).reduce((s, r) => s + r.length, 0);
-  console.log(green(`✓ ref`) + dim(`  ${refData.baseId} · ${refData.schema.tables.length} tables · ${recCount} records (sampled)`));
-}
-if (target) {
-  targetParsed = parseAirtableUrl(target);
-  console.log(dim(`fetching target Airtable schema...`));
-  targetData = await fetchSchema(target, process.env.AIRTABLE_PAT);
-  console.log(
-    green(`✓ target`) +
-    dim(`  ${targetData.baseId} · ${targetData.schema.tables.length} tables` +
-        (targetParsed.recordId ? ` · record=${targetParsed.recordId}` : ""))
-  );
-}
-
-// ── userPrompt 조립 ──
-// 응답 형식 지시문은 *맨 앞 + 맨 뒤* 둘 다. 사용자 input 안에 충돌하는 format 지시
-// ("마크다운으로 써" 등) 가 있어도 override. LLM 은 끝에 박힌 지시보다 처음·끝 sandwich 패턴을 더 강하게 따름.
-let formatDirective;
-if (csvMode) {
-  const csvSchema = targetData?.schema ?? refData?.schema;
-  if (targetParsed?.recordId) {
-    console.error(red(`✗ --csv 는 base URL 만 지원 (rec... 포함 X).`));
-    process.exit(1);
+async function refetchSchemas() {
+  refData = null; targetData = null; targetParsed = null;
+  if (ref) {
+    console.log(dim(`fetching reference Airtable... (sample=${REF_SAMPLE || "all"})`));
+    refData = await fetchSchemaAndRecords(ref, process.env.AIRTABLE_PAT, { sample: REF_SAMPLE });
+    const recCount = Object.values(refData.records).reduce((s, r) => s + r.length, 0);
+    console.log(green(`✓ ref`) + dim(`  ${refData.baseId} · ${refData.schema.tables.length} tables · ${recCount} records (sampled)`));
   }
-  formatDirective = buildCsvInstruction(csvSchema);
-} else if (targetData) {
-  const mode = targetParsed.recordId ? "record" : "base";
-  const formatGuide = mode === "record"
-    ? `- 단일 record. { "필드명": 값, ... } 형식. select 옵션은 schema 의 options 안에서 선택.`
-    : `- base 통째. { "테이블명": [ { "id"?: "rec...", "fields": { 필드명: 값 } }, ... ] } 형식.\n` +
-      `- id 있으면 PATCH (update), 없으면 POST (create). 테이블명은 target schema 의 name 과 정확히 일치해야 함.`;
-  formatDirective = `응답 형식: 위 target schema 에 맞춰 JSON 단독 출력. 펜스·서두·설명 X.\n${formatGuide}`;
-} else {
-  formatDirective = `응답 형식: 마크다운 본문만. 펜스·서두·설명 X.`;
-}
-
-const parts = [];
-
-// [head] format override — 가장 먼저, 가장 강하게.
-if (csvMode || targetData) {
-  parts.push(
-    `===== OUTPUT FORMAT — STRICT (이 지시가 아래 어떤 마크다운/카피 지시보다 우선) =====\n\n` +
-    formatDirective +
-    `\n\n===== 아래는 컨텐츠·톤·스타일 컨텍스트. 형식은 위 OUTPUT FORMAT 만 따름. =====`
-  );
-}
-
-if (inputText) parts.push(inputText);
-
-if (refData) {
-  parts.push(
-    `<reference-airtable url="${ref}" baseId="${refData.baseId}">\n` +
-    `<schema>\n${JSON.stringify(compactSchema(refData.schema), null, 2)}\n</schema>\n` +
-    `<records>\n${JSON.stringify(refData.records, null, 2)}\n</records>\n` +
-    `</reference-airtable>`
-  );
-}
-
-if (targetData) {
-  const mode = targetParsed.recordId ? "record" : "base";
-  parts.push(
-    `<target-airtable url="${target}" baseId="${targetData.baseId}" mode="${mode}">\n` +
-    `<schema>\n${JSON.stringify(compactSchema(targetData.schema), null, 2)}\n</schema>\n` +
-    `</target-airtable>`
-  );
-}
-
-if (instruction) {
-  parts.push(`<instruction>\n${instruction}\n</instruction>`);
-}
-
-// [tail] reminder — 컨텍스트 끝에 다시.
-parts.push(formatDirective);
-
-const userPrompt = parts.join("\n\n");
-
-// ── output 경로 + prompt 저장 (claude 실패해도 입력은 남음) ──
-const SYSTEM_PROMPT = "";
-const outputDir = join(folder, "output");
-const { version, mdPath, promptPath, systemPath, csvDir } = nextVersion(outputDir, "output_v", MODEL);
-savePrompt(promptPath, userPrompt, MODEL);
-saveSystemPrompt(systemPath, SYSTEM_PROMPT, MODEL);
-
-console.log();
-console.log(dim(`prompt saved: ${promptPath}  (${Buffer.byteLength(userPrompt, "utf8")}B, ${version})`));
-console.log(dim(`→ claude (${MODEL}) 호출 중...`));
-
-// ── claude 호출 ──
-const r = await runClaude({ userPrompt, model: MODEL });
-console.log(
-  green(`✓ claude`) +
-  dim(`  ${r.elapsedSec.toFixed(1)}s, ${r.usage.input_tokens ?? "?"}in/${r.usage.output_tokens ?? "?"}out, $${r.totalCostUsd.toFixed(4)}`)
-);
-
-if (r.isError) {
-  console.error(red(`✗ claude 응답 에러: ${r.errorMessage}`));
-  process.exit(1);
-}
-
-const responseText = stripCodeFence(r.result);
-
-// ── 결과 처리 ──
-if (csvMode) {
-  // csv 모드 — 멀티테이블 파싱 후 폴더에 분리 저장. push X.
-  const tables = parseMultiCsv(responseText);
-  if (Object.keys(tables).length === 0) {
-    console.error(red(`✗ CSV 파싱 실패: === <테이블명> === 블록 못 찾음`));
-    console.error(dim(`raw 응답 (앞 500자):\n${responseText.slice(0, 500)}`));
-    writeFileSync(mdPath, `# CSV 파싱 실패\n\n\`\`\`\n${responseText}\n\`\`\`\n`);
-    process.exit(1);
-  }
-  const written = writeCsvDir(csvDir, tables);
-  writeFileSync(
-    mdPath,
-    `# CSV 출력 (${written.length} tables, ${written.reduce((s, w) => s + w.rows, 0)} rows)\n\n` +
-    `data_dir: \`${csvDir}\`\n\n` +
-    written.map(w => `- \`${basename(w.path)}\` — ${w.rows} rows`).join("\n") + "\n\n" +
-    `## Raw 응답\n\n\`\`\`\n${responseText}\n\`\`\`\n`,
-  );
-  console.log(green(`✓ CSV`) + dim(`  ${csvDir}/`));
-  written.forEach(w => console.log(dim(`    ${basename(w.path)}: ${w.rows} rows`)));
-  console.log();
-  console.log(`${cyan("→")} airtableCtl ${dim("로 review→upsert:")}`);
-  console.log(`  ${green("airtableCtl")}  ${dim(`→ base 선택 → dir=${csvDir} → [1] dry-run → [2] upsert`)}`);
-} else if (!targetData) {
-  // md 모드
-  writeFileSync(mdPath, responseText);
-  console.log(green(`✓ saved`) + dim(`  ${mdPath}`));
-} else {
-  // airtable 모드 — JSON 파싱 + push
-  let payload;
-  try { payload = JSON.parse(responseText); }
-  catch (e) {
-    console.error(red(`✗ JSON 파싱 실패: ${e.message}`));
-    console.error(dim(`raw 응답 (앞 500자):\n${responseText.slice(0, 500)}`));
-    writeFileSync(mdPath, `# JSON 파싱 실패\n\n\`\`\`\n${responseText}\n\`\`\`\n`);
-    process.exit(1);
-  }
-  writeFileSync(
-    mdPath,
-    `# Airtable push (${targetParsed.recordId ? "record" : "base"} mode)\n\n` +
-    `target: ${target}\n\n` +
-    `\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\`\n`,
-  );
-
-  if (targetParsed.recordId) {
-    // 단일 record PATCH
-    await patchRecord({
-      baseId: targetData.baseId,
-      tableId: targetParsed.tableId,
-      recordId: targetParsed.recordId,
-      fields: payload,
-      pat: process.env.AIRTABLE_PAT,
-    });
+  if (target) {
+    targetParsed = parseAirtableUrl(target);
+    console.log(dim(`fetching target Airtable schema...`));
+    targetData = await fetchSchema(target, process.env.AIRTABLE_PAT);
     console.log(
-      green(`✓ Airtable PATCH`) +
-      dim(`  ${targetData.baseId}/${targetParsed.tableId}/${targetParsed.recordId}`),
+      green(`✓ target`) +
+      dim(`  ${targetData.baseId} · ${targetData.schema.tables.length} tables` +
+          (targetParsed.recordId ? ` · record=${targetParsed.recordId}` : ""))
     );
-  } else {
-    // base 통째 — 테이블별 records
-    if (typeof payload !== "object" || Array.isArray(payload)) {
-      console.error(red(`✗ base 모드는 { "테이블명": [...records...] } 형식 필요. 받은: ${typeof payload}`));
-      process.exit(1);
+  }
+}
+
+// ── 최근 CSV 폴더 발견 (upsert action 에서 사용) ──
+function findCsvDirs() {
+  const outDir = join(folder, "output");
+  if (!existsSync(outDir)) return [];
+  return readdirSync(outDir)
+    .filter(name => /^output_v\d+/.test(name))
+    .map(name => join(outDir, name))
+    .filter(p => statSync(p).isDirectory())
+    .sort()
+    .reverse();
+}
+
+// ── action 실행 (csv / push / md / upsert-dry / upsert-live) ──
+async function runAction(action) {
+  // upsert 액션은 claude 호출 X — CSV 폴더 픽 + executeUpsert.
+  if (action === "upsert-dry" || action === "upsert-live") {
+    if (!targetData) {
+      console.log(yellow(`  ⚠ upsert 는 --target 필요. 컨텍스트 변경에서 박으세요.`));
+      return;
     }
-    for (const [tableName, records] of Object.entries(payload)) {
-      const tableId = tableIdByName(targetData.schema, tableName);
-      if (!tableId) {
-        console.log(yellow(`⚠ 테이블 '${tableName}' 없음 — skip`));
-        continue;
-      }
-      if (!Array.isArray(records)) {
-        console.log(yellow(`⚠ '${tableName}' 값이 array 아님 — skip`));
-        continue;
-      }
-      const r = await createOrPatchRecords({
-        baseId: targetData.baseId,
-        tableId,
-        records,
+    if (targetParsed.recordId) {
+      console.log(yellow(`  ⚠ upsert 는 base URL 만 지원 (rec... 포함 X).`));
+      return;
+    }
+    const csvDirs = findCsvDirs();
+    const picked = await pickCsvDir(csvDirs);
+    if (!picked) return;
+    const isLive = action === "upsert-live";
+    if (isLive) {
+      const ok = await confirm(`LIVE upsert — ${basename(picked)} → ${targetData.baseId}. 진짜로?`);
+      if (!ok) { console.log(dim("  취소")); return; }
+    }
+    const client = createClient(process.env.AIRTABLE_PAT);
+    console.log();
+    console.log(bold(isLive ? red("━━━ LIVE UPSERT ━━━") : yellow("━━━ DRY-RUN ━━━")));
+    await executeUpsert(client, targetData.baseId, picked, { dryRun: !isLive });
+    return;
+  }
+
+  // claude 호출 액션들 — csv / push / md.
+  const actionIsCsv = action === "csv";
+  const actionIsPush = action === "push";
+  // md = !target && !csvMode → 기본 markdown 본문.
+
+  // input/ 로드 — 매 실행마다 다시 (사용자 편집 가능).
+  const inputDir = join(folder, "input");
+  const { text: inputText, files: inputFiles } = loadInputFolder(inputDir);
+  if (!existsSync(inputDir)) {
+    console.log(yellow(`  ⚠ ${inputDir} 없음 — input/ 폴더 만들어 .md 자료 박으세요.`));
+    return;
+  }
+  console.log(dim(`  input/ — ${inputFiles.length} files, ${Buffer.byteLength(inputText, "utf8")} bytes`));
+
+  // format directive 선정
+  let formatDirective;
+  if (actionIsCsv) {
+    const csvSchema = targetData?.schema ?? refData?.schema;
+    if (!csvSchema) {
+      console.log(yellow(`  ⚠ CSV 는 target 또는 ref 스키마 필요`));
+      return;
+    }
+    if (targetParsed?.recordId) {
+      console.log(yellow(`  ⚠ CSV 는 base URL 만 지원 (rec... 포함 X)`));
+      return;
+    }
+    formatDirective = buildCsvInstruction(csvSchema);
+  } else if (actionIsPush && targetData) {
+    const mode = targetParsed.recordId ? "record" : "base";
+    const formatGuide = mode === "record"
+      ? `- 단일 record. { "필드명": 값, ... } 형식. select 옵션은 schema 의 options 안에서 선택.`
+      : `- base 통째. { "테이블명": [ { "id"?: "rec...", "fields": { 필드명: 값 } }, ... ] } 형식.\n` +
+        `- id 있으면 PATCH (update), 없으면 POST (create). 테이블명은 target schema 의 name 과 정확히 일치해야 함.`;
+    formatDirective = `응답 형식: 위 target schema 에 맞춰 JSON 단독 출력. 펜스·서두·설명 X.\n${formatGuide}`;
+  } else {
+    formatDirective = `응답 형식: 마크다운 본문만. 펜스·서두·설명 X.`;
+  }
+
+  // userPrompt 조립 — sandwich format directive.
+  const parts = [];
+  if (actionIsCsv || actionIsPush) {
+    parts.push(
+      `===== OUTPUT FORMAT — STRICT (이 지시가 아래 어떤 마크다운/카피 지시보다 우선) =====\n\n` +
+      formatDirective +
+      `\n\n===== 아래는 컨텐츠·톤·스타일 컨텍스트. 형식은 위 OUTPUT FORMAT 만 따름. =====`
+    );
+  }
+  if (inputText) parts.push(inputText);
+  if (refData) {
+    parts.push(
+      `<reference-airtable url="${ref}" baseId="${refData.baseId}">\n` +
+      `<schema>\n${JSON.stringify(compactSchema(refData.schema), null, 2)}\n</schema>\n` +
+      `<records>\n${JSON.stringify(refData.records, null, 2)}\n</records>\n` +
+      `</reference-airtable>`
+    );
+  }
+  if (targetData) {
+    const mode = targetParsed.recordId ? "record" : "base";
+    parts.push(
+      `<target-airtable url="${target}" baseId="${targetData.baseId}" mode="${mode}">\n` +
+      `<schema>\n${JSON.stringify(compactSchema(targetData.schema), null, 2)}\n</schema>\n` +
+      `</target-airtable>`
+    );
+  }
+  if (instruction) parts.push(`<instruction>\n${instruction}\n</instruction>`);
+  parts.push(formatDirective);
+
+  const userPrompt = parts.join("\n\n");
+
+  // output 경로 + 프롬프트 저장.
+  const outputDir = join(folder, "output");
+  const { version, mdPath, promptPath, systemPath, csvDir } = nextVersion(outputDir, "output_v", MODEL_VAR);
+  savePrompt(promptPath, userPrompt, MODEL_VAR);
+  saveSystemPrompt(systemPath, SYSTEM_PROMPT, MODEL_VAR);
+
+  console.log(dim(`  prompt: ${basename(promptPath)} (${Buffer.byteLength(userPrompt, "utf8")}B, ${version})`));
+  console.log(dim(`  → claude (${MODEL_VAR}) 호출 중...`));
+
+  const r = await runClaude({ userPrompt, model: MODEL_VAR });
+  console.log(
+    `  ${green(`✓ claude`)}` +
+    dim(`  ${r.elapsedSec.toFixed(1)}s, ${r.usage.input_tokens ?? "?"}in/${r.usage.output_tokens ?? "?"}out, $${r.totalCostUsd.toFixed(4)}`)
+  );
+
+  if (r.isError) {
+    console.error(red(`  ✗ claude 응답 에러: ${r.errorMessage}`));
+    return;
+  }
+
+  const responseText = stripCodeFence(r.result);
+
+  // 결과 처리.
+  if (actionIsCsv) {
+    const tables = parseMultiCsv(responseText);
+    if (Object.keys(tables).length === 0) {
+      console.error(red(`  ✗ CSV 파싱 실패: === <테이블명> === 블록 못 찾음`));
+      console.error(dim(`  raw (앞 500자):\n${responseText.slice(0, 500)}`));
+      writeFileSync(mdPath, `# CSV 파싱 실패\n\n\`\`\`\n${responseText}\n\`\`\`\n`);
+      return;
+    }
+    const written = writeCsvDir(csvDir, tables);
+    writeFileSync(
+      mdPath,
+      `# CSV 출력 (${written.length} tables, ${written.reduce((s, w) => s + w.rows, 0)} rows)\n\n` +
+      `data_dir: \`${csvDir}\`\n\n` +
+      written.map(w => `- \`${basename(w.path)}\` — ${w.rows} rows`).join("\n") + "\n\n" +
+      `## Raw 응답\n\n\`\`\`\n${responseText}\n\`\`\`\n`,
+    );
+    console.log(`  ${green(`✓ CSV`)}` + dim(`  ${csvDir}/`));
+    written.forEach(w => console.log(dim(`    ${basename(w.path)}: ${w.rows} rows`)));
+    console.log(dim(`  → 메뉴 [2] dry-run / [3] live upsert 로 push`));
+  } else if (!actionIsPush) {
+    // md 모드
+    writeFileSync(mdPath, responseText);
+    console.log(`  ${green(`✓ saved`)}` + dim(`  ${mdPath}`));
+  } else {
+    // push 모드 — JSON 파싱 + 즉시 PATCH/POST
+    let payload;
+    try { payload = JSON.parse(responseText); }
+    catch (e) {
+      console.error(red(`  ✗ JSON 파싱 실패: ${e.message}`));
+      console.error(dim(`  raw (앞 500자):\n${responseText.slice(0, 500)}`));
+      writeFileSync(mdPath, `# JSON 파싱 실패\n\n\`\`\`\n${responseText}\n\`\`\`\n`);
+      return;
+    }
+    writeFileSync(
+      mdPath,
+      `# Airtable push (${targetParsed.recordId ? "record" : "base"} mode)\n\n` +
+      `target: ${target}\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\`\n`,
+    );
+    if (targetParsed.recordId) {
+      await patchRecord({
+        baseId: targetData.baseId, tableId: targetParsed.tableId,
+        recordId: targetParsed.recordId, fields: payload,
         pat: process.env.AIRTABLE_PAT,
       });
-      console.log(green(`✓ ${tableName}`) + dim(`  patched=${r.patched} created=${r.created}`));
+      console.log(`  ${green(`✓ Airtable PATCH`)}` + dim(`  ${targetData.baseId}/${targetParsed.tableId}/${targetParsed.recordId}`));
+    } else {
+      if (typeof payload !== "object" || Array.isArray(payload)) {
+        console.error(red(`  ✗ base 모드는 { "테이블명": [...records...] } 형식 필요`));
+        return;
+      }
+      for (const [tableName, records] of Object.entries(payload)) {
+        const tableId = tableIdByName(targetData.schema, tableName);
+        if (!tableId) { console.log(yellow(`  ⚠ 테이블 '${tableName}' 없음 — skip`)); continue; }
+        if (!Array.isArray(records)) { console.log(yellow(`  ⚠ '${tableName}' 값이 array 아님 — skip`)); continue; }
+        const result = await createOrPatchRecords({
+          baseId: targetData.baseId, tableId, records,
+          pat: process.env.AIRTABLE_PAT,
+        });
+        console.log(`  ${green(`✓ ${tableName}`)}` + dim(`  patched=${result.patched} created=${result.created}`));
+      }
     }
   }
 }
 
-// ── cache 갱신 ──
+// ── 메인 흐름 ──
+// (a) airtable 모드 X (md only): 1회 실행 후 종료.
+// (b) airtable 모드: workerCtl 패턴 — 초기 액션(플래그 기반) 후 메뉴 루프.
+
+if (!isAirtableMode) {
+  // md 단독
+  await runAction("md");
+} else {
+  await refetchSchemas();
+
+  // 명시적 액션 플래그가 있으면 1회 자동 실행 (그 다음 메뉴로).
+  const explicitAction = csvMode ? "csv" : (target && instruction ? "push" : null);
+  if (explicitAction) {
+    console.log();
+    console.log(bold(cyan(`━━━ 초기 액션: ${explicitAction} ━━━`)));
+    await runAction(explicitAction);
+  }
+
+  // 메뉴 루프 — workerCtl 패턴.
+  while (true) {
+    const tick = await airtableMenuTick({
+      folder, target, ref, instruction, model: MODEL_VAR,
+      targetData, refData, refSample: REF_SAMPLE,
+    });
+    if (tick.action === "exit") break;
+    if (tick.action === "change") {
+      target = tick.ctx.target; ref = tick.ctx.ref;
+      instruction = tick.ctx.instruction; MODEL_VAR = tick.ctx.model;
+      await refetchSchemas();
+      continue;
+    }
+    console.log();
+    console.log(bold(cyan(`━━━ action: ${tick.action} ━━━`)));
+    try {
+      await runAction(tick.action);
+    } catch (e) {
+      console.error(red(`  ✗ ${e.message}`));
+    }
+  }
+}
+
+// ── cache 갱신 + 종료 로그 ──
 cache.recent = (cache.recent || []).filter(x => x.path !== folder);
 cache.recent.unshift({ path: folder, at: new Date().toISOString() });
 if (cache.recent.length > 10) cache.recent.length = 10;
 saveCache(cache);
 
+closeAsk();
 console.log();
-console.log(dim(`version: ${version}`));
-console.log(dim(`output:  ${csvMode ? csvDir + "/" : mdPath}`));
-console.log(dim(`prompt:  ${promptPath}`));
-console.log(dim(`system:  ${systemPath}`));
+console.log(dim(`종료. ${folder}/output/ 확인.`));
