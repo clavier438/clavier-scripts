@@ -24,6 +24,11 @@
 
 import "./lib/freshness.mjs";
 
+// IPv6 routing 문제 (일부 Mac 환경에서 Airtable AWS 노드 ETIMEDOUT) 차단 — IPv4 우선.
+// 2026-05-27 v26 push 실패 → IPv4 강제로 해소. 모든 fetch 가 IPv4 부터.
+import { setDefaultResultOrder } from "dns";
+setDefaultResultOrder("ipv4first");
+
 import { existsSync, statSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join, resolve as resolvePath } from "path";
 import { homedir } from "os";
@@ -200,12 +205,23 @@ async function refetchSchemas() {
   }
   if (target) {
     targetParsed = parseAirtableUrl(target);
-    console.log(dim(`fetching target Airtable schema...`));
-    targetData = await fetchSchema(target, process.env.AIRTABLE_PAT);
+    if (targetParsed.recordId) {
+      // 단일 record 모드 — schema 만
+      console.log(dim(`fetching target Airtable schema...`));
+      targetData = await fetchSchema(target, process.env.AIRTABLE_PAT);
+    } else {
+      // base 모드 — schema + records (in-place PATCH 매칭용. LLM 이 기존 id 보고 값만 교체)
+      console.log(dim(`fetching target Airtable schema + records... (sample=${REF_SAMPLE || "all"})`));
+      targetData = await fetchSchemaAndRecords(target, process.env.AIRTABLE_PAT, { sample: REF_SAMPLE });
+    }
+    const tRecCount = targetData.records
+      ? Object.values(targetData.records).reduce((s, r) => s + r.length, 0)
+      : null;
     console.log(
       green(`✓ target`) +
       dim(`  ${targetData.baseId} · ${targetData.schema.tables.length} tables` +
-          (targetParsed.recordId ? ` · record=${targetParsed.recordId}` : ""))
+          (targetParsed.recordId ? ` · record=${targetParsed.recordId}` :
+           tRecCount !== null ? ` · ${tRecCount} records (sampled)` : ""))
     );
   }
 }
@@ -281,7 +297,10 @@ async function runAction(action) {
     const formatGuide = mode === "record"
       ? `- 단일 record. { "필드명": 값, ... } 형식. select 옵션은 schema 의 options 안에서 선택.`
       : `- base 통째. { "테이블명": [ { "id"?: "rec...", "fields": { 필드명: 값 } }, ... ] } 형식.\n` +
-        `- id 있으면 PATCH (update), 없으면 POST (create). 테이블명은 target schema 의 name 과 정확히 일치해야 함.`;
+        `- **id 있으면 PATCH (update existing — 바인딩 보존). id 없으면 POST (create new).**\n` +
+        `- target 의 <records> 블록에 기존 records 가 있음. 새 콘텐츠가 *같은 역할/카테고리* 면 그 id 박아서 PATCH (덮어쓰지 말고 의미 맞는 슬롯에).\n` +
+        `- 시소소 고유로 *기존에 슬롯이 없는* 콘텐츠만 id 없이 POST.\n` +
+        `- 테이블명은 target schema 의 name 과 정확히 일치해야 함.`;
     formatDirective = `응답 형식: 위 target schema 에 맞춰 JSON 단독 출력. 펜스·서두·설명 X.\n${formatGuide}`;
   } else {
     formatDirective = `응답 형식: 마크다운 본문만. 펜스·서두·설명 X.`;
@@ -307,9 +326,13 @@ async function runAction(action) {
   }
   if (targetData) {
     const mode = targetParsed.recordId ? "record" : "base";
+    const recordsBlock = targetData.records
+      ? `<records>\n${JSON.stringify(targetData.records, null, 2)}\n</records>\n`
+      : "";
     parts.push(
       `<target-airtable url="${target}" baseId="${targetData.baseId}" mode="${mode}">\n` +
       `<schema>\n${JSON.stringify(compactSchema(targetData.schema), null, 2)}\n</schema>\n` +
+      recordsBlock +
       `</target-airtable>`
     );
   }
