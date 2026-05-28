@@ -139,6 +139,20 @@ iCloud `clavier.env` 직접 편집 금지 — `doppler-mirror-icloud`로 자동 
 
 ---
 
+## 외부 도구 코드 작성 전 reference-class 의무 (2026-05-28~) ★ 구조 강제
+
+**Framer / Notion / Airtable / Cloudflare / 3rd-party SDK 코드 작성 = reference-class 탐색 (WebSearch/WebFetch ≥ 2 + URL 인용 ≥ 1 + 30자 본문) 이 트랜스크립트에 없으면 도구 호출 자체가 차단됨.**
+
+차단 메커니즘 = **reference-class agent hook** (clavier-hq DECISIONS 5/28 ADR):
+- `clavier-scripts/tools/claude-hooks/pre-tool-use.agent-reference-class.md` 가 verifier subagent prompt
+- PreToolUse 매처: `Write|Edit|mcp__design-bridge__codeFiles_(setContent|create)`
+- 별도 Claude 인스턴스가 트랜스크립트 검사 후 `permissionDecision: allow|deny`
+- 차단 사유 표시되면 → WebSearch/WebFetch 먼저 + URL+30자 인용 명시 후 재시도
+
+이 hook 은 메모리 권유 (`feedback_reference_class.md`) 의 의지 의존 한계를 닫음. 5/28 Framer FractionPad 사건 (2h 손실) 처방.
+
+---
+
 ## 결정 전파 자동 검증 (Defense in Depth, 2026-04-28~)
 
 clavier-hq `DECISIONS.md`에 새 ADR 추가 시 **즉시** `doc-coverage <개념>` 또는 `doc-coverage --recent` 호출. ❌ 표시된 12개 표준 문서 모두 갱신 후 다음 작업 시작.

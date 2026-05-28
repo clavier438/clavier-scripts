@@ -168,6 +168,20 @@ Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.m
 
 위반 시 사용자 폭발 (2026-05-04 인용): "*책임지는 새끼 없이 오합지졸로 떠돌아다녀서 잘하고있는지 확인조차 있는지없는지도몰랐다*". DECISIONS.md 2026-05-04 ADR "STL 원칙 + Closer 신설" 참조.
 
+## 외부 도구 코드 작성 전 reference-class 의무 (2026-05-28~) ★ hook 강제
+
+**Framer / Notion / Airtable / Cloudflare / 3rd-party SDK 코드 작성 시점에 reference-class 탐색 (WebSearch/WebFetch 로 working case + URL 인용) 이 트랜스크립트에 없으면 도구 호출 자체가 차단됨.**
+
+차단 메커니즘 — **reference-class agent hook**:
+- PreToolUse 매처: `Write|Edit|mcp__design-bridge__codeFiles_(setContent|create)`
+- 별도 Claude 인스턴스 (verifier subagent) 가 매번 트랜스크립트 검사
+- WebSearch/WebFetch ≥2 + URL 인용 ≥1 + 30자 본문 미충족 → `permissionDecision: deny`
+- `clavier-scripts/tools/claude-hooks/pre-tool-use.agent-reference-class.md` 가 verifier prompt 정의 (bootstrap.sh Step 5b 가 settings.json 에 자동 등록)
+
+이 hook 은 메모리 권유 (`feedback_reference_class.md`) 의 의지 의존 한계를 닫기 위해 박힘 (2026-05-28 Framer 사건 처방). 권유 영역 → 구조 영역. DECISIONS.md 2026-05-28 ADR + CONCEPTS.md #17 "반복 실수 차단의 구조 패턴" 참조.
+
+---
+
 ## 능력 떠넘기기 전 self-check (2026-05-04~, B1 병목 차단)
 
 **"사용자가 직접 하셔야 합니다" 발화 전 반드시 self-check.** 어제 이 패턴으로 사용자가 폭발 — 사실 Claude 가 직접 가능했던 것을 떠넘김.
