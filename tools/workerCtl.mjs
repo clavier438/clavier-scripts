@@ -383,11 +383,26 @@ function bustWorkersCache() {
     try { writeFileSync(WORKERS_CACHE_FILE, JSON.stringify({ fetchedAt: 0, workers: [] })) } catch {}
 }
 
+// ── fetch 에러 → 사용자 진단 hint ─────────────────────────────────────────
+// "fetch failed" 만 보여주면 30분 미스터리. cause 코드별 한 줄 hint 동봉.
+// freshness.mjs 가 IPv4-first 박은 이후엔 ETIMEDOUT 이 진짜 네트워크 막힘 신호.
+function fetchErrorHint(err) {
+    const code = err.cause?.code
+    const codeTag = code ? ` (${code})` : ""
+    const hint =
+        code === "ETIMEDOUT"     ? " — 워커 down 또는 네트워크 막힘 (Wi-Fi/VPN 토글?)" :
+        code === "EHOSTUNREACH"  ? " — 라우팅 불가 (네트워크 환경 점검)" :
+        code === "ENOTFOUND"     ? " — DNS 실패 (워커 URL 오타?)" :
+        code === "ECONNREFUSED"  ? " — 워커가 연결 거부 (워커 down 의심)" :
+        code === "ECONNRESET"    ? " — 연결 끊김 (재시도 권유)" : ""
+    return `${err.message}${codeTag}${hint}`
+}
+
 // ── /capabilities 호출 ────────────────────────────────────────────────────
 async function fetchCapabilities(workerUrl) {
     const res = await fetch(`${workerUrl}/capabilities`, {
         signal: AbortSignal.timeout(10_000),
-    }).catch(err => { throw new Error(`연결 실패: ${err.message}`) })
+    }).catch(err => { throw new Error(`연결 실패: ${fetchErrorHint(err)}`) })
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const data = await res.json()
@@ -774,6 +789,7 @@ const SNAPSHOT_DIR = join(__dir, "worker-snapshots")
 
 async function fetchStatus(workerUrl) {
     const res = await fetch(`${workerUrl}/status`, { signal: AbortSignal.timeout(15_000) })
+        .catch(err => { throw new Error(fetchErrorHint(err)) })
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     return res.json()
 }
