@@ -168,6 +168,25 @@ Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.m
 
 위반 시 사용자 폭발 (2026-05-04 인용): "*책임지는 새끼 없이 오합지졸로 떠돌아다녀서 잘하고있는지 확인조차 있는지없는지도몰랐다*". DECISIONS.md 2026-05-04 ADR "STL 원칙 + Closer 신설" 참조.
 
+## Architecture Navigator + 7 추가 agent hook (2026-05-29~) ★ hook 강제
+
+5/28 reference-class hook 의 확장. 8개 agent hook 으로 사용자 메모리 8 패턴 구조화 (DECISIONS 5/29 ADR):
+
+| 시점 | hook | 막는 패턴 |
+|---|---|---|
+| Write/Edit/codeFiles + Bash | **architecture-navigator** ★ | 4 원칙 (단일 뇌 / SvelteKit / SSOT / 의도) 위반 |
+| Write/Edit/codeFiles + Bash | **reference-class** (확장) | 외부 도구 / 설치 / 새 자동화 시 추측 |
+| Bash | **new-thing-modular** | 브랜치/레포 신설 시 reference + How Big Things Get Done 부재 |
+| Write/Edit/codeFiles | **data-hardcode** | CSV/JSON 파싱 대신 하드코딩 |
+| Bash | **commit-big-picture** | git/PR 메시지 전체 그림 부재 |
+| Stop (turn 종료) | **no-quick-options** | 진행 모드 + 옵션 메뉴 |
+| Stop | **ownership-values** | 결정 떠넘김 + 가치관 7 메모리 로드 |
+| Stop | **followthrough** | spawn_task 미추적 |
+
+각 hook 의 verifier prompt = `clavier-scripts/tools/claude-hooks/<event>.agent-<name>.md`. 컨벤션 외 = drift.
+
+---
+
 ## 외부 도구 코드 작성 전 reference-class 의무 (2026-05-28~) ★ hook 강제
 
 **Framer / Notion / Airtable / Cloudflare / 3rd-party SDK 코드 작성 시점에 reference-class 탐색 (WebSearch/WebFetch 로 working case + URL 인용) 이 트랜스크립트에 없으면 도구 호출 자체가 차단됨.**
