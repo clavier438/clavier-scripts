@@ -35,15 +35,25 @@ export async function fetchSchema(url, pat) {
 }
 
 /**
- * schema + 모든 테이블의 records.
+ * schema + 테이블별 records (sample 가능).
+ *
+ * LLM 프롬프트로 들어가는 용도라 *전부 덤프*하면 "Prompt is too long" 발생.
+ * 기본 sample=5 (테이블당 5개 — 톤/구조 학습 목적엔 충분). 0 이면 전부.
+ *
+ * record 도 compact: { id, fields } 만, createdTime·기타 메타 제거.
+ *
+ * @param {object} opts {sample?: number}  sample=0 = 전부
  */
-export async function fetchSchemaAndRecords(url, pat) {
+export async function fetchSchemaAndRecords(url, pat, opts = {}) {
+  const sample = opts.sample ?? 5;
   const { baseId } = parseAirtableUrl(url);
   const client = createClient(pat);
   const schema = await client.getSchema(baseId);
   const records = {};
   for (const t of schema.tables) {
-    records[t.name] = await client.listRecords(baseId, t.id);
+    const all = await client.listRecords(baseId, t.id);
+    const picked = sample > 0 ? all.slice(0, sample) : all;
+    records[t.name] = picked.map(r => ({ id: r.id, fields: r.fields }));
   }
   return { baseId, schema, records };
 }
