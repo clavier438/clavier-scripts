@@ -139,24 +139,23 @@ iCloud `clavier.env` 직접 편집 금지 — `doppler-mirror-icloud`로 자동 
 
 ---
 
-## Architecture Navigator + 7 추가 agent hook 적용 (2026-05-29~) ★ 구조 강제
+## 근본 3분류 agent hook — 근거 / 자리 / 책임 (2026-05-29~) ★ hook 강제
 
-5/28 reference-class hook 의 확장 — 8 agent hook 으로 사용자 메모리 8 패턴 일괄 구조화. *언제·어떤 행동을 할 때 어디 막힐 수 있는지* 알아두면 작업 마찰 줄어듦.
+반복 실수를 *근본 3분류* 로 환원, hook event 2개에 박음 (DECISIONS 5/29 ADR):
 
-| 시점 / 매처 | hook | 막는 위반 패턴 | 통과 신호 |
+| 근본 실수 | 교정 = | hook (event) | 흡수한 메모리 |
 |---|---|---|---|
-| Write/Edit/codeFiles + Bash | architecture-navigator ★ | 4 원칙 (단일 뇌 / SvelteKit / SSOT / 의도) 위반 | 위치·소속·ADR 정합 인용 |
-| Write/Edit/codeFiles + Bash | reference-class (확장) | 추측 / docs 부재 / 설치 직전 미검증 | WebSearch ≥2 + URL+30자 인용 |
-| Bash | new-thing-modular | 브랜치/레포 신설 시 reference + 분할 계획 부재 | reference + "작게 분할" 명시 |
-| Write/Edit/codeFiles | data-hardcode | CSV/JSON 파싱 대신 하드코딩 | 데이터 소스 인용 또는 ≤10 elements |
-| Bash | commit-big-picture | git/PR 메시지 단일 라인 / 큰 맥락 부재 | 목적+수단+ADR/메모리 인용 |
-| Stop | no-quick-options | 진행 모드 시 옵션 메뉴 / 의문문 | 결정·실행 완료 |
-| Stop | ownership-values | 결정 떠넘김 | 가치관 메모리 위 derive 흔적 |
-| Stop | followthrough | spawn_task 던지고 미추적 | 능동 보고 또는 추적 가능 형태 |
+| **추측** (현실 근거 없이) | **근거** Grounding | `before-action` (PreToolUse) | reference_class / docs_first / verify_install / automation_order / data_source / How Big Things Get Done |
+| **흩뜨림** (잘못된 자리·구조) | **자리** Placement | `before-action` (PreToolUse) | 단일뇌 / SvelteKit / GitHub+Doppler SSOT / 아키텍처 의도 / commit big-picture |
+| **떠넘김** (판단·완수 회피) | **책임** Ownership | `before-reply` (Stop) | no_quick_options / ownership / followthrough |
 
-DECISIONS 2026-05-29 ADR + clavier-scripts `tools/claude-hooks/<event>.agent-<name>.md` 컨벤션 참조.
+- `pre-tool-use.agent-before-action.md` — 행동 직전. 근거(추측 아닌가) + 자리(올바른 위치인가) 2 축.
+- `stop.agent-before-reply.md` — 응답 직전. 책임(떠넘기지 않았나) 1 축. 가치관 메모리 로드 후 derive 강제.
+
+verifier = 별도 Claude 인스턴스 (메인의 "사용자 만족 동기" 비공유). 컨벤션 외 파일 = drift. 8 subagent fire → 2 환원 (`feedback_single_solution` 적용).
 
 ---
+
 
 ## 외부 도구 코드 작성 전 reference-class 의무 (2026-05-28~) ★ 구조 강제
 

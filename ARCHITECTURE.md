@@ -213,7 +213,7 @@ Claude Code가 추가 컨텍스트로 자동 주입
 
 | 날짜 | 변경 내용 |
 |------|-----------|
-| 2026-05-29 | **Architecture Navigator + 7 추가 agent hook 확장** (clavier-hq DECISIONS ADR): 8 agent hook 으로 사용자 메모리 8 패턴 구조화 — `pre-tool-use.agent-*` 5개 + `stop.agent-*` 3개. bootstrap.sh Stop event 지원 동반. |
+| 2026-05-29 | **Architecture Navigator + 7 추가 agent hook (→ 같은 날 **근본 3분류 agent hook** (근거/자리/책임) 으로 환원 — 8 hook → 2, DECISIONS 5/29) 확장** (clavier-hq DECISIONS ADR): 8 agent hook 으로 사용자 메모리 8 패턴 구조화 — `pre-tool-use.agent-*` 5개 + `stop.agent-*` 3개. bootstrap.sh Stop event 지원 동반. |
 | 2026-05-28 | **reference-class agent hook 신설** (clavier-hq DECISIONS ADR): `tools/claude-hooks/pre-tool-use.agent-reference-class.md` — PreToolUse agent type hook (experimental). 외부 도구 코드 작성 직전 별도 Claude 인스턴스가 트랜스크립트 검사 → reference 부재 시 deny. 반복 실수 차단의 첫 구조 적용. clavier-hq `bootstrap.sh` Step 5b 가 `.agent-*.md` 패턴 자동 등록 (SvelteKit 정신 확장). |
 | 2026-04-30 | **framer-sync / control-tower 구조 점검**: D1 SSOT 마이그레이션 직후 cold-start SOLID 감사. 발견 8개: `syncCollectionNative ↔ syncCollectionFromD1` 코드 중복(높음), `syncAllNative` KV 사망 파라미터·`index.ts` 모놀리식 라우터(중간). 시정 4개 CLOSER_QUEUE.md 등록. ADR: clavier-hq/DECISIONS.md 2026-04-30. CONCEPTS.md #13 "구조 점검 — SOLID 감사" 신설. |
 | 2026-04-28 | **framer-sync 인터페이스 동결**: "프레이머가 변화를 알 수 없게 한다" — `addFields`/`createCollection` 등 Framer 측 스키마 변경 RPC 호출 전면 제거, `getFields()` read-only만 사용. 매칭 안 되는 필드는 `[needs-manual-framer-setup]` 경고 후 graceful skip. 4중 양파 디버깅 (typia/fldXXX/Connection error/D1 chicken-egg) 모두 호환성 종속에서 발생 → 호환성 영구 보장. 브랜치 `framer-immutable-refactor` (commit 68a8ce1, sisoso production deployed). clavier-hq/DECISIONS.md 2026-04-28 + CONCEPTS.md "외부 인터페이스 동결" 항목 |

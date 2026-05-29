@@ -26,7 +26,7 @@
 - clavier-hq `hooks/post-commit` 자동 발동 — DECISIONS.md commit 시 즉시 검증
 - Notion Architecture Archive — DECISIONS/CONCEPTS 자동 미러 (closer-runner 매일 03:00)
 
-**반복 실수 차단 hook (2026-05-28~5/29 확장)** — **Architecture Navigator + 7 추가 agent hook**:
+**반복 실수 차단 hook (2026-05-28~5/29 확장)** — **Architecture Navigator + 7 추가 agent hook (→ 같은 날 **근본 3분류 agent hook** (근거/자리/책임) 으로 환원 — 8 hook → 2, DECISIONS 5/29)**:
 - 5/29 확장: 8 agent hook 으로 사용자 메모리 8 패턴 구조화 (DECISIONS 5/29 ADR)
 - `tools/claude-hooks/<event>.agent-<name>.md` 컨벤션 + bootstrap.sh 자동 등록
 - 5/28 1차 hook (reference-class)::

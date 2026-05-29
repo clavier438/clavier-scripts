@@ -168,24 +168,23 @@ Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.m
 
 위반 시 사용자 폭발 (2026-05-04 인용): "*책임지는 새끼 없이 오합지졸로 떠돌아다녀서 잘하고있는지 확인조차 있는지없는지도몰랐다*". DECISIONS.md 2026-05-04 ADR "STL 원칙 + Closer 신설" 참조.
 
-## Architecture Navigator + 7 추가 agent hook (2026-05-29~) ★ hook 강제
+## 근본 3분류 agent hook — 근거 / 자리 / 책임 (2026-05-29~) ★ hook 강제
 
-5/28 reference-class hook 의 확장. 8개 agent hook 으로 사용자 메모리 8 패턴 구조화 (DECISIONS 5/29 ADR):
+반복 실수를 *근본 3분류* 로 환원, hook event 2개에 박음 (DECISIONS 5/29 ADR):
 
-| 시점 | hook | 막는 패턴 |
-|---|---|---|
-| Write/Edit/codeFiles + Bash | **architecture-navigator** ★ | 4 원칙 (단일 뇌 / SvelteKit / SSOT / 의도) 위반 |
-| Write/Edit/codeFiles + Bash | **reference-class** (확장) | 외부 도구 / 설치 / 새 자동화 시 추측 |
-| Bash | **new-thing-modular** | 브랜치/레포 신설 시 reference + How Big Things Get Done 부재 |
-| Write/Edit/codeFiles | **data-hardcode** | CSV/JSON 파싱 대신 하드코딩 |
-| Bash | **commit-big-picture** | git/PR 메시지 전체 그림 부재 |
-| Stop (turn 종료) | **no-quick-options** | 진행 모드 + 옵션 메뉴 |
-| Stop | **ownership-values** | 결정 떠넘김 + 가치관 7 메모리 로드 |
-| Stop | **followthrough** | spawn_task 미추적 |
+| 근본 실수 | 교정 = | hook (event) | 흡수한 메모리 |
+|---|---|---|---|
+| **추측** (현실 근거 없이) | **근거** Grounding | `before-action` (PreToolUse) | reference_class / docs_first / verify_install / automation_order / data_source / How Big Things Get Done |
+| **흩뜨림** (잘못된 자리·구조) | **자리** Placement | `before-action` (PreToolUse) | 단일뇌 / SvelteKit / GitHub+Doppler SSOT / 아키텍처 의도 / commit big-picture |
+| **떠넘김** (판단·완수 회피) | **책임** Ownership | `before-reply` (Stop) | no_quick_options / ownership / followthrough |
 
-각 hook 의 verifier prompt = `clavier-scripts/tools/claude-hooks/<event>.agent-<name>.md`. 컨벤션 외 = drift.
+- `pre-tool-use.agent-before-action.md` — 행동 직전. 근거(추측 아닌가) + 자리(올바른 위치인가) 2 축.
+- `stop.agent-before-reply.md` — 응답 직전. 책임(떠넘기지 않았나) 1 축. 가치관 메모리 로드 후 derive 강제.
+
+verifier = 별도 Claude 인스턴스 (메인의 "사용자 만족 동기" 비공유). 컨벤션 외 파일 = drift. 8 subagent fire → 2 환원 (`feedback_single_solution` 적용).
 
 ---
+
 
 ## 외부 도구 코드 작성 전 reference-class 의무 (2026-05-28~) ★ hook 강제
 
