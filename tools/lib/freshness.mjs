@@ -30,7 +30,7 @@
  * git hook 내부 (GIT_DIR set) 에서는 skip — 재귀 방지.
  */
 
-import { execSync, spawnSync } from "child_process"
+import { execSync } from "child_process"
 import { fileURLToPath } from "url"
 import { dirname, resolve } from "path"
 import { setDefaultResultOrder } from "node:dns"
@@ -111,26 +111,26 @@ function checkRepo(repo, label) {
         if (ahead === 0 && behind === 0) return
 
         if (ahead > 0) {
+            // fail-open: freshness 는 인프라 경고일 뿐 — 절대 차단하지 않는다 (DECISIONS 2026-05-30).
             process.stderr.write(
-                `\n\x1b[31m‼️  freshness[${label}]: 로컬 main 이 origin 보다 ${ahead} commit 앞섭니다.\x1b[0m\n` +
-                `\x1b[31m    main 직접 커밋은 pre-commit hook 으로 차단되니 이 상태는 정상이 아닙니다.\x1b[0m\n` +
-                `\x1b[31m    조사:  git -C "${repo}" log origin/main..main\x1b[0m\n\n`,
+                `\n\x1b[33m! freshness[${label}]: 로컬 main 이 origin 보다 ${ahead} commit 앞섭니다 (경고만, 차단 안 함).\x1b[0m\n` +
+                `\x1b[33m    비정상일 수 있음. 조사:  git -C "${repo}" log origin/main..main\x1b[0m\n\n`,
             )
-            process.exit(2)
+            return
         }
 
-        // behind > 0, ahead === 0 → ff-only 안전
+        // behind > 0, ahead === 0 → ff-only 시도 (실패해도 경고만, 차단 안 함)
         try {
             execSync(`git -C "${repo}" pull --ff-only --quiet origin main`, {
                 stdio: ["ignore", "ignore", "pipe"], timeout: 8000,
             })
             process.stderr.write(`\x1b[36mℹ freshness[${label}]: origin/main 에서 ${behind} 새 commit 적용\x1b[0m\n`)
         } catch {
+            // fail-open: 작업 트리가 더러워 자동 pull 못 해도 차단하지 않는다 (DECISIONS 2026-05-30).
             process.stderr.write(
-                `\n\x1b[31m‼️  freshness[${label}]: ff-only pull 실패 — 로컬 main 에 uncommitted/untracked 변경?\x1b[0m\n` +
-                `\x1b[31m    조사:  git -C "${repo}" status\x1b[0m\n\n`,
+                `\n\x1b[33m! freshness[${label}]: origin 보다 ${behind} commit 뒤처짐 — 작업 트리가 더러워 자동 pull 못 함 (경고만, 차단 안 함).\x1b[0m\n` +
+                `\x1b[33m    정리되면 직접:  git -C "${repo}" pull --ff-only\x1b[0m\n\n`,
             )
-            process.exit(2)
         }
         return
     }
@@ -161,27 +161,22 @@ function checkRepo(repo, label) {
         return
     }
 
-    // scripts repo, non-main → main 으로 자동 전환 후 재실행
-    if (!fetched) {
-        process.stderr.write(`\x1b[33m! freshness[${label}]: 오프라인 — main 전환 불가. '${branch}' 로 진행\x1b[0m\n`)
-        return
-    }
-
+    // scripts repo, non-main — fail-open: 브랜치를 강제 전환하지 않는다.
+    // 예전엔 자동 `git checkout main` 후 재실행했으나, 작업 중인 브랜치를 사용자
+    // 몰래 바꾸는 파괴적 부작용이라 폐기 (DECISIONS 2026-05-30). 이제 경고만 —
+    // platform-workers 와 동일하게 advisory.
+    if (!fetched) return
     try {
-        execSync(`git -C "${repo}" checkout main`, { stdio: ["ignore", "ignore", "ignore"] })
-        execSync(`git -C "${repo}" pull --ff-only --quiet origin main`, { stdio: ["ignore", "ignore", "ignore"] })
-    } catch {
-        process.stderr.write(
-            `\n\x1b[31m‼️  freshness[${label}]: main 전환 실패 — uncommitted changes 가 있을 수 있음.\x1b[0m\n` +
-            `\x1b[31m    테스트 목적이면: CLAVIER_TEST_BRANCH=1 <command>\x1b[0m\n\n`,
-        )
-        process.exit(1)
-    }
-
-    // main 으로 전환됐으니 현재 프로세스 종료 후 main 버전으로 재실행
-    process.stderr.write(`\x1b[36mℹ freshness: '${branch}' → main 전환 후 재실행\x1b[0m\n`)
-    const env = { ...process.env }
-    delete env._CLAVIER_FRESHNESS_OK
-    const result = spawnSync(process.execPath, process.argv.slice(1), { stdio: "inherit", env })
-    process.exit(result.status ?? 0)
+        const behind = Number(execSync(
+            `git -C "${repo}" rev-list --count HEAD..origin/main`,
+            { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+        ).trim())
+        if (behind > 0) {
+            process.stderr.write(
+                `\n\x1b[33m! freshness[${label}]: '${branch}' 가 origin/main 보다 ${behind} commit 부족 (경고만, 전환·차단 안 함).\x1b[0m\n` +
+                `\x1b[33m    의도적이면 무시. main 코드로 실행하려면:  git -C "${repo}" checkout main\x1b[0m\n\n`,
+            )
+        }
+    } catch { /* best-effort */ }
+    return
 }
