@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # setup.sh — 포맷 후 전체 환경 복구 스크립트
-# 실행: bash ~/Library/Mobile\ Documents/com\~apple\~CloudDocs/0/scripts/setup.sh
+# 실행: bash ~/dev/clavier/clavier-scripts/setup.sh
 
 set -euo pipefail
 
@@ -99,10 +99,15 @@ echo "[ 4/6 ] Claude 메모리 symlink 연결..."
 CLAUDE_MEM_SRC="$SCRIPTS_DIR/memory"
 CLAUDE_MEM_LINK="$HOME/.claude/projects/-Users-clavier/memory"
 mkdir -p "$HOME/.claude/projects/-Users-clavier"
-if [ -L "$CLAUDE_MEM_LINK" ]; then
+if [ -L "$CLAUDE_MEM_LINK" ] && [ ! -e "$CLAUDE_MEM_LINK" ]; then
+    # 깨진 심링크 (이주로 타겟 소실) — [ -L ] 만 보면 skip 돼 영영 안 고쳐진다
+    rm -f "$CLAUDE_MEM_LINK"
+    ln -s "$CLAUDE_MEM_SRC" "$CLAUDE_MEM_LINK"
+    echo "  [복구] 깨진 심링크 재연결 → $CLAUDE_MEM_SRC"
+elif [ -L "$CLAUDE_MEM_LINK" ]; then
     echo "  [skip] 이미 연결됨"
-elif [ -d "$CLAUDE_MEM_LINK" ]; then
-    echo "  [경고] 디렉토리 존재 — 수동 확인 필요: $CLAUDE_MEM_LINK"
+elif [ -e "$CLAUDE_MEM_LINK" ]; then
+    echo "  [경고] 디렉토리/파일 존재 — 수동 확인 필요: $CLAUDE_MEM_LINK"
 else
     ln -s "$CLAUDE_MEM_SRC" "$CLAUDE_MEM_LINK"
     echo "  [연결] $CLAUDE_MEM_LINK → $CLAUDE_MEM_SRC"
@@ -155,7 +160,7 @@ fi
 # ── 8. framer-sync npm install ─────────────────────────────────────────
 echo ""
 echo "[ 8/9 ] framer-sync 의존성 설치 (Mac 로컬 Node 실행에 필요) ..."
-FRAMER_SYNC_DIR="$(dirname "$SCRIPTS_DIR")/code/projects/platform-workers/framer-sync"
+FRAMER_SYNC_DIR="$(dirname "$SCRIPTS_DIR")/platform-workers/framer-sync"
 if [ -d "$FRAMER_SYNC_DIR" ]; then
     if [ -d "$FRAMER_SYNC_DIR/node_modules" ]; then
         echo "  [skip] node_modules 이미 있음"
@@ -165,8 +170,8 @@ if [ -d "$FRAMER_SYNC_DIR" ]; then
     fi
 else
     echo "  ⚠️  framer-sync 폴더 없음: $FRAMER_SYNC_DIR"
-    echo "      iCloud 동기화가 끝났는지 확인하거나, GitHub 에서 직접 clone:"
-    echo "      git clone https://github.com/clavier0/platform-workers \"$(dirname "$FRAMER_SYNC_DIR" | sed 's|/projects$||')\""
+    echo "      콜로니 sibling 로 clone:"
+    echo "      git clone https://github.com/clavier0/platform-workers \"$(dirname "$FRAMER_SYNC_DIR")\""
 fi
 
 # ── 9. Claude routines (Tier 3) — slash command + 등록 trigger ─────────

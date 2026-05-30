@@ -103,11 +103,11 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 **왜 폐기했나**: OCI 상주 에이전트 + 다중 환경 운영(CONVENTIONS "다중 환경 커밋 위생") 시 "canonical 1개" 가정이 환경 확장을 가로막음. 진짜 SSOT 는 외부(GitHub/Doppler)에 있으므로 로컬 클론은 모두 휘발성 캐시. silent drift 방어는 "canonical 강제" 가 아니라 "모든 환경이 시작 시 fetch+status, 종료 시 commit+push" 로 대체. DECISIONS.md 2026-05-03 ADR "environment-peer 모델" 참조.
 
 **실용 경로** (편의일 뿐, 강제 아님):
-- Mac: `~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/`, `.../0/code/projects/platform-workers/`
+- Mac: `~/dev/clavier/clavier-scripts/`, `~/dev/clavier/platform-workers/` (콜로니 컨테이너, 2026-05-24~)
 - OCI: `~/oci-scripts/`, `~/clavier-scripts/`, `~/platform-workers/` on `ubuntu@168.107.63.94`
 - web (Claude Code on web): 세션 워크디렉토리, 휘발성
 
-**sibling-first 자동 탐색 (2026-05-03~)**: Layer 1 도구는 관련 repo 위치를 ① env override → ② sibling 디렉토리(`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 fallback 순으로 찾음. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs) / inline (.sh). OCI 부트는 `clavier-scripts`/`clavier-hq`/`platform-workers` 를 형제로 clone — zero-config. ARCHITECTURE.md "이 repo 안 파일의 Layer 분류" 표 참조.
+**sibling-first 자동 탐색 (2026-05-03~, iCloud fallback 폐기 2026-05-30)**: Layer 1 도구는 관련 repo 위치를 ① env override → ② sibling 디렉토리(`$REPO_ROOT/../<name>`) 순으로 찾음. 절대경로 하드코딩 0 — 자기 위치(`BASH_SOURCE`/`import.meta.url`)에서 도출. **공유 헬퍼 하나만 사용 (inline 재구현 금지)**: `tools/lib/repoPaths.mjs` (.mjs) / `tools/lib/repoPaths.sh` (.sh). OCI 부트는 `clavier-scripts`/`clavier-hq`/`platform-workers` 를 형제로 clone — zero-config. ARCHITECTURE.md "이 repo 안 파일의 Layer 분류" 표 참조.
 
 **콜로니 self-install (2026-05-24~, clavier-hq DECISIONS ADR)**: Mac peer 위치 = `~/dev/clavier/` 컨테이너 (4 repo sibling). 호스트 어댑터(`~/bin`·`~/.claude/settings.json`·`~/.claude/memory`·LaunchAgent) install = `bash clavier-hq/bootstrap.sh ensure` 한 줄. 멱등 desired-state — 어디서 어느 상태에서 돌려도 같은 결과. `tools/claude-hooks/<event>.sh` 폴더가 settings.json hook 등록 *정의* (SvelteKit 정신) — 파일 추가/삭제 = 즉시 등록/제거. drift 할 대상 0. `hooks/post-merge` 가 `git pull` 직후 ensure 자동 호출.
 
@@ -167,20 +167,6 @@ Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.m
 - 무소속 prompt 발견 시 → archive 권고 또는 새 루틴 합의 제안.
 
 위반 시 사용자 폭발 (2026-05-04 인용): "*책임지는 새끼 없이 오합지졸로 떠돌아다녀서 잘하고있는지 확인조차 있는지없는지도몰랐다*". DECISIONS.md 2026-05-04 ADR "STL 원칙 + Closer 신설" 참조.
-
-## 외부 도구 코드 작성 전 reference-class 의무 (2026-05-28~) ★ hook 강제
-
-**Framer / Notion / Airtable / Cloudflare / 3rd-party SDK 코드 작성 시점에 reference-class 탐색 (WebSearch/WebFetch 로 working case + URL 인용) 이 트랜스크립트에 없으면 도구 호출 자체가 차단됨.**
-
-차단 메커니즘 — **reference-class agent hook**:
-- PreToolUse 매처: `Write|Edit|mcp__design-bridge__codeFiles_(setContent|create)`
-- 별도 Claude 인스턴스 (verifier subagent) 가 매번 트랜스크립트 검사
-- WebSearch/WebFetch ≥2 + URL 인용 ≥1 + 30자 본문 미충족 → `permissionDecision: deny`
-- `clavier-scripts/tools/claude-hooks/pre-tool-use.agent-reference-class.md` 가 verifier prompt 정의 (bootstrap.sh Step 5b 가 settings.json 에 자동 등록)
-
-이 hook 은 메모리 권유 (`feedback_reference_class.md`) 의 의지 의존 한계를 닫기 위해 박힘 (2026-05-28 Framer 사건 처방). 권유 영역 → 구조 영역. DECISIONS.md 2026-05-28 ADR + CONCEPTS.md #17 "반복 실수 차단의 구조 패턴" 참조.
-
----
 
 ## 능력 떠넘기기 전 self-check (2026-05-04~, B1 병목 차단)
 

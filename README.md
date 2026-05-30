@@ -26,14 +26,9 @@
 - clavier-hq `hooks/post-commit` 자동 발동 — DECISIONS.md commit 시 즉시 검증
 - Notion Architecture Archive — DECISIONS/CONCEPTS 자동 미러 (closer-runner 매일 03:00)
 
-**반복 실수 차단 hook (2026-05-28~)** — **reference-class agent hook**:
-- `tools/claude-hooks/pre-tool-use.agent-reference-class.md` (verifier prompt)
-- 외부 도구 (Framer 등) 코드 작성 시도 시 별도 Claude 인스턴스가 트랜스크립트 검사 → reference 부재면 차단
-- clavier-hq DECISIONS 2026-05-28 ADR 참조
-
 **환경 모델 (2026-05-03~ + 콜로니 self-install 2026-05-24~)** — **environment-peer**:
 - "1 repo = 1 canonical 클론" 폐기. Mac iCloud / OCI VM / Claude web / Cloudflare Workers 는 모두 휘발성 peer (동등). 진짜 SSOT = GitHub(code) + Doppler(config).
-- Layer 1 도구 5개 (workerCtl / closer-runner / doc-coverage / doppler-sync-wrangler / ociIn) 가 **sibling-first** 자동 탐색 — env > sibling > iCloud Mac fallback. 어느 환경에서 호출해도 zero-config.
+- Layer 1 도구가 **sibling-first** 자동 탐색 — env > sibling (공유 헬퍼 `tools/lib/repoPaths.{mjs,sh}`, 절대경로 하드코딩 0). 어느 환경에서 호출해도 zero-config.
 - **Mac peer 표준 콜로니 위치 = `~/dev/clavier/`** (4 repo sibling). 호스트 어댑터 install = `bash clavier-hq/bootstrap.sh ensure` (멱등). `tools/claude-hooks/<event>.sh` 폴더가 settings.json hook 등록 *정의* (SvelteKit 정신). `hooks/post-merge` 가 `git pull` 직후 ensure 자동.
 - 자세한 결정: `clavier-hq/DECISIONS.md` 2026-05-03 / 2026-05-24 ADR.
 

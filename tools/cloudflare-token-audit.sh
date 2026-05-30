@@ -7,10 +7,11 @@
 # 토큰 list 자체는 Cloudflare 대시보드 직접 확인 (Account-level 토큰은 API list 미제공)
 
 . "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/repoPaths.sh"
 
 set -e
 
-OUT_DIR="${HOME}/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/briefings"
+OUT_DIR="$CLAVIER_HQ/briefings"
 mkdir -p "$OUT_DIR"
 DATE=$(date +%Y-%m-%d)
 REPORT="$OUT_DIR/cloudflare-tokens-$DATE.md"

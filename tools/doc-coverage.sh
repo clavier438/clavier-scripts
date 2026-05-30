@@ -18,23 +18,10 @@
 
 set -euo pipefail
 
-# sibling-first repo 탐색 (environment-peer 모델, DECISIONS 2026-05-03)
-# env > sibling > iCloud Mac fallback
-SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SCRIPTS_DEFAULT="$(cd "$SELF_DIR/.." && pwd)"
-PARENT_DEFAULT="$(cd "$SCRIPTS_DEFAULT/.." && pwd)"
-ICLOUD_PROJECTS="$HOME/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects"
-ICLOUD_SCRIPTS="$HOME/Library/Mobile Documents/com~apple~CloudDocs/0/scripts"
-
-discover() {
-    local sibling="$1" icloud="$2"
-    if [ -d "$sibling" ]; then echo "$sibling"
-    elif [ -d "$icloud" ]; then echo "$icloud"
-    else echo "$sibling"; fi  # 못 찾아도 sibling 기본값 (아래에서 file 존재 검증)
-}
-
-SCRIPTS="${CLAVIER_SCRIPTS:-$(discover "$SCRIPTS_DEFAULT" "$ICLOUD_SCRIPTS")}"
-HQ="${CLAVIER_HQ:-$(discover "$PARENT_DEFAULT/clavier-hq" "$ICLOUD_PROJECTS/clavier-hq")}"
+# sibling-first repo 탐색 — tools/lib/repoPaths.sh (env > sibling, 절대경로 하드코딩 0)
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/repoPaths.sh"
+SCRIPTS="$CLAVIER_SCRIPTS"
+HQ="${CLAVIER_HQ:-$(cd "$CLAVIER_SCRIPTS/.." && pwd)/clavier-hq}"
 
 # 표준 문서 목록 — 시스템 전체 인지 검증 대상.
 # 새 문서 추가 시 이 배열에 한 줄 추가.

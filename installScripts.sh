@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# installScripts.sh — iCloud/0/scripts/ 의 스크립트를 ~/bin 에 wrapper 로 배포
+# installScripts.sh — 콜로니(clavier-scripts) 의 스크립트를 ~/bin 에 wrapper 로 배포
 #
 # 폴더 기반 자동 배포 (SvelteKit 방식):
 #   루트 스크립트     → ~/bin/
