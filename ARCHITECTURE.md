@@ -82,12 +82,12 @@ Layer 2 — Platform 확장 (opt-in per environment)
 
 | Layer | 파일/폴더 | 비고 |
 |-------|-----------|------|
-| Layer 1 (환경 독립, sibling-first) | `tools/lib/repoPaths.mjs`, `tools/workerCtl.mjs`, `tools/closer-runner.mjs`, `tools/doc-coverage.sh`, `tools/doppler-sync-wrangler.sh` | env > sibling > iCloud Mac fallback 자동 탐색 — 어느 peer 든 zero-config |
-| Layer 2 / Mac | `setup.sh`, `installScripts.sh`, `daemons/`, `tools/scriptsList.sh`, `tools/scripts.sh`, `tools/sessionStartContext.sh`, `tools/doppler-mirror-icloud.sh`, `daemons/syncObsidian.py`, `daemons/syncMemory.sh` | Mac launchd / iCloud 의존이 본질 (Obsidian/Memory 가 거기 있음) |
-| Layer 2 / OCI | `clouds/oci/bootstrap-agent.sh`, `clouds/oci/ociIn.sh` (Doppler 우선, iCloud 폴백) | OCI-specific 또는 OCI 접속용 |
+| Layer 1 (환경 독립, sibling-first) | `tools/lib/repoPaths.mjs` + `tools/lib/repoPaths.sh` (공유 헬퍼), `tools/workerCtl.mjs`, `tools/closer-runner.mjs`, `tools/doc-coverage.sh`, `tools/doppler-sync-wrangler.sh` | env > sibling 자동 탐색 — 어느 peer 든 zero-config |
+| Layer 2 / Mac | `setup.sh`, `installScripts.sh`, `daemons/`, `tools/scriptsList.sh`, `tools/scripts.sh`, `tools/sessionStartContext.sh`, `daemons/syncObsidian.py`, `daemons/syncMemory.sh` | Mac launchd / iCloud 의존이 본질 (Obsidian/Memory 가 거기 있음) |
+| Layer 2 / OCI | `clouds/oci/bootstrap-agent.sh`, `clouds/oci/ociIn.sh` (Doppler SSOT) | OCI-specific 또는 OCI 접속용 |
 | 메타/문서 | `CLAUDE.md`, `CONVENTIONS.md`, `ARCHITECTURE.md`, `README.md` | 모든 환경에서 읽음 |
 
-> **sibling-first 관례 (2026-05-03~)**: Layer 1 도구는 관련 repo (clavier-hq, platform-workers) 를 다음 우선순위로 자동 탐색 — ① env override (`CLAVIER_HQ`, `PLATFORM_WORKERS` 등) → ② sibling 디렉토리 (`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 경로 (`~/Library/Mobile Documents/.../code/projects/<name>`). OCI peer 는 `~/clavier-scripts`, `~/clavier-hq`, `~/platform-workers` 를 형제로 두면 zero-config. Mac peer 는 iCloud 관례로 동작. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs 도구) / inline 패턴 (.sh 도구).
+> **sibling-first 관례 (2026-05-03~, iCloud fallback 폐기 2026-05-30)**: Layer 1 도구는 관련 repo (clavier-hq, platform-workers) 를 다음 우선순위로 자동 탐색 — ① env override (`CLAVIER_HQ`, `PLATFORM_WORKERS`, `FRAMER_SYNC_DIR`) → ② sibling 디렉토리 (`$REPO_ROOT/../<name>`). 절대경로 하드코딩 0 — 자기 위치(`BASH_SOURCE`/`import.meta.url`)에서 도출하므로 어느 peer(Mac 콜로니 `~/dev/clavier`, OCI 형제 클론, web)든 zero-config. **공유 헬퍼 하나만 사용 (inline 재구현 금지)**: `tools/lib/repoPaths.mjs` (.mjs) / `tools/lib/repoPaths.sh` (.sh).
 >
 > Layer 2 가 없는 환경(예: web, OCI agent)에서는 해당 도구 호출만 안 하면 됨. Mac 의존 도구가 OCI 에서 깨져도 Layer 1 은 영향 없음.
 

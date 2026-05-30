@@ -103,11 +103,11 @@ framer-sync 표준 D1 테이블: `worker_state`, `collection_items`, `collection
 **왜 폐기했나**: OCI 상주 에이전트 + 다중 환경 운영(CONVENTIONS "다중 환경 커밋 위생") 시 "canonical 1개" 가정이 환경 확장을 가로막음. 진짜 SSOT 는 외부(GitHub/Doppler)에 있으므로 로컬 클론은 모두 휘발성 캐시. silent drift 방어는 "canonical 강제" 가 아니라 "모든 환경이 시작 시 fetch+status, 종료 시 commit+push" 로 대체. DECISIONS.md 2026-05-03 ADR "environment-peer 모델" 참조.
 
 **실용 경로** (편의일 뿐, 강제 아님):
-- Mac: `~/Library/Mobile Documents/com~apple~CloudDocs/0/scripts/`, `.../0/code/projects/platform-workers/`
+- Mac: `~/dev/clavier/clavier-scripts/`, `~/dev/clavier/platform-workers/` (콜로니 컨테이너, 2026-05-24~)
 - OCI: `~/oci-scripts/`, `~/clavier-scripts/`, `~/platform-workers/` on `ubuntu@168.107.63.94`
 - web (Claude Code on web): 세션 워크디렉토리, 휘발성
 
-**sibling-first 자동 탐색 (2026-05-03~)**: Layer 1 도구는 관련 repo 위치를 ① env override → ② sibling 디렉토리(`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 fallback 순으로 찾음. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs) / inline (.sh). OCI 부트는 `clavier-scripts`/`clavier-hq`/`platform-workers` 를 형제로 clone — zero-config. ARCHITECTURE.md "이 repo 안 파일의 Layer 분류" 표 참조.
+**sibling-first 자동 탐색 (2026-05-03~, iCloud fallback 폐기 2026-05-30)**: Layer 1 도구는 관련 repo 위치를 ① env override → ② sibling 디렉토리(`$REPO_ROOT/../<name>`) 순으로 찾음. 절대경로 하드코딩 0 — 자기 위치(`BASH_SOURCE`/`import.meta.url`)에서 도출. **공유 헬퍼 하나만 사용 (inline 재구현 금지)**: `tools/lib/repoPaths.mjs` (.mjs) / `tools/lib/repoPaths.sh` (.sh). OCI 부트는 `clavier-scripts`/`clavier-hq`/`platform-workers` 를 형제로 clone — zero-config. ARCHITECTURE.md "이 repo 안 파일의 Layer 분류" 표 참조.
 
 **콜로니 self-install (2026-05-24~, clavier-hq DECISIONS ADR)**: Mac peer 위치 = `~/dev/clavier/` 컨테이너 (4 repo sibling). 호스트 어댑터(`~/bin`·`~/.claude/settings.json`·`~/.claude/memory`·LaunchAgent) install = `bash clavier-hq/bootstrap.sh ensure` 한 줄. 멱등 desired-state — 어디서 어느 상태에서 돌려도 같은 결과. `tools/claude-hooks/<event>.sh` 폴더가 settings.json hook 등록 *정의* (SvelteKit 정신) — 파일 추가/삭제 = 즉시 등록/제거. drift 할 대상 0. `hooks/post-merge` 가 `git pull` 직후 ensure 자동 호출.
 

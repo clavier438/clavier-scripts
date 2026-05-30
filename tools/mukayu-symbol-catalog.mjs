@@ -2,6 +2,8 @@
 // mukayu-symbol-catalog.mjs — 9.0.1 의 모든 텍스트 필드에서 특수문자 추출 + 빈도 + 컨텍스트 샘플
 
 import "./lib/freshness.mjs"
+import { join } from "path";
+import { findClavierHq } from "./lib/repoPaths.mjs";
 
 const BASE = 'appDyu0d6afRVeJiZ';
 const TOKEN = process.env.AIRTABLE_PAT;
@@ -132,7 +134,9 @@ const lines = sorted.map(([ch, { count, samples }]) => {
   return `| \`${ch}\` | U+${code} | ${count} | ${name} | ${sampleStr} |`;
 });
 
-const outDir = '/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/clavier-hq/projects/mukayu';
+const hq = findClavierHq();
+if (!hq) throw new Error("clavier-hq 못 찾음 — sibling 클론 또는 CLAVIER_HQ env 설정 필요.");
+const outDir = join(hq, 'projects/mukayu');
 const outFile = `${outDir}/SYMBOL_CATALOG.md`;
 const md = `# 9.0.1_mukayu 특수문자 카탈로그
 
@@ -164,7 +168,8 @@ ${lines.join('\n')}
 - *진짜 list 형식* (markdown \`-\`) → 글로벌 CSS 자동
 `;
 
-import { writeFileSync } from 'fs';
+import { writeFileSync, mkdirSync } from 'fs';
+mkdirSync(outDir, { recursive: true });
 writeFileSync(outFile, md);
 console.log(`✅ 작성: ${outFile}`);
 console.log(`\n샘플 (top 10):`);

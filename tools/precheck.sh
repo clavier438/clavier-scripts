@@ -10,6 +10,7 @@
 # 등록되지 않은 모드 = 사용법 안내
 
 . "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/freshness.sh"
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/repoPaths.sh"
 
 set -uo pipefail
 
@@ -163,7 +164,7 @@ check_doppler() {
 check_framer_sync() {
     print "[framer-sync idempotency]"
     local mc_init
-    mc_init=$(grep -rn "mc_init" "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/framer-sync/src/" 2>/dev/null | wc -l | tr -d ' ')
+    mc_init=$(grep -rn "mc_init" "$FRAMER_SYNC/src/" 2>/dev/null | wc -l | tr -d ' ')
     if [ "$mc_init" -gt 0 ]; then
         ok "mc_init flag 코드 살아있음 ($mc_init refs)"
     else
@@ -172,7 +173,7 @@ check_framer_sync() {
 
     # API 시그니처 회귀 — getItems (잘못된 메서드) 호출 검사
     local bad_calls
-    bad_calls=$(grep -rn "mc\.getItems\b\|managedCollection\.getItems\b" "/Users/clavier/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/framer-sync/src/" 2>/dev/null | wc -l | tr -d ' ')
+    bad_calls=$(grep -rn "mc\.getItems\b\|managedCollection\.getItems\b" "$FRAMER_SYNC/src/" 2>/dev/null | wc -l | tr -d ' ')
     if [ "$bad_calls" = "0" ]; then
         ok "잘못된 메서드 mc.getItems() 호출 없음"
     else

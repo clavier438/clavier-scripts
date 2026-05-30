@@ -84,6 +84,24 @@ export function tableIdByName(schema, name) {
 }
 
 /**
+ * base 통째 payload push. { "테이블명": [{ id?, fields }], ... }
+ * id 있으면 PATCH, 없으면 POST. 없는 테이블명은 skip (조용히 X — 결과에 사유 남김).
+ *
+ * @returns {Array<{table, patched?, created?, skipped?}>}  테이블별 결과
+ */
+export async function pushBasePayload({ targetData, payload, pat }) {
+  const results = [];
+  for (const [tableName, records] of Object.entries(payload)) {
+    const tableId = tableIdByName(targetData.schema, tableName);
+    if (!tableId) { results.push({ table: tableName, skipped: "그 이름 테이블 없음" }); continue; }
+    if (!Array.isArray(records)) { results.push({ table: tableName, skipped: "값이 배열 아님" }); continue; }
+    const r = await createOrPatchRecords({ baseId: targetData.baseId, tableId, records, pat });
+    results.push({ table: tableName, patched: r.patched, created: r.created });
+  }
+  return results;
+}
+
+/**
  * schema → claude 한테 보낼 컴팩트 JSON. (id 같은 디테일 제거 — 토큰 절약, name 만)
  */
 export function compactSchema(schema) {
