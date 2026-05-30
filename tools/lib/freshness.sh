@@ -46,19 +46,21 @@ if [ "$_FRESHNESS_AHEAD" -eq 0 ] && [ "$_FRESHNESS_BEHIND" -eq 0 ]; then
 fi
 
 if [ "$_FRESHNESS_AHEAD" -gt 0 ]; then
-    printf '\n\033[31m‼️  freshness: 로컬 main 이 origin 보다 %s commit 앞섭니다.\033[0m\n' "$_FRESHNESS_AHEAD" >&2
-    printf '\033[31m    main 직접 커밋은 pre-commit hook 으로 차단되니 이 상태는 정상이 아닙니다.\033[0m\n' >&2
-    printf '\033[31m    조사:  git -C "%s" log origin/main..main\033[0m\n\n' "$_FRESHNESS_REPO" >&2
-    exit 2
+    # fail-open: freshness 는 인프라 경고일 뿐 — 절대 차단하지 않는다 (DECISIONS 2026-05-30).
+    printf '\n\033[33m! freshness: 로컬 main 이 origin 보다 %s commit 앞섭니다 (경고만, 차단 안 함).\033[0m\n' "$_FRESHNESS_AHEAD" >&2
+    printf '\033[33m    비정상일 수 있음. 조사:  git -C "%s" log origin/main..main\033[0m\n\n' "$_FRESHNESS_REPO" >&2
+    export _CLAVIER_FRESHNESS_OK=1
+    unset _FRESHNESS_REPO _FRESHNESS_BRANCH _FRESHNESS_COUNTS _FRESHNESS_AHEAD _FRESHNESS_BEHIND
+    return 0
 fi
 
 if git -C "$_FRESHNESS_REPO" pull --ff-only --quiet origin main 2>/dev/null; then
     printf '\033[36mℹ freshness: origin/main 에서 %s 새 commit 적용\033[0m\n' "$_FRESHNESS_BEHIND" >&2
-    export _CLAVIER_FRESHNESS_OK=1
-    unset _FRESHNESS_REPO _FRESHNESS_BRANCH _FRESHNESS_COUNTS _FRESHNESS_AHEAD _FRESHNESS_BEHIND
-    return 0
 else
-    printf '\n\033[31m‼️  freshness: ff-only pull 실패 — 로컬 main 에 uncommitted/untracked 변경?\033[0m\n' >&2
-    printf '\033[31m    조사:  git -C "%s" status\033[0m\n\n' "$_FRESHNESS_REPO" >&2
-    exit 2
+    # fail-open: 작업 트리가 더러워 자동 pull 못 해도 차단하지 않고 경고만 (DECISIONS 2026-05-30).
+    printf '\n\033[33m! freshness: origin 보다 %s commit 뒤처짐 — 작업 트리가 더러워 자동 pull 못 함 (경고만, 차단 안 함).\033[0m\n' "$_FRESHNESS_BEHIND" >&2
+    printf '\033[33m    정리되면 직접:  git -C "%s" pull --ff-only\033[0m\n\n' "$_FRESHNESS_REPO" >&2
 fi
+export _CLAVIER_FRESHNESS_OK=1
+unset _FRESHNESS_REPO _FRESHNESS_BRANCH _FRESHNESS_COUNTS _FRESHNESS_AHEAD _FRESHNESS_BEHIND
+return 0
