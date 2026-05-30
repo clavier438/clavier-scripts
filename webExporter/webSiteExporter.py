@@ -65,6 +65,7 @@ VIEWPORT_STAGGER    = float(os.environ.get("WEBEXP_VIEWPORT_STAGGER", "1.0"))  #
 WEBEXP_MEM_FLOOR_MB      = int(os.environ.get("WEBEXP_MEM_FLOOR_MB", "0"))    # 절대 floor (0=auto)
 WEBEXP_MEM_FLOOR_PCT     = float(os.environ.get("WEBEXP_MEM_FLOOR_PCT", "20"))  # MemTotal × N%
 WEBEXP_PAGES_PER_RESTART = int(os.environ.get("WEBEXP_PAGES_PER_RESTART", "5"))  # N URL 마다 chrome 재기동
+WEBEXP_URL_HARD_TIMEOUT_S = int(os.environ.get("WEBEXP_URL_HARD_TIMEOUT_S", "0"))  # per-URL 전체 watchdog 초 (0=viewport수 기반 auto). hang 시 그 URL 통째 skip.
 WEBEXP_MEM_WAIT_S        = float(os.environ.get("WEBEXP_MEM_WAIT_S", "5"))    # floor 미만 시 polling interval
 WEBEXP_MEM_WAIT_MAX_S    = float(os.environ.get("WEBEXP_MEM_WAIT_MAX_S", "60"))  # 회복 대기 max
 
@@ -242,7 +243,7 @@ async def auto_scroll(page, max_scroll_time: int = 30):
     )
 
 # ── 페이지 탐색 ───────────────────────────────────────────
-async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
+async def discover_pages(page, base_url: str, max_pages: int = 0, extras=()) -> list:
     base_domain = urlparse(base_url).netloc
     SKIP_EXT = {
         ".pdf", ".zip", ".png", ".jpg", ".jpeg", ".gif", ".svg",
@@ -300,6 +301,15 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
         return True
 
     add(base_url.rstrip("/"))
+
+    # 추가 강제 URL — multi-URL 모드 (사용자가 직접 지정한 URL 들 자연 발견 전에 add)
+    # 그 자체만 캡처 — nav_pages 에는 안 넣어서 detail 자동 추출은 하지 않음 (사용자 명시 의도 보존)
+    for u in extras:
+        try:
+            cleaned = clean_url(u) or u.rstrip("/")
+            add(cleaned)
+        except Exception:
+            pass
 
     nav_pages = []
     try:
@@ -1513,6 +1523,7 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
                     user_agent=REALISTIC_UA,
                     extra_http_headers=EXTRA_HEADERS,
                     locale="en-US",
+                    ignore_https_errors=True,   # cert mismatch (예: gabia *.gabia.io, 자체서명) 도 진입 — 디자인 스터디 캡처 목적상 안전
                 ), timeout=30)
                 # 스텔스 스크립트 (모든 페이지 진입 직전에 navigator.* 마스킹)
                 await ctx.add_init_script(STEALTH_INIT_SCRIPT)
@@ -1622,7 +1633,7 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
         return ok, fail, captured
 
 # ── 메인 ──────────────────────────────────────────────────
-async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False):
+async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False, extras=()):
     os.makedirs(output_dir, exist_ok=True)
 
     # site_name + 로그 파일: 같은 netloc 의 sub-path base 도 충돌 없도록 base_url 전체로 슬러그
@@ -1665,10 +1676,11 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
             user_agent=REALISTIC_UA,
             extra_http_headers=EXTRA_HEADERS,
             locale="en-US",
+            ignore_https_errors=True,   # discover 단계도 cert mismatch 통과
         )
         await ctx.add_init_script(STEALTH_INIT_SCRIPT)
         pg        = await ctx.new_page()
-        pages     = await discover_pages(pg, base_url, max_pages)
+        pages     = await discover_pages(pg, base_url, max_pages, extras=extras)
         await ctx.close()
         await browser_d.close()
 
@@ -1689,6 +1701,17 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
         all_results: list[tuple[int, int, list]] = []
         pages_since_restart = 0
         sem_dummy = asyncio.Semaphore(1)  # export_url 시그니처 호환용
+
+        # per-URL hard watchdog — export_url 전체(모든 viewport + cleanup)를 감싸는 timeout.
+        # viewport 단위 timeout(prepare 60s/capture 120s)은 이미 있으나, ctx.close() 무한대기처럼
+        # await point 가 영원히 resolve 안 되면 전체가 멈춤(2026-05 johcompany / aman gallery 사고).
+        # 초과 시 그 URL 통째 skip → browser 재시작(orphan ctx 정리) → 다음 URL 진행.
+        if WEBEXP_URL_HARD_TIMEOUT_S > 0:
+            url_hard_timeout = WEBEXP_URL_HARD_TIMEOUT_S
+        else:
+            _per_vp = (LOAD_TIMEOUT_MS / 1000) + 60 + 120 + 30  # load+prepare+capture+cleanup 여유
+            url_hard_timeout = int(len(VIEWPORT_CONFIGS) * _per_vp + 60)
+        log(f"  [watchdog] per-URL hard timeout = {url_hard_timeout}s ({len(VIEWPORT_CONFIGS)} viewports)")
 
         for i, url in enumerate(pages, 1):
             # browser disconnect 감지 또는 메모리/주기 도달 시 재시작
@@ -1713,7 +1736,14 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
 
             log(f"\n[{i}/{len(pages)}]")
             try:
-                ok, fail, captured = await export_url(url, output_dir, scroll_time, sem_dummy, browser)
+                ok, fail, captured = await asyncio.wait_for(
+                    export_url(url, output_dir, scroll_time, sem_dummy, browser),
+                    timeout=url_hard_timeout,
+                )
+            except asyncio.TimeoutError:
+                log(f"  [ERROR] export_url 전체 timeout {url_hard_timeout}s ({url}) — hang 방어, 통째 skip")
+                ok, fail, captured = 0, len(VIEWPORT_CONFIGS), []
+                pages_since_restart = WEBEXP_PAGES_PER_RESTART  # orphan ctx 정리 위해 browser 재시작
             except Exception as e:
                 log(f"  [ERROR] export_url 실패 ({url}): {type(e).__name__} — skip")
                 ok, fail, captured = 0, len(VIEWPORT_CONFIGS), []
@@ -1797,16 +1827,21 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
 # ── CLI ───────────────────────────────────────────────────
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Website Layout Exporter (WebP/PNG, Option C)")
-    parser.add_argument("url",                                          help="기준 URL (https://...)")
-    parser.add_argument("--output",      "-o", default="./exports",    help="출력 디렉터리")
+    parser.add_argument("urls", nargs="+",                              help="기준 URL [추가 URL ...] — 첫 URL = base + 자연 nav 발견, 나머지 = 강제 add (자연 발견 못 잡는 페이지 보충용). 모두 같은 base PDF 1개로 합본.")
+    parser.add_argument("--output",      "-o", default=None,           help="출력 디렉터리 (디폴트: ./exports/<host>/ — base URL 호스트 기반 자동)")
     parser.add_argument("--max-pages",   "-m", type=int, default=50,   help="최대 페이지 수")
     parser.add_argument("--scroll-time", "-s", type=int, default=60,   help="스크롤 타임아웃(초, 내부 고정값과 별개)")
     parser.add_argument("--concurrency", "-c", type=int, default=2,    help="URL 동시 처리 수 (작은 사이트 ban 잦으면 1, 큰 사이트는 3)")
     parser.add_argument("--keep-frames",       action="store_true",     help="PDF 빌드 후 frames/ 보존 (디폴트: 삭제 — 출력 디렉터리에는 PDF+로그만)")
     args = parser.parse_args()
 
-    if not urlparse(args.url).scheme:
+    base_url   = args.urls[0]
+    extra_urls = args.urls[1:]
+    if not urlparse(base_url).scheme:
         print("[ERROR] URL에 https:// 를 포함해주세요")
         sys.exit(1)
 
-    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames))
+    # --output 미지정 시: ./exports/<host>/ 자동 (base URL 호스트 기반)
+    output_dir = args.output or f"./exports/{urlparse(base_url).netloc}"
+
+    asyncio.run(run(base_url, output_dir, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, extras=extra_urls))
