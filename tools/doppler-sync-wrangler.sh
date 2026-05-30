@@ -52,20 +52,13 @@ KEYS=(
 WORKER_DIR="framer-sync"
 
 # ── 환경 셋업 ─────────────────────────────────────────────────────────────
-# sibling-first 자동 탐색 (environment-peer 모델, DECISIONS 2026-05-03)
-SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SIBLING_PW="$(cd "$SELF_DIR/../.." && pwd)/platform-workers"
-ICLOUD_PW="$HOME/Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers"
-if [ -n "${PLATFORM_WORKERS_DIR:-}" ]; then
-    : # use override
-elif [ -d "$SIBLING_PW" ]; then
-    PLATFORM_WORKERS_DIR="$SIBLING_PW"
-elif [ -d "$ICLOUD_PW" ]; then
-    PLATFORM_WORKERS_DIR="$ICLOUD_PW"
-else
-    echo "❌ platform-workers repo 못 찾음. PLATFORM_WORKERS_DIR env 설정 또는 sibling 클론 필요." >&2
+# platform-workers 위치 — tools/lib/repoPaths.sh (env PLATFORM_WORKERS > sibling)
+. "$(dirname "$(readlink "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")/lib/repoPaths.sh"
+if [ -z "$PLATFORM_WORKERS" ]; then
+    echo "❌ platform-workers repo 못 찾음. PLATFORM_WORKERS env 설정 또는 sibling 클론 필요." >&2
     exit 1
 fi
+PLATFORM_WORKERS_DIR="$PLATFORM_WORKERS"
 
 if ! doppler me >/dev/null 2>&1; then
     echo "❌ Doppler 로그인 필요." >&2

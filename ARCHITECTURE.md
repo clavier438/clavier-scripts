@@ -82,12 +82,12 @@ Layer 2 — Platform 확장 (opt-in per environment)
 
 | Layer | 파일/폴더 | 비고 |
 |-------|-----------|------|
-| Layer 1 (환경 독립, sibling-first) | `tools/lib/repoPaths.mjs`, `tools/workerCtl.mjs`, `tools/closer-runner.mjs`, `tools/doc-coverage.sh`, `tools/doppler-sync-wrangler.sh` | env > sibling > iCloud Mac fallback 자동 탐색 — 어느 peer 든 zero-config |
-| Layer 2 / Mac | `setup.sh`, `installScripts.sh`, `daemons/`, `tools/scriptsList.sh`, `tools/scripts.sh`, `tools/sessionStartContext.sh`, `tools/doppler-mirror-icloud.sh`, `daemons/syncObsidian.py`, `daemons/syncMemory.sh` | Mac launchd / iCloud 의존이 본질 (Obsidian/Memory 가 거기 있음) |
-| Layer 2 / OCI | `clouds/oci/bootstrap-agent.sh`, `clouds/oci/ociIn.sh` (Doppler 우선, iCloud 폴백) | OCI-specific 또는 OCI 접속용 |
+| Layer 1 (환경 독립, sibling-first) | `tools/lib/repoPaths.mjs` + `tools/lib/repoPaths.sh` (공유 헬퍼), `tools/workerCtl.mjs`, `tools/closer-runner.mjs`, `tools/doc-coverage.sh`, `tools/doppler-sync-wrangler.sh` | env > sibling 자동 탐색 — 어느 peer 든 zero-config |
+| Layer 2 / Mac | `setup.sh`, `installScripts.sh`, `daemons/`, `tools/scriptsList.sh`, `tools/scripts.sh`, `tools/sessionStartContext.sh`, `daemons/syncObsidian.py`, `daemons/syncMemory.sh` | Mac launchd / iCloud 의존이 본질 (Obsidian/Memory 가 거기 있음) |
+| Layer 2 / OCI | `clouds/oci/bootstrap-agent.sh`, `clouds/oci/ociIn.sh` (Doppler SSOT) | OCI-specific 또는 OCI 접속용 |
 | 메타/문서 | `CLAUDE.md`, `CONVENTIONS.md`, `ARCHITECTURE.md`, `README.md` | 모든 환경에서 읽음 |
 
-> **sibling-first 관례 (2026-05-03~)**: Layer 1 도구는 관련 repo (clavier-hq, platform-workers) 를 다음 우선순위로 자동 탐색 — ① env override (`CLAVIER_HQ`, `PLATFORM_WORKERS` 등) → ② sibling 디렉토리 (`$REPO_ROOT/../<name>`) → ③ Mac iCloud 관례 경로 (`~/Library/Mobile Documents/.../code/projects/<name>`). OCI peer 는 `~/clavier-scripts`, `~/clavier-hq`, `~/platform-workers` 를 형제로 두면 zero-config. Mac peer 는 iCloud 관례로 동작. 헬퍼: `tools/lib/repoPaths.mjs` (.mjs 도구) / inline 패턴 (.sh 도구).
+> **sibling-first 관례 (2026-05-03~, iCloud fallback 폐기 2026-05-30)**: Layer 1 도구는 관련 repo (clavier-hq, platform-workers) 를 다음 우선순위로 자동 탐색 — ① env override (`CLAVIER_HQ`, `PLATFORM_WORKERS`, `FRAMER_SYNC_DIR`) → ② sibling 디렉토리 (`$REPO_ROOT/../<name>`). 절대경로 하드코딩 0 — 자기 위치(`BASH_SOURCE`/`import.meta.url`)에서 도출하므로 어느 peer(Mac 콜로니 `~/dev/clavier`, OCI 형제 클론, web)든 zero-config. **공유 헬퍼 하나만 사용 (inline 재구현 금지)**: `tools/lib/repoPaths.mjs` (.mjs) / `tools/lib/repoPaths.sh` (.sh).
 >
 > Layer 2 가 없는 환경(예: web, OCI agent)에서는 해당 도구 호출만 안 하면 됨. Mac 의존 도구가 OCI 에서 깨져도 Layer 1 은 영향 없음.
 
@@ -213,7 +213,6 @@ Claude Code가 추가 컨텍스트로 자동 주입
 
 | 날짜 | 변경 내용 |
 |------|-----------|
-| 2026-05-28 | **reference-class agent hook 신설** (clavier-hq DECISIONS ADR): `tools/claude-hooks/pre-tool-use.agent-reference-class.md` — PreToolUse agent type hook (experimental). 외부 도구 코드 작성 직전 별도 Claude 인스턴스가 트랜스크립트 검사 → reference 부재 시 deny. 반복 실수 차단의 첫 구조 적용. clavier-hq `bootstrap.sh` Step 5b 가 `.agent-*.md` 패턴 자동 등록 (SvelteKit 정신 확장). |
 | 2026-04-30 | **framer-sync / control-tower 구조 점검**: D1 SSOT 마이그레이션 직후 cold-start SOLID 감사. 발견 8개: `syncCollectionNative ↔ syncCollectionFromD1` 코드 중복(높음), `syncAllNative` KV 사망 파라미터·`index.ts` 모놀리식 라우터(중간). 시정 4개 CLOSER_QUEUE.md 등록. ADR: clavier-hq/DECISIONS.md 2026-04-30. CONCEPTS.md #13 "구조 점검 — SOLID 감사" 신설. |
 | 2026-04-28 | **framer-sync 인터페이스 동결**: "프레이머가 변화를 알 수 없게 한다" — `addFields`/`createCollection` 등 Framer 측 스키마 변경 RPC 호출 전면 제거, `getFields()` read-only만 사용. 매칭 안 되는 필드는 `[needs-manual-framer-setup]` 경고 후 graceful skip. 4중 양파 디버깅 (typia/fldXXX/Connection error/D1 chicken-egg) 모두 호환성 종속에서 발생 → 호환성 영구 보장. 브랜치 `framer-immutable-refactor` (commit 68a8ce1, sisoso production deployed). clavier-hq/DECISIONS.md 2026-04-28 + CONCEPTS.md "외부 인터페이스 동결" 항목 |
 | 2026-04-28 | **시크릿 SSOT 이전**: iCloud `clavier.env` → Doppler `clavier/prd`. ~/.zshrc 하이브리드 전환, 4개 LaunchAgent (overnight/Git/Obsidian/Cal) doppler run 래핑, clavier-config Doppler 래퍼화, 신규 도구 `tools/doppler-mirror-icloud`/`tools/doppler-sync-wrangler`. iCloud는 백업 미러로 강등. DECISIONS.md 2026-04-28 ADR + clavier-hq/CONCEPTS.md 신설 |

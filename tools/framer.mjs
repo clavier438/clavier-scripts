@@ -36,13 +36,16 @@ import "./lib/freshness.mjs"
 import { execSync, spawn } from "child_process"
 import { existsSync, mkdirSync, openSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "fs"
 import { dirname, join } from "path"
-import { homedir } from "os"
 import { createInterface } from "readline"
 import { getWorkerEnv } from "./lib/workerEnvMap.mjs"
+import { findFramerSync } from "./lib/repoPaths.mjs"
 
 // ── 경로 ───────────────────────────────────────────────────────────────
-const FRAMER_SYNC_DIR = process.env.FRAMER_SYNC_DIR
-    ?? join(homedir(), "Library/Mobile Documents/com~apple~CloudDocs/0/code/projects/platform-workers/framer-sync")
+const FRAMER_SYNC_DIR = findFramerSync()
+if (!FRAMER_SYNC_DIR) {
+    console.error("❌ platform-workers/framer-sync 못 찾음 — sibling 클론 또는 FRAMER_SYNC_DIR env 설정 필요.")
+    process.exit(1)
+}
 const LOCAL_DIR  = join(FRAMER_SYNC_DIR, ".local")
 const DB_PATH    = join(LOCAL_DIR, "framer-sync.db")
 const PIDFILE    = join(LOCAL_DIR, "server.pid")
