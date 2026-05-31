@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FrameSync — Airtable to Framer, automatically</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --border: #1f1f1f;
+      --text: #f0f0f0;
+      --muted: #666;
+      --accent: #6b5ce7;
+      --accent-light: #8b7cf7;
+      --green: #22c55e;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 40px;
+      background: rgba(10,10,10,0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo { font-weight: 800; font-size: 18px; letter-spacing: -0.5px; }
+    .nav-logo span { color: var(--accent-light); }
+    .nav-links { display: flex; gap: 32px; }
+    .nav-links a { font-size: 14px; color: var(--muted); transition: color .15s; }
+    .nav-links a:hover { color: var(--text); }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      font-size: 14px; font-weight: 600;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none; cursor: pointer;
+      transition: background .15s, transform .1s;
+    }
+    .btn-primary:hover { background: var(--accent-light); transform: translateY(-1px); }
+
+    /* ── HERO ── */
+    .hero {
+      max-width: 760px; margin: 0 auto;
+      padding: 120px 40px 100px;
+      text-align: center;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 6px 14px;
+      font-size: 12px; font-weight: 500; color: var(--muted);
+      margin-bottom: 32px;
+    }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+    .hero h1 {
+      font-size: clamp(44px, 7vw, 72px);
+      font-weight: 900;
+      line-height: 1.08;
+      letter-spacing: -2px;
+      margin-bottom: 24px;
+    }
+    .hero h1 em { color: var(--accent-light); font-style: normal; }
+    .hero p {
+      font-size: 18px; color: var(--muted);
+      max-width: 520px; margin: 0 auto 40px;
+      line-height: 1.7;
+    }
+    .hero-cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 14px; font-weight: 500;
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color .15s, color .15s;
+    }
+    .btn-secondary:hover { border-color: #444; color: var(--text); }
+    .hero-social {
+      margin-top: 56px;
+      font-size: 13px; color: var(--muted);
+    }
+    .hero-social strong { color: var(--text); }
+
+    /* ── DIVIDER ── */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0 40px;
+    }
+
+    /* ── SECTION ── */
+    section { padding: 100px 40px; max-width: 1000px; margin: 0 auto; }
+    .section-label {
+      font-size: 12px; font-weight: 600; letter-spacing: 1.5px;
+      text-transform: uppercase; color: var(--accent-light);
+      margin-bottom: 16px;
+    }
+    .section-title {
+      font-size: clamp(28px, 4vw, 42px);
+      font-weight: 800; letter-spacing: -1px;
+      line-height: 1.15;
+      margin-bottom: 16px;
+    }
+    .section-sub {
+      font-size: 16px; color: var(--muted);
+      max-width: 480px; line-height: 1.7;
+    }
+
+    /* ── PAIN ── */
+    .pain-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+      margin-top: 60px;
+    }
+    .pain-item {
+      background: var(--bg);
+      padding: 36px 32px;
+    }
+    .pain-icon { font-size: 24px; margin-bottom: 16px; }
+    .pain-item h3 { font-size: 16px; font-weight: 700; margin-bottom: 10px; }
+    .pain-item p { font-size: 14px; color: var(--muted); line-height: 1.65; }
+
+    /* ── HOW IT WORKS ── */
+    .steps { display: flex; flex-direction: column; gap: 0; margin-top: 60px; }
+    .step {
+      display: grid; grid-template-columns: 48px 1fr;
+      gap: 24px; align-items: start;
+      padding: 36px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .step:last-child { border-bottom: none; }
+    .step-num {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 700; color: var(--accent-light);
+      flex-shrink: 0;
+    }
+    .step h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .step p { font-size: 15px; color: var(--muted); line-height: 1.65; }
+    .code-block {
+      margin-top: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px; color: #a5f3c4;
+    }
+    .code-block .prompt { color: var(--muted); user-select: none; }
+
+    /* ── FEATURES ── */
+    .features-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 16px; overflow: hidden;
+      margin-top: 60px;
+    }
+    .feature-item {
+      background: var(--bg);
+      padding: 40px 36px;
+    }
+    .feature-item h3 { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
+    .feature-item p { font-size: 14px; color: var(--muted); line-height: 1.7; }
+    .feature-tag {
+      display: inline-block;
+      background: rgba(107, 92, 231, 0.12);
+      border: 1px solid rgba(107, 92, 231, 0.3);
+      color: var(--accent-light);
+      font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+      padding: 3px 10px; border-radius: 100px;
+      margin-bottom: 14px;
+    }
+
+    /* ── PRICING ── */
+    .pricing-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px;
+      margin-top: 60px;
+    }
+    .pricing-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px 36px;
+    }
+    .pricing-card.featured {
+      background: #13102a;
+      border-color: rgba(107, 92, 231, 0.4);
+    }
+    .pricing-card .plan-name {
+      font-size: 13px; font-weight: 600;
+      color: var(--muted); letter-spacing: 0.5px;
+      text-transform: uppercase; margin-bottom: 20px;
+    }
+    .pricing-card.featured .plan-name { color: var(--accent-light); }
+    .price {
+      font-size: 48px; font-weight: 900;
+      letter-spacing: -2px; line-height: 1;
+      margin-bottom: 6px;
+    }
+    .price-note { font-size: 13px; color: var(--muted); margin-bottom: 32px; }
+    .feature-list { list-style: none; display: flex; flex-direction: column; gap: 12px; margin-bottom: 36px; }
+    .feature-list li { font-size: 14px; display: flex; align-items: center; gap: 10px; }
+    .feature-list li::before { content: '✓'; color: var(--green); font-weight: 700; flex-shrink: 0; }
+    .feature-list li.muted { color: var(--muted); }
+    .feature-list li.muted::before { content: '—'; color: var(--border); }
+
+    /* ── FAQ ── */
+    .faq { display: flex; flex-direction: column; gap: 0; margin-top: 60px; }
+    .faq-item {
+      padding: 28px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .faq-item h3 { font-size: 16px; font-weight: 600; margin-bottom: 10px; }
+    .faq-item p { font-size: 14px; color: var(--muted); line-height: 1.7; }
+
+    /* ── CTA BANNER ── */
+    .cta-banner {
+      margin: 0 40px 100px;
+      background: linear-gradient(135deg, #13102a 0%, #0f0f1a 100%);
+      border: 1px solid rgba(107, 92, 231, 0.3);
+      border-radius: 20px;
+      padding: 80px 60px;
+      text-align: center;
+    }
+    .cta-banner h2 {
+      font-size: clamp(28px, 4vw, 44px);
+      font-weight: 900; letter-spacing: -1px;
+      margin-bottom: 16px;
+    }
+    .cta-banner p { font-size: 16px; color: var(--muted); margin-bottom: 40px; }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 13px; color: var(--muted);
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 700px) {
+      nav { padding: 16px 20px; }
+      .nav-links { display: none; }
+      section { padding: 70px 20px; }
+      .hero { padding: 80px 20px 70px; }
+      .pain-grid, .features-grid, .pricing-grid { grid-template-columns: 1fr; }
+      .divider { margin: 0 20px; }
+      .cta-banner { margin: 0 20px 70px; padding: 50px 28px; }
+      footer { flex-direction: column; gap: 12px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">Frame<span>Sync</span></div>
+  <div class="nav-links">
+    <a href="#how">How it works</a>
+    <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
+  </div>
+  <button class="btn-primary">Get started →</button>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="badge">
+    <span class="badge-dot"></span>
+    Airtable × Framer sync
+  </div>
+  <h1>Your Airtable.<br /><em>In Framer.</em><br />Automatically.</h1>
+  <p>One command syncs everything. Existing records update, new ones appear. No clicking through records. No duplicates.</p>
+  <div class="hero-cta">
+    <button class="btn-primary">Start syncing →</button>
+    <button class="btn-secondary">See how it works</button>
+  </div>
+  <p class="hero-social">Trusted by <strong>40+ teams</strong> running Framer in production</p>
+</div>
+
+<hr class="divider" />
+
+<!-- PAIN -->
+<section>
+  <p class="section-label">The problem</p>
+  <h2 class="section-title">The official plugin is fine.<br />Until you actually need it.</h2>
+  <p class="section-sub">Framer's built-in Airtable integration handles simple imports. It breaks down the moment your workflow gets real.</p>
+
+  <div class="pain-grid">
+    <div class="pain-item">
+      <div class="pain-icon">🖱️</div>
+      <h3>Clicking records one by one</h3>
+      <p>You have 200 products. The official plugin wants you to select, confirm, import — each one, manually.</p>
+    </div>
+    <div class="pain-item">
+      <div class="pain-icon">🔁</div>
+      <h3>Duplicates everywhere</h3>
+      <p>Edit a record in Airtable. Re-import it. Now you have two versions in Framer. Pick the right one. Hope you don't miss any.</p>
+    </div>
+    <div class="pain-item">
+      <div class="pain-icon">⏰</div>
+      <h3>You have to remember</h3>
+      <p>Content published in Airtable? Hope someone remembered to open Framer, find the collection, and hit import again.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- HOW IT WORKS -->
+<section id="how">
+  <p class="section-label">How it works</p>
+  <h2 class="section-title">One command.<br />Everything syncs.</h2>
+  <p class="section-sub">Connect once, then push whenever you want — or let the Worker handle it automatically.</p>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div>
+        <h3>Connect your base</h3>
+        <p>Add your Airtable base ID and Framer token once. FrameSync maps your fields and remembers the configuration.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div>
+        <h3>Run a single command</h3>
+        <p>Every record pushes to Framer's CMS in one shot. New records get created. Existing ones get updated. Nothing gets duplicated.</p>
+        <div class="code-block">
+          <span class="prompt">$ </span>framesync push<br />
+          <span style="color:#6b7280">✓ Fetched 214 records from Airtable</span><br />
+          <span style="color:#6b7280">✓ Updated 18 · Created 3 · Skipped 193</span><br />
+          <span style="color:#a5f3c4">✓ Framer collection synced in 2.4s</span>
+        </div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div>
+        <h3>Deploy a Worker and forget</h3>
+        <p>One Cloudflare Worker deploy and your Airtable webhook triggers automatic syncs. Publish a record — Framer updates in seconds. No cron jobs. No manual steps.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- FEATURES -->
+<section id="features">
+  <p class="section-label">Features</p>
+  <h2 class="section-title">Built for real<br />content operations.</h2>
+
+  <div class="features-grid">
+    <div class="feature-item">
+      <div class="feature-tag">Sync</div>
+      <h3>Batch upsert, not import</h3>
+      <p>Every push checks existing records first. Updates what changed. Creates what's new. Never creates duplicates regardless of how many times you run it.</p>
+    </div>
+    <div class="feature-item">
+      <div class="feature-tag">Automation</div>
+      <h3>Always-on Worker</h3>
+      <p>Deploy once to Cloudflare. Your Airtable webhook calls the Worker. Framer stays in sync without you touching anything.</p>
+    </div>
+    <div class="feature-item">
+      <div class="feature-tag">UTM</div>
+      <h3>UTM management per project</h3>
+      <p>Define UTM parameters once per project in Airtable. FrameSync applies them consistently across every page. No more UTM spreadsheets.</p>
+    </div>
+    <div class="feature-item">
+      <div class="feature-tag">CLI</div>
+      <h3>Script-first, not click-first</h3>
+      <p>Designed for people who run content at scale. One command in your terminal beats five minutes in a plugin UI. Compose it into any pipeline.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- PRICING -->
+<section id="pricing">
+  <p class="section-label">Pricing</p>
+  <h2 class="section-title">Simple pricing.<br />No surprises.</h2>
+  <p class="section-sub">One flat rate per site. Worker deployment and CLI tool included.</p>
+
+  <div class="pricing-grid">
+    <div class="pricing-card">
+      <p class="plan-name">Starter</p>
+      <div class="price">$49</div>
+      <p class="price-note">per site / month</p>
+      <ul class="feature-list">
+        <li>1 Framer site</li>
+        <li>Unlimited syncs</li>
+        <li>CLI tool</li>
+        <li>Cloudflare Worker deployment</li>
+        <li>Airtable webhook support</li>
+        <li>UTM management</li>
+        <li>Email support</li>
+      </ul>
+      <button class="btn-secondary" style="width:100%; padding:14px;">Get started</button>
+    </div>
+    <div class="pricing-card featured">
+      <p class="plan-name">Agency</p>
+      <div class="price">$149</div>
+      <p class="price-note">up to 5 sites / month</p>
+      <ul class="feature-list">
+        <li>5 Framer sites</li>
+        <li>Unlimited syncs</li>
+        <li>CLI tool</li>
+        <li>Cloudflare Worker deployment</li>
+        <li>Airtable webhook support</li>
+        <li>UTM management</li>
+        <li>Priority support</li>
+      </ul>
+      <button class="btn-primary" style="width:100%; padding:14px;">Get started</button>
+    </div>
+  </div>
+</section>
+
+<hr class="divider" />
+
+<!-- FAQ -->
+<section>
+  <p class="section-label">FAQ</p>
+  <h2 class="section-title">Common questions.</h2>
+
+  <div class="faq">
+    <div class="faq-item">
+      <h3>Does this replace the official Framer Airtable plugin?</h3>
+      <p>It runs alongside it. You keep your Framer site setup exactly as-is. FrameSync only handles the data layer — pushing records into your existing CMS collections.</p>
+    </div>
+    <div class="faq-item">
+      <h3>Do I need a Cloudflare account?</h3>
+      <p>For the always-on Worker (automatic sync on Airtable publish), yes — Cloudflare's free tier covers it. If you only want CLI-based manual syncs, no Cloudflare account needed.</p>
+    </div>
+    <div class="faq-item">
+      <h3>What if my Airtable fields change?</h3>
+      <p>FrameSync detects field changes on the next push and updates your Framer collection fields accordingly. You can also run <code style="background:var(--surface);padding:2px 6px;border-radius:4px;font-size:12px;">framesync check</code> to preview changes before they apply.</p>
+    </div>
+    <div class="faq-item">
+      <h3>How is this different from Make or Zapier?</h3>
+      <p>Make and Zapier handle general automation — they treat Framer as a black box. FrameSync speaks Framer's ManagedCollection API natively, so it understands field types, slugs, and upsert semantics that general automation tools don't.</p>
+    </div>
+    <div class="faq-item">
+      <h3>Can I use it for multiple Airtable bases?</h3>
+      <p>Yes. Each site can have its own Airtable base configuration. The CLI lets you switch between worker profiles per project.</p>
+    </div>
+  </div>
+</section>
+
+<!-- CTA BANNER -->
+<div class="cta-banner">
+  <h2>Start syncing today.</h2>
+  <p>One command. Your Airtable content in Framer, exactly where it should be.</p>
+  <button class="btn-primary" style="font-size:16px; padding:14px 32px;">Get started →</button>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="nav-logo">Frame<span>Sync</span></div>
+  <span>© 2026 FrameSync. Built by someone who actually uses it.</span>
+</footer>
+
+</body>
+</html>
