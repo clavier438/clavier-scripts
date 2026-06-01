@@ -1,5 +1,8 @@
 # FrameSync SaaS — 멀티테넌트 모듈
 
+> 📌 **프로젝트 인수인계는 `PROJECT.md` 부터.** 이 README 는 모듈(코드) 기술용.
+> 결정 배경은 `DECISIONS.md`, 다음 할 일은 `ROADMAP.md`, 격리 구조는 `ARCHITECTURE.md`.
+
 > Airtable → Framer 동기화를 **owner(나)** 와 **customer(고객)** 가 *같은 core* 위에서
 > 둘 다 프로덕션으로 굴리기 위한 모듈. 사용자의 현재 방식(Doppler 기반 `framer push`)은
 > 한 줄도 바뀌지 않는다 — 이 모듈은 위에 *얹는다*.
