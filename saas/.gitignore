@@ -1,0 +1,5 @@
+# 실제 customer 레코드 = secret (Airtable PAT / Framer token 포함). 절대 커밋 금지.
+# 예시 스키마는 tenant/customers.example.json (placeholder) 만 추적.
+customers.json
+tenant/customers.json
+*.local.json
