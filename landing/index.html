@@ -4,6 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FrameSync — Airtable to Framer, automatically</title>
+  <script>
+    // TODO: Lemon Squeezy 상품 등록 후 아래 URL 교체
+    const LS_STARTER_URL = "https://YOUR_STORE.lemonsqueezy.com/buy/STARTER_VARIANT_ID"
+    const LS_AGENCY_URL  = "https://YOUR_STORE.lemonsqueezy.com/buy/AGENCY_VARIANT_ID"
+    window.addEventListener("DOMContentLoaded", () => {
+      document.querySelectorAll("[data-buy='starter']").forEach(el => {
+        el.addEventListener("click", () => window.open(LS_STARTER_URL, "_blank"))
+      })
+      document.querySelectorAll("[data-buy='agency']").forEach(el => {
+        el.addEventListener("click", () => window.open(LS_AGENCY_URL, "_blank"))
+      })
+    })
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <style>
@@ -425,7 +438,7 @@
         <li>UTM management</li>
         <li>Email support</li>
       </ul>
-      <button class="btn-secondary" style="width:100%; padding:14px;">Get started</button>
+      <button class="btn-secondary" data-buy="starter" style="width:100%; padding:14px;">Get started</button>
     </div>
     <div class="pricing-card featured">
       <p class="plan-name">Agency</p>
@@ -440,7 +453,7 @@
         <li>UTM management</li>
         <li>Priority support</li>
       </ul>
-      <button class="btn-primary" style="width:100%; padding:14px;">Get started</button>
+      <button class="btn-primary" data-buy="agency" style="width:100%; padding:14px;">Get started</button>
     </div>
   </div>
 </section>
@@ -480,7 +493,7 @@
 <div class="cta-banner">
   <h2>Start syncing today.</h2>
   <p>One command. Your Airtable content in Framer, exactly where it should be.</p>
-  <button class="btn-primary" style="font-size:16px; padding:14px 32px;">Get started →</button>
+  <button class="btn-primary" data-buy="starter" style="font-size:16px; padding:14px 32px;">Get started →</button>
 </div>
 
 <!-- FOOTER -->
