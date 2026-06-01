@@ -65,6 +65,7 @@ VIEWPORT_STAGGER    = float(os.environ.get("WEBEXP_VIEWPORT_STAGGER", "1.0"))  #
 WEBEXP_MEM_FLOOR_MB      = int(os.environ.get("WEBEXP_MEM_FLOOR_MB", "0"))    # 절대 floor (0=auto)
 WEBEXP_MEM_FLOOR_PCT     = float(os.environ.get("WEBEXP_MEM_FLOOR_PCT", "20"))  # MemTotal × N%
 WEBEXP_PAGES_PER_RESTART = int(os.environ.get("WEBEXP_PAGES_PER_RESTART", "5"))  # N URL 마다 chrome 재기동
+WEBEXP_URL_HARD_TIMEOUT_S = int(os.environ.get("WEBEXP_URL_HARD_TIMEOUT_S", "0"))  # per-URL 전체 watchdog 초 (0=viewport수 기반 auto). hang 시 그 URL 통째 skip.
 WEBEXP_MEM_WAIT_S        = float(os.environ.get("WEBEXP_MEM_WAIT_S", "5"))    # floor 미만 시 polling interval
 WEBEXP_MEM_WAIT_MAX_S    = float(os.environ.get("WEBEXP_MEM_WAIT_MAX_S", "60"))  # 회복 대기 max
 
@@ -174,8 +175,34 @@ def _read_meminfo() -> dict | None:
     except Exception:
         return None
 
+def _read_macos_mem() -> dict | None:
+    """macOS: vm_stat(available≈free+inactive+speculative) + sysctl(total).
+    Linux /proc 부재 시 OOM 방어를 macOS 에서도 활성화 (2026-06 johcompany OOM 처방).
+    vm_stat 'Pages free' 는 이미 speculative 를 뺀 값이라, free+speculative+inactive = 실제 가용."""
+    if sys.platform != "darwin":
+        return None
+    try:
+        total_b = int(subprocess.run(["sysctl", "-n", "hw.memsize"],
+                                     capture_output=True, text=True).stdout.strip())
+        vm = subprocess.run(["vm_stat"], capture_output=True, text=True).stdout
+        page = 4096
+        mp = re.search(r"page size of (\d+)", vm)
+        if mp:
+            page = int(mp.group(1))
+        def _pages(label: str) -> int:
+            m = re.search(rf"{label}:\s+(\d+)", vm)
+            return int(m.group(1)) if m else 0
+        avail_b = (_pages("Pages free") + _pages("Pages inactive") + _pages("Pages speculative")) * page
+        return {"MemTotal": total_b // 1024, "MemAvailable": avail_b // 1024}
+    except Exception:
+        return None
+
+def _mem_info() -> dict | None:
+    """Linux /proc 우선, 없으면 macOS vm_stat. 둘 다 실패 시 None(체크 비활성)."""
+    return _read_meminfo() or _read_macos_mem()
+
 def _compute_mem_floor_kb() -> int:
-    info = _read_meminfo()
+    info = _mem_info()
     if info is None:
         return 0
     if WEBEXP_MEM_FLOOR_MB > 0:
@@ -184,14 +211,14 @@ def _compute_mem_floor_kb() -> int:
 
 _MEM_FLOOR_KB = _compute_mem_floor_kb()
 if _MEM_FLOOR_KB > 0:
-    _info = _read_meminfo() or {}
+    _info = _mem_info() or {}
     _total_mb = _info.get("MemTotal", 0) // 1024
     log(f"  [mem] floor = {_MEM_FLOOR_KB // 1024}MB (MemTotal {_total_mb}MB × {WEBEXP_MEM_FLOOR_PCT}%) — pages/restart={WEBEXP_PAGES_PER_RESTART}")
 
 def mem_available_kb() -> int:
-    info = _read_meminfo()
+    info = _mem_info()
     if info is None:
-        return 10**9  # non-Linux: 임계 체크 사실상 비활성
+        return 10**9  # /proc·vm_stat 둘 다 실패: 임계 체크 비활성
     return info.get("MemAvailable", info.get("MemFree", 0))
 
 def is_below_floor() -> bool:
@@ -1513,6 +1540,7 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
                     user_agent=REALISTIC_UA,
                     extra_http_headers=EXTRA_HEADERS,
                     locale="en-US",
+                    ignore_https_errors=True,   # cert mismatch (예: gabia *.gabia.io, 자체서명) 도 진입 — 디자인 스터디 캡처 목적상 안전
                 ), timeout=30)
                 # 스텔스 스크립트 (모든 페이지 진입 직전에 navigator.* 마스킹)
                 await ctx.add_init_script(STEALTH_INIT_SCRIPT)
@@ -1665,6 +1693,7 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
             user_agent=REALISTIC_UA,
             extra_http_headers=EXTRA_HEADERS,
             locale="en-US",
+            ignore_https_errors=True,   # discover 단계도 cert mismatch 통과
         )
         await ctx.add_init_script(STEALTH_INIT_SCRIPT)
         pg        = await ctx.new_page()
@@ -1690,6 +1719,17 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
         pages_since_restart = 0
         sem_dummy = asyncio.Semaphore(1)  # export_url 시그니처 호환용
 
+        # per-URL hard watchdog — export_url 전체(모든 viewport + cleanup)를 감싸는 timeout.
+        # viewport 단위 timeout(prepare 60s/capture 120s)은 이미 있으나, ctx.close() 무한대기처럼
+        # await point 가 영원히 resolve 안 되면 전체가 멈춤(2026-05 johcompany / aman gallery 사고).
+        # 초과 시 그 URL 통째 skip → browser 재시작(orphan ctx 정리) → 다음 URL 진행.
+        if WEBEXP_URL_HARD_TIMEOUT_S > 0:
+            url_hard_timeout = WEBEXP_URL_HARD_TIMEOUT_S
+        else:
+            _per_vp = (LOAD_TIMEOUT_MS / 1000) + 60 + 120 + 30  # load+prepare+capture+cleanup 여유
+            url_hard_timeout = int(len(VIEWPORT_CONFIGS) * _per_vp + 60)
+        log(f"  [watchdog] per-URL hard timeout = {url_hard_timeout}s ({len(VIEWPORT_CONFIGS)} viewports)")
+
         for i, url in enumerate(pages, 1):
             # browser disconnect 감지 또는 메모리/주기 도달 시 재시작
             try:
@@ -1713,7 +1753,14 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
 
             log(f"\n[{i}/{len(pages)}]")
             try:
-                ok, fail, captured = await export_url(url, output_dir, scroll_time, sem_dummy, browser)
+                ok, fail, captured = await asyncio.wait_for(
+                    export_url(url, output_dir, scroll_time, sem_dummy, browser),
+                    timeout=url_hard_timeout,
+                )
+            except asyncio.TimeoutError:
+                log(f"  [ERROR] export_url 전체 timeout {url_hard_timeout}s ({url}) — hang 방어, 통째 skip")
+                ok, fail, captured = 0, len(VIEWPORT_CONFIGS), []
+                pages_since_restart = WEBEXP_PAGES_PER_RESTART  # orphan ctx 정리 위해 browser 재시작
             except Exception as e:
                 log(f"  [ERROR] export_url 실패 ({url}): {type(e).__name__} — skip")
                 ok, fail, captured = 0, len(VIEWPORT_CONFIGS), []

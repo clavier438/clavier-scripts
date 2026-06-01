@@ -61,6 +61,8 @@ python webSiteExporter.py https://example.com --keep-frames
 | `WEBEXP_SKIP_VIEWPORTS` | Comma-separated viewports to skip (e.g. `mobile` or `tablet,mobile`) |
 | `WEBEXP_NAV_TOTAL_CAP` | Max nav links to follow |
 | `WEBEXP_NAV_PREFIX_CAP` | Max detail pages per path prefix |
+| `WEBEXP_URL_HARD_TIMEOUT_S` | Per-URL hard timeout in seconds (0 = auto by viewport count). Skips a page if it hangs instead of stalling the whole run |
+| `WEBEXP_MEM_FLOOR_PCT` | Memory floor as % of total RAM (default 20). Restarts the browser when free memory drops below — works on both Linux and macOS |
 
 ## Output
 
