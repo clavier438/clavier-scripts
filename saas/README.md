@@ -19,12 +19,18 @@ CLAUDE.md 의 "framer-sync = platform-agnostic (use case 동일, store 만 D1↔
 |---|---|---|
 | `tenant/tenantConfig.mjs` | TenantConfig 모양 + 검증 + secret 마스킹 | 없음 (순수) |
 | `tenant/tenantStore.mjs` | customer 레코드 저장소 (JSON / memory) | fs |
-| `tenant/tenantProvider.mjs` | **심장**: owner(Doppler) / customer(store) provider + resolver | `tools/lib/workerEnvMap.mjs` (owner SSOT 재사용) |
+| `tenant/tenantProvider.mjs` | **심장**: owner/customer provider + `ownerResolver`/`customerResolver` (배포별 조립) | `workerEnvMap.mjs`, `isolation.mjs` |
+| `tenant/isolation.mjs` | 격리 불변식 — owner 예약 ID 를 customer 가 못 가짐 | `workerEnvMap.mjs` |
 | `tenant/ports.mjs` | 모듈 경계 계약 (TenantPort / SyncStorePort / RunnerPort) | 없음 (순수) |
 | `tenant/tenantProvider.test.mjs` | 의존성 0 자체 테스트 | node:assert |
 | `tenant/customers.example.json` | customer 레코드 스키마 예시 (placeholder) | — |
+| `ARCHITECTURE.md` | **격리 아키텍처** — owner↔customer 4차원 분리, "내 것 안 망침" 증명 | — |
 
-테스트: `node saas/tenant/tenantProvider.test.mjs` → 5/5
+테스트: `node saas/tenant/tenantProvider.test.mjs` → 8/8
+
+> ⚠️ **격리 핵심**: owner 와 customer 는 한 resolver 에 섞지 않는다. 각 배포가 자기 것만 조립
+> (`ownerResolver` = doppler 만, `customerResolver` = store 만). 코드 경로가 분리돼야
+> "내 것 절대 안 망침" 이 성립. 상세는 `ARCHITECTURE.md`.
 
 ---
 

@@ -19,6 +19,7 @@
 
 import { getWorkerEnv, listWorkerEnvs } from "../../tools/lib/workerEnvMap.mjs"
 import { assertTenantConfig } from "./tenantConfig.mjs"
+import { guardOwnerIds } from "./isolation.mjs"
 
 // owner 테넌트가 doppler run 으로 주입받는 env 키 이름.
 // ⚠️ 본인 Doppler config(prd / prd_mukayu)의 실제 키 이름과 일치시킬 것.
@@ -127,4 +128,28 @@ export function createTenantResolver(providers) {
             return [...new Set(all.flat())]
         },
     }
+}
+
+// ── 배포별 조립 루트 (composition root) ────────────────────────────────────
+//
+// ★ 핵심 격리: owner 배포와 customer 배포는 *서로의 provider 를 import 조차 안 한다*.
+//   같은 resolver 에 둘을 섞지 말 것 — 코드 경로 자체를 분리해야 "내 것 절대 안 망침" 이 성립.
+//   (둘을 한 resolver 에 넣는 createTenantResolver 직접 호출은 단일 통합 배포 전용. 권장 X.)
+
+/**
+ * owner 전용 resolver — Doppler provider 만. store 코드 경로 없음.
+ * 내 CLI(`framer push`)가 쓸 조립. customer 가 100명이어도 이 경로엔 안 닿는다.
+ * @param {Object} [opts]  dopplerTenantProvider 옵션 (env, envKeys)
+ */
+export function ownerResolver(opts = {}) {
+    return createTenantResolver([dopplerTenantProvider(opts)])
+}
+
+/**
+ * customer 전용 resolver — store provider 만. doppler 코드 경로 없음.
+ * 멀티테넌트 Worker 가 쓸 조립. store 는 owner ID 침범 가드로 자동 감싼다.
+ * @param {{get:Function, put:Function, list:Function, delete:Function}} store
+ */
+export function customerResolver(store) {
+    return createTenantResolver([storeTenantProvider(guardOwnerIds(store))])
 }
