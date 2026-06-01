@@ -35,11 +35,16 @@ Two hard rules shape everything:
 2. **Cheap and many beats precious and few.** Ten $7 tools that each sell
    occasionally beat one $49 tool nobody buys. Keep prices under $15, keep the
    bar for "ship it" low, keep the catalog growing.
+3. **Listing is not selling — distribution is the lever, and the means is always
+   community virality.** A tool sitting on Gumroad with no traffic sells ~0; the
+   product was the easy part. Sales come from getting it shared in the communities
+   where its users already are (Show HN, the right subreddit, Product Hunt, niche
+   forums). Always plan the viral angle, not just the listing.
 
 ## The loop
 
 ```
-Hunt  →  Audit  →  Package  →  Channel (PR)  →  Publish
+Hunt  →  Audit  →  Package  →  Channel (PR)  →  Publish  →  Distribute
 ```
 
 You can run the whole loop on demand, or run Hunt→Channel as the weekly
@@ -131,6 +136,11 @@ Autonomous prep is done. Here's what's staged and what only you can do.
 ### 💡 New angles I'm scheming (optional)
 - <idea — effort vs payoff>
 
+### 📣 Distribution (the real lever — community virality)
+For the 1-2 most promising, post drafts are below — fire them where the users live:
+- [ ] <product> → <community> (Show HN / r/<sub> / Product Hunt) — draft ready
+- [ ] watch traction, double down on whatever converts
+
 ### After first sale (Gumroad gate)
 - [ ] Set Discover category + tags (only persists once a product has sold)
 EOF
@@ -151,6 +161,20 @@ and every wall (the upload sandbox, payout, the Discover gate, editor gotchas).
 The short version: you create the product + name + price + voice copy; the human
 drags the zip; you publish; you hand back the live `…gumroad.com/l/<slug>` URL.
 Record the live URLs back on the PR so it closes as a clean log of what shipped.
+
+### 6. Distribute — community virality, always
+
+This is where money actually comes from, and where the 잔머리 should work hardest.
+Read `references/distribution.md` for the per-product community map and the posting
+playbook. The principle the user set: **the means is always to make it go viral in
+the communities where the target users already live** — never wait for Gumroad's
+marketplace to find you.
+
+For each shipped product, pick the 1-2 communities that fit and draft a real post
+(a Show HN, a subreddit post, a Product Hunt launch) that leads with the story and
+the problem — never a naked sales link. Put the drafts in the PR so the human can
+fire them. Then watch what gets traction and double down there; let the data pick
+the winner rather than pushing everything equally.
 
 ## Pricing
 
