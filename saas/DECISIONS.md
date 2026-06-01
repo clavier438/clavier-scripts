@@ -57,6 +57,37 @@
 
 ---
 
+## ADR-005 (2026-06-01) — 모노레포 전용 repo 가 정답, 추출은 마지막 단계
+
+**결정**: FrameSync 부품은 최종적으로 **전용 모노레포 하나(`framesync`)**에 모아야 한다.
+단, 추출은 core 가 안정된 이후(ROADMAP 6단계). 지금은 `clavier-scripts/saas/` 를 씨앗으로 운영.
+
+**맥락**: "여러 repo 를 오가며 모듈형으로 해야 할 때 어느 repo 에 두나? 전용 repo 가 필요한가?"
+
+**근거**:
+- core(platform-workers) + tenant(clavier-scripts) + 고객 부품(platform-workers) 이 흩어지면
+  "어느 부품이 어느 repo 꺼냐" 가 drift 남 → 업계 표준 = 모노레포.
+- core·tenant·worker·cli 가 한 제품의 부품이고 서로 의존 → npm workspace 모노레포가 맞음.
+- 단, 지금 당장 옮기면: core 가 platform-workers 에서 프로덕션으로 돌고 있어서 섣불리 옮기면
+  내 것 망가질 위험 + CLAUDE.md "한 번에 하나" 위반.
+
+**목표 구조** (안정 후):
+```
+framesync/  ← 전용 repo
+  packages/
+    core/         ← platform-workers/framer-sync 에서 이사
+    tenant/       ← clavier-scripts/saas/tenant 에서 이사
+    ports/
+    store-d1/     (고객 부품)
+    store-sqlite/ (내 부품)
+    worker/       (고객 프로덕션)
+    cli/          (내 프로덕션 `framer` 명령)
+```
+
+**결과**: 지금은 `saas/` 씨앗 단계. core 안정 → 전용 repo 추출. 급하지 않음, ROADMAP 6단계(선택).
+
+---
+
 ## ADR-004 (2026-06-01) — 부품 수정 = 고객 자동 업데이트, core 수정 = 양쪽 개선
 
 **결정**: 개선은 공유, 장애만 격리.
