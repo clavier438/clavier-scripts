@@ -18,3 +18,7 @@ webExporter/pdf_export_progress.txt
 webExporter/pdf_export_urls.txt
 safari_export_*.log
 .wrangler/
+
+# sellable product build artifacts (regenerate via skills/passive-income/scripts/package_tool.sh)
+products/**/*.zip
+webExporter/*.zip
