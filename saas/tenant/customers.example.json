@@ -1,0 +1,23 @@
+{
+  "cus_a1b2c3": {
+    "tenantId": "cus_a1b2c3",
+    "kind": "customer",
+    "airtable": {
+      "baseId": "appXXXXXXXXXXXXXX",
+      "pat": "patXXXXXXXXXXXXXX.PLACEHOLDER_DO_NOT_COMMIT_REAL_SECRET"
+    },
+    "framer": {
+      "url": "https://framer-sync.example.workers.dev/cus_a1b2c3",
+      "token": "FRAMER_TOKEN_PLACEHOLDER"
+    },
+    "utm": {
+      "source": "framesync",
+      "medium": "cms",
+      "campaign": "spring-launch"
+    },
+    "meta": {
+      "plan": "starter",
+      "createdAt": "2026-06-01"
+    }
+  }
+}

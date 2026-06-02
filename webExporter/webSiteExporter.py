@@ -65,6 +65,7 @@ VIEWPORT_STAGGER    = float(os.environ.get("WEBEXP_VIEWPORT_STAGGER", "1.0"))  #
 WEBEXP_MEM_FLOOR_MB      = int(os.environ.get("WEBEXP_MEM_FLOOR_MB", "0"))    # 절대 floor (0=auto)
 WEBEXP_MEM_FLOOR_PCT     = float(os.environ.get("WEBEXP_MEM_FLOOR_PCT", "20"))  # MemTotal × N%
 WEBEXP_PAGES_PER_RESTART = int(os.environ.get("WEBEXP_PAGES_PER_RESTART", "5"))  # N URL 마다 chrome 재기동
+WEBEXP_URL_HARD_TIMEOUT_S = int(os.environ.get("WEBEXP_URL_HARD_TIMEOUT_S", "0"))  # per-URL 전체 watchdog 초 (0=viewport수 기반 auto). hang 시 그 URL 통째 skip.
 WEBEXP_MEM_WAIT_S        = float(os.environ.get("WEBEXP_MEM_WAIT_S", "5"))    # floor 미만 시 polling interval
 WEBEXP_MEM_WAIT_MAX_S    = float(os.environ.get("WEBEXP_MEM_WAIT_MAX_S", "60"))  # 회복 대기 max
 
@@ -174,8 +175,34 @@ def _read_meminfo() -> dict | None:
     except Exception:
         return None
 
+def _read_macos_mem() -> dict | None:
+    """macOS: vm_stat(available≈free+inactive+speculative) + sysctl(total).
+    Linux /proc 부재 시 OOM 방어를 macOS 에서도 활성화 (2026-06 johcompany OOM 처방).
+    vm_stat 'Pages free' 는 이미 speculative 를 뺀 값이라, free+speculative+inactive = 실제 가용."""
+    if sys.platform != "darwin":
+        return None
+    try:
+        total_b = int(subprocess.run(["sysctl", "-n", "hw.memsize"],
+                                     capture_output=True, text=True).stdout.strip())
+        vm = subprocess.run(["vm_stat"], capture_output=True, text=True).stdout
+        page = 4096
+        mp = re.search(r"page size of (\d+)", vm)
+        if mp:
+            page = int(mp.group(1))
+        def _pages(label: str) -> int:
+            m = re.search(rf"{label}:\s+(\d+)", vm)
+            return int(m.group(1)) if m else 0
+        avail_b = (_pages("Pages free") + _pages("Pages inactive") + _pages("Pages speculative")) * page
+        return {"MemTotal": total_b // 1024, "MemAvailable": avail_b // 1024}
+    except Exception:
+        return None
+
+def _mem_info() -> dict | None:
+    """Linux /proc 우선, 없으면 macOS vm_stat. 둘 다 실패 시 None(체크 비활성)."""
+    return _read_meminfo() or _read_macos_mem()
+
 def _compute_mem_floor_kb() -> int:
-    info = _read_meminfo()
+    info = _mem_info()
     if info is None:
         return 0
     if WEBEXP_MEM_FLOOR_MB > 0:
@@ -184,14 +211,14 @@ def _compute_mem_floor_kb() -> int:
 
 _MEM_FLOOR_KB = _compute_mem_floor_kb()
 if _MEM_FLOOR_KB > 0:
-    _info = _read_meminfo() or {}
+    _info = _mem_info() or {}
     _total_mb = _info.get("MemTotal", 0) // 1024
     log(f"  [mem] floor = {_MEM_FLOOR_KB // 1024}MB (MemTotal {_total_mb}MB × {WEBEXP_MEM_FLOOR_PCT}%) — pages/restart={WEBEXP_PAGES_PER_RESTART}")
 
 def mem_available_kb() -> int:
-    info = _read_meminfo()
+    info = _mem_info()
     if info is None:
-        return 10**9  # non-Linux: 임계 체크 사실상 비활성
+        return 10**9  # /proc·vm_stat 둘 다 실패: 임계 체크 비활성
     return info.get("MemAvailable", info.get("MemFree", 0))
 
 def is_below_floor() -> bool:
@@ -1463,8 +1490,66 @@ async def capture_viewport(page, vp_name: str, vp_conf: dict) -> Image.Image:
     return canvas
 
 # ── URL 하나 처리 ─────────────────────────────────────────
+async def _download_page_images(page, output_dir: str, base_name: str) -> int:
+    """페이지의 모든 이미지(img src/currentSrc + picture srcset 최대 + CSS background-image)를
+    다운로드. page.request 사용 → 페이지 쿠키/UA 유지(봇 차단 회피). images/<page>/ 에 저장."""
+    try:
+        img_urls = await page.evaluate(r"""() => {
+            const urls = new Set();
+            const abs = (u) => { try { return new URL(u, location.href).href; } catch(e) { return null; } };
+            document.querySelectorAll('img').forEach(img => {
+                const s = img.currentSrc || img.src;
+                if (s && !s.startsWith('data:')) { const a = abs(s); if (a) urls.add(a); }
+            });
+            document.querySelectorAll('source[srcset]').forEach(src => {
+                const cands = src.srcset.split(',').map(x => x.trim().split(/\s+/)[0]).filter(Boolean);
+                if (cands.length) { const a = abs(cands[cands.length-1]); if (a && !a.startsWith('data:')) urls.add(a); }
+            });
+            document.querySelectorAll('*').forEach(el => {
+                const bg = getComputedStyle(el).backgroundImage;
+                if (bg && bg !== 'none') {
+                    const re = /url\((["']?)([^"')]+)\1\)/g; let m;
+                    while ((m = re.exec(bg)) !== null) {
+                        if (m[2] && !m[2].startsWith('data:')) { const a = abs(m[2]); if (a) urls.add(a); }
+                    }
+                }
+            });
+            return [...urls];
+        }""")
+    except Exception:
+        return 0
+    if not img_urls:
+        return 0
+    img_dir = os.path.join(output_dir, "images", base_name)
+    os.makedirs(img_dir, exist_ok=True)
+    saved = 0
+    seen: set = set()
+    for u in img_urls:
+        try:
+            resp = await page.request.get(u, timeout=20000)
+            if not resp.ok:
+                continue
+            body = await resp.body()
+            if not body:
+                continue
+            fname = os.path.basename(urlparse(u).path) or "img"
+            fname = re.sub(r"[^\w\-.]", "_", fname)[:90]
+            if not os.path.splitext(fname)[1]:
+                fname += ".img"
+            if fname in seen:
+                stem, ext = os.path.splitext(fname)
+                fname = f"{stem}_{saved}{ext}"
+            seen.add(fname)
+            with open(os.path.join(img_dir, fname), "wb") as f:
+                f.write(body)
+            saved += 1
+        except Exception:
+            pass
+    log(f"  [images] {saved}/{len(img_urls)}장 → images/{base_name}/")
+    return saved
+
 async def export_url(url: str, output_dir: str, scroll_time: int,
-                     sem: asyncio.Semaphore, browser) -> tuple[int, int]:
+                     sem: asyncio.Semaphore, browser, download_images: bool = False) -> tuple[int, int]:
     """
     뷰포트마다 새 컨텍스트 + 새 페이지 로드.
     - 각 뷰포트 치수로 처음부터 로드 → IO가 올바른 치수 기준으로 자연스럽게 발동
@@ -1513,6 +1598,7 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
                     user_agent=REALISTIC_UA,
                     extra_http_headers=EXTRA_HEADERS,
                     locale="en-US",
+                    ignore_https_errors=True,   # cert mismatch (예: gabia *.gabia.io, 자체서명) 도 진입 — 디자인 스터디 캡처 목적상 안전
                 ), timeout=30)
                 # 스텔스 스크립트 (모든 페이지 진입 직전에 navigator.* 마스킹)
                 await ctx.add_init_script(STEALTH_INIT_SCRIPT)
@@ -1613,6 +1699,13 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
                 log(f"  ✗ 실패 ({vp_name}): {e}")
                 fail += 1
 
+            # 이미지 전수 다운로드 (부가) — desktop viewport 1회. 실패/timeout 해도 PDF 는 진행.
+            if download_images and vp_name == "desktop" and page is not None:
+                try:
+                    await asyncio.wait_for(_download_page_images(page, output_dir, base_name), timeout=180)
+                except Exception as e:
+                    log(f"  [images] 다운로드 실패/timeout: {type(e).__name__}")
+
             await ctx.close()
 
         if captured:
@@ -1622,7 +1715,7 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
         return ok, fail, captured
 
 # ── 메인 ──────────────────────────────────────────────────
-async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False):
+async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False, download_images: bool = False):
     os.makedirs(output_dir, exist_ok=True)
 
     # site_name + 로그 파일: 같은 netloc 의 sub-path base 도 충돌 없도록 base_url 전체로 슬러그
@@ -1665,6 +1758,7 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
             user_agent=REALISTIC_UA,
             extra_http_headers=EXTRA_HEADERS,
             locale="en-US",
+            ignore_https_errors=True,   # discover 단계도 cert mismatch 통과
         )
         await ctx.add_init_script(STEALTH_INIT_SCRIPT)
         pg        = await ctx.new_page()
@@ -1690,6 +1784,17 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
         pages_since_restart = 0
         sem_dummy = asyncio.Semaphore(1)  # export_url 시그니처 호환용
 
+        # per-URL hard watchdog — export_url 전체(모든 viewport + cleanup)를 감싸는 timeout.
+        # viewport 단위 timeout(prepare 60s/capture 120s)은 이미 있으나, ctx.close() 무한대기처럼
+        # await point 가 영원히 resolve 안 되면 전체가 멈춤(2026-05 johcompany / aman gallery 사고).
+        # 초과 시 그 URL 통째 skip → browser 재시작(orphan ctx 정리) → 다음 URL 진행.
+        if WEBEXP_URL_HARD_TIMEOUT_S > 0:
+            url_hard_timeout = WEBEXP_URL_HARD_TIMEOUT_S
+        else:
+            _per_vp = (LOAD_TIMEOUT_MS / 1000) + 60 + 120 + 30  # load+prepare+capture+cleanup 여유
+            url_hard_timeout = int(len(VIEWPORT_CONFIGS) * _per_vp + 60)
+        log(f"  [watchdog] per-URL hard timeout = {url_hard_timeout}s ({len(VIEWPORT_CONFIGS)} viewports)")
+
         for i, url in enumerate(pages, 1):
             # browser disconnect 감지 또는 메모리/주기 도달 시 재시작
             try:
@@ -1713,7 +1818,14 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
 
             log(f"\n[{i}/{len(pages)}]")
             try:
-                ok, fail, captured = await export_url(url, output_dir, scroll_time, sem_dummy, browser)
+                ok, fail, captured = await asyncio.wait_for(
+                    export_url(url, output_dir, scroll_time, sem_dummy, browser, download_images),
+                    timeout=url_hard_timeout,
+                )
+            except asyncio.TimeoutError:
+                log(f"  [ERROR] export_url 전체 timeout {url_hard_timeout}s ({url}) — hang 방어, 통째 skip")
+                ok, fail, captured = 0, len(VIEWPORT_CONFIGS), []
+                pages_since_restart = WEBEXP_PAGES_PER_RESTART  # orphan ctx 정리 위해 browser 재시작
             except Exception as e:
                 log(f"  [ERROR] export_url 실패 ({url}): {type(e).__name__} — skip")
                 ok, fail, captured = 0, len(VIEWPORT_CONFIGS), []
@@ -1803,10 +1915,11 @@ if __name__ == "__main__":
     parser.add_argument("--scroll-time", "-s", type=int, default=60,   help="스크롤 타임아웃(초, 내부 고정값과 별개)")
     parser.add_argument("--concurrency", "-c", type=int, default=2,    help="URL 동시 처리 수 (작은 사이트 ban 잦으면 1, 큰 사이트는 3)")
     parser.add_argument("--keep-frames",       action="store_true",     help="PDF 빌드 후 frames/ 보존 (디폴트: 삭제 — 출력 디렉터리에는 PDF+로그만)")
+    parser.add_argument("--download-images",   action="store_true",     help="(부가) 각 페이지의 모든 이미지(img/srcset 최대/background-image)를 images/<page>/ 에 다운로드")
     args = parser.parse_args()
 
     if not urlparse(args.url).scheme:
         print("[ERROR] URL에 https:// 를 포함해주세요")
         sys.exit(1)
 
-    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames))
+    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, args.download_images))
