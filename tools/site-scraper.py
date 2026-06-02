@@ -21,7 +21,10 @@ from collections import deque
 from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
-import freshness  # noqa: F401
+try:
+    import freshness  # noqa: F401  (repo freshness 체크 — 없는 환경(OCI 등)에서도 동작하게 선택적)
+except ImportError:
+    pass
 
 try:
     import requests
@@ -30,7 +33,9 @@ except ImportError:
     print("❌ 의존성 누락. 설치: pip3 install requests beautifulsoup4 --break-system-packages")
     sys.exit(1)
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; site-scraper/1.0)"}
+# 브라우저 UA — 봇 UA 면 차단하는 사이트(예: mukayu) 회피. 일반 데스크톱 Chrome 가장.
+HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"}
+VERIFY_SSL = True   # --insecure 로 False (cert mismatch / 자체서명 사이트)
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".avif"}
 
 # ── 메타 추출 ───────────────────────────────────────────────
@@ -214,7 +219,7 @@ def url_to_slug(url: str) -> str:
 # ── 이미지 다운로드 ─────────────────────────────────────────
 def download_image(url: str, img_dir: Path) -> bool:
     try:
-        r = requests.get(url, headers=HEADERS, timeout=10, stream=True)
+        r = requests.get(url, headers=HEADERS, timeout=10, stream=True, verify=VERIFY_SSL)
         r.raise_for_status()
         ext = Path(urllib.parse.urlparse(url).path).suffix.lower() or ".jpg"
         name = hashlib.md5(url.encode()).hexdigest()[:12] + ext
@@ -226,7 +231,7 @@ def download_image(url: str, img_dir: Path) -> bool:
 # ── 단일 페이지 스크래핑 ────────────────────────────────────
 def scrape_page(url: str, base_url: str, dl_images: bool, img_dir: Path) -> dict | None:
     try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
+        r = requests.get(url, headers=HEADERS, timeout=15, verify=VERIFY_SSL)
         r.raise_for_status()
     except Exception as e:
         print(f"  ❌ {url}  ({e})")
@@ -253,6 +258,42 @@ def scrape_page(url: str, base_url: str, dl_images: bool, img_dir: Path) -> dict
         "sections":   sections,
         "footer":     footer,
     }
+
+# ── 명시 URL 모드 (crawl 안 함, 깊은 쿨다운) — mukayu 류 연속차단 사이트용 ──
+def scrape_urls(urls: list, out_dir: Path, dl_images: bool, cooldown: int):
+    """명시 URL 리스트만 — 링크 안 따라감(정확한 스코프). 각 페이지 사이 ban 쿨다운
+    (cooldown 초 sleep + origin 200 될 때까지 대기). HTML 단일 요청이라 캡처보다 가볍지만
+    연속이면 차단되는 사이트(mukayu)는 쿨다운 필수."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    img_dir = out_dir / "images"
+    if dl_images: img_dir.mkdir(exist_ok=True)
+    p0 = urllib.parse.urlparse(urls[0])
+    origin = f"{p0.scheme}://{p0.netloc}"
+    all_pages = []
+    print(f"\n🔍 명시 URL 모드: {len(urls)}개  (cooldown {cooldown}s)")
+    print(f"   출력: {out_dir}\n")
+    for idx, url in enumerate(urls):
+        if idx > 0 and cooldown > 0:
+            print(f"  ⏳ 쿨다운 {cooldown}s + 200 대기...")
+            time.sleep(cooldown)
+            waited = 0
+            while waited < 600:
+                try:
+                    if requests.get(origin + "/", headers=HEADERS, timeout=10, verify=VERIFY_SSL).status_code == 200:
+                        break
+                except Exception:
+                    pass
+                time.sleep(20); waited += 20
+        page = scrape_page(url, origin, dl_images, img_dir)
+        if not page:
+            continue
+        slug = page["slug"]
+        (out_dir / f"{slug}.json").write_text(json.dumps(page, ensure_ascii=False, indent=2), encoding="utf-8")
+        (out_dir / f"{slug}.md").write_text(to_markdown(page), encoding="utf-8")
+        all_pages.append(page)
+        print(f"  ✅ {url} → {slug}  ({len(page['sections'])} sections)")
+    (out_dir / "_all.json").write_text(json.dumps(all_pages, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\n✨ 완료: {len(all_pages)}개 → {out_dir}")
 
 # ── 크롤러 ──────────────────────────────────────────────────
 def crawl(start_url: str, out_dir: Path, max_depth: int,
@@ -313,7 +354,7 @@ def crawl(start_url: str, out_dir: Path, max_depth: int,
 
         # 내부 링크 수집
         try:
-            r2 = requests.get(url, headers=HEADERS, timeout=15)
+            r2 = requests.get(url, headers=HEADERS, timeout=15, verify=VERIFY_SSL)
             soup2 = BeautifulSoup(r2.text, "html.parser")
             for a in soup2.find_all("a", href=True):
                 href = urllib.parse.urljoin(url, a["href"])
@@ -350,20 +391,34 @@ def main():
   site-scraper https://example.com -o ~/data -d 2
         """
     )
-    p.add_argument("url")
+    p.add_argument("url", nargs="?", help="시작 URL (crawl 모드). --urls 쓰면 생략 가능")
     p.add_argument("-o", "--output", help="출력 디렉토리")
     p.add_argument("-d", "--depth",  type=int, default=3)
     p.add_argument("-i", "--images", action="store_true")
     p.add_argument("-s", "--scope",  default="")
+    p.add_argument("--urls",     help="명시 URL 리스트(쉼표/공백 구분) — crawl 안 함, 정확한 스코프")
+    p.add_argument("--cooldown", type=int, default=0, help="페이지 사이 쿨다운 초(200 대기, ban 회피)")
+    p.add_argument("--insecure", action="store_true", help="SSL 인증 무시")
 
     if len(sys.argv) == 1:
         p.print_help(); sys.exit(0)
 
     args = p.parse_args()
-    out_dir = (Path(args.output).expanduser() if args.output
-               else Path("./scraped") / urllib.parse.urlparse(args.url).netloc.replace("www.", ""))
+    global VERIFY_SSL
+    if args.insecure:
+        VERIFY_SSL = False
 
-    crawl(args.url, out_dir, args.depth, args.images, args.scope)
+    if args.urls:
+        urls = [u for u in re.split(r"[,\s]+", args.urls.strip()) if u]
+        out_dir = (Path(args.output).expanduser() if args.output
+                   else Path("./scraped") / urllib.parse.urlparse(urls[0]).netloc.replace("www.", ""))
+        scrape_urls(urls, out_dir, args.images, args.cooldown)
+    else:
+        if not args.url:
+            p.error("url(positional) 또는 --urls 중 하나 필요")
+        out_dir = (Path(args.output).expanduser() if args.output
+                   else Path("./scraped") / urllib.parse.urlparse(args.url).netloc.replace("www.", ""))
+        crawl(args.url, out_dir, args.depth, args.images, args.scope)
 
 if __name__ == "__main__":
     main()
