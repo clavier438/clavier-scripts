@@ -34,6 +34,7 @@ import { execSync } from "child_process"
 import { fileURLToPath } from "url"
 import { dirname, resolve } from "path"
 import { setDefaultResultOrder } from "node:dns"
+import net from "node:net"
 import { findPlatformWorkers } from "./repoPaths.mjs"
 
 // ── IPv4-first 시스템 invariant ────────────────────────────────────────────
@@ -48,6 +49,15 @@ import { findPlatformWorkers } from "./repoPaths.mjs"
 //       workerCtl 까지 전파 안 돼 같은 날 두 번째로 사용자가 30분 헤맴.
 //       그 외로운 박힘 → 단일 자리로 통합 (clavier-hq RAY_DALIO_QUEUE 2026-05-28).
 setDefaultResultOrder("ipv4first")
+
+// ── IPv4-first 의 빠진 절반: happy-eyeballs off ─────────────────────────────
+// setDefaultResultOrder 는 DNS 결과 *순서* 만 IPv4 우선으로 바꾼다. 그러나 undici
+// fetch 의 happy-eyeballs (autoSelectFamily) 는 여전히 IPv4·IPv6 를 *병렬* 시도하고,
+// 시스템 IPv6 라우팅이 죽어 있으면 그 IPv6 시도가 ETIMEDOUT 으로 fetch 전체를 죽인다.
+// (2026-06-02 workerCtl 사고: IPv6 dead 환경에서 ipv4first 만으론 3/3 실패 → happy-eyeballs
+//  off 시 3/3 성공. curl 은 자체 fallback 으로 됐기에 "curl 은 되는데 도구만 안 됨" 미스터리였음.)
+// 끄면 ipv4first 순서의 첫 주소(IPv4)만 시도 → IPv6-dead 에 면역. (Node 18.18+/20.13+/22)
+if (typeof net.setDefaultAutoSelectFamily === "function") net.setDefaultAutoSelectFamily(false)
 
 ;(function ensureFresh() {
     if (process.env._CLAVIER_FRESHNESS_OK === "1") return
