@@ -34,6 +34,10 @@ from playwright.async_api import async_playwright
 
 Image.MAX_IMAGE_PIXELS = None  # 대형 이미지 경고 억제
 
+# 출력 기본 위치 — books 로 통일. env BOOKS_DIR override (OCI 등 다른 환경은 env 로).
+BOOKS_DIR = os.environ.get("BOOKS_DIR") or os.path.expanduser(
+    "~/Library/Mobile Documents/com~apple~CloudDocs/0/works/study/books")
+
 # ── 설정 ──────────────────────────────────────────────────
 VIEWPORTS = {
     # scale: 디바이스 pixel ratio. 모두 2x — 디자인 스터디용 충분 + 메모리 절약
@@ -1910,7 +1914,7 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Website Layout Exporter (WebP/PNG, Option C)")
     parser.add_argument("url",                                          help="기준 URL (https://...)")
-    parser.add_argument("--output",      "-o", default="./exports",    help="출력 디렉터리")
+    parser.add_argument("--output",      "-o", default=None,           help="출력 디렉터리 (디폴트: books/<host>/)")
     parser.add_argument("--max-pages",   "-m", type=int, default=50,   help="최대 페이지 수")
     parser.add_argument("--scroll-time", "-s", type=int, default=60,   help="스크롤 타임아웃(초, 내부 고정값과 별개)")
     parser.add_argument("--concurrency", "-c", type=int, default=2,    help="URL 동시 처리 수 (작은 사이트 ban 잦으면 1, 큰 사이트는 3)")
@@ -1922,4 +1926,5 @@ if __name__ == "__main__":
         print("[ERROR] URL에 https:// 를 포함해주세요")
         sys.exit(1)
 
-    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, args.download_images))
+    out = args.output or os.path.join(BOOKS_DIR, urlparse(args.url).netloc.replace("www.", ""))
+    asyncio.run(run(args.url, out, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, args.download_images))

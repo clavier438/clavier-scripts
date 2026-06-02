@@ -36,6 +36,9 @@ except ImportError:
 # 브라우저 UA — 봇 UA 면 차단하는 사이트(예: mukayu) 회피. 일반 데스크톱 Chrome 가장.
 HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"}
 VERIFY_SSL = True   # --insecure 로 False (cert mismatch / 자체서명 사이트)
+# 출력 기본 위치 — books 로 통일 (env BOOKS_DIR override).
+BOOKS_DIR = os.environ.get("BOOKS_DIR") or os.path.expanduser(
+    "~/Library/Mobile Documents/com~apple~CloudDocs/0/works/study/books")
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".avif"}
 
 # ── 메타 추출 ───────────────────────────────────────────────
@@ -411,13 +414,13 @@ def main():
     if args.urls:
         urls = [u for u in re.split(r"[,\s]+", args.urls.strip()) if u]
         out_dir = (Path(args.output).expanduser() if args.output
-                   else Path("./scraped") / urllib.parse.urlparse(urls[0]).netloc.replace("www.", ""))
+                   else Path(BOOKS_DIR) / urllib.parse.urlparse(urls[0]).netloc.replace("www.", ""))
         scrape_urls(urls, out_dir, args.images, args.cooldown)
     else:
         if not args.url:
             p.error("url(positional) 또는 --urls 중 하나 필요")
         out_dir = (Path(args.output).expanduser() if args.output
-                   else Path("./scraped") / urllib.parse.urlparse(args.url).netloc.replace("www.", ""))
+                   else Path(BOOKS_DIR) / urllib.parse.urlparse(args.url).netloc.replace("www.", ""))
         crawl(args.url, out_dir, args.depth, args.images, args.scope)
 
 if __name__ == "__main__":
