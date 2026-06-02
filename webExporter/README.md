@@ -20,6 +20,7 @@ Most screenshot tools capture the visible area only. This one:
 - **3 viewports in one run** — desktop (1440px), tablet (768px), mobile (390px) at 2x resolution
 - **Crawls the whole site** — follows nav links automatically, up to a configurable page cap
 - **Single PDF output** — no loose files to manage, everything in one document
+- **Asset extraction** — optionally pull every image, web font, and the brand color palette from each page (web swiss-army knife)
 
 ## Install
 
@@ -53,6 +54,9 @@ python webSiteExporter.py https://example.com --keep-frames
 | `--concurrency, -c` | `2` | Parallel URL processing |
 | `--scroll-time, -s` | `60` | Scroll timeout in seconds |
 | `--keep-frames` | off | Keep individual frame JPEGs after PDF build |
+| `--download-images` | off | Download every image (img/srcset/background-image) → `images/<page>/` |
+| `--download-fonts` | off | Download web fonts (@font-face woff/woff2/ttf/otf) → `fonts/<page>/` + `_loaded.txt` |
+| `--extract-colors` | off | Extract rendered color palette (frequency-ranked) → `colors/<page>.json` + `.png` swatch |
 
 ## Environment variables
 
