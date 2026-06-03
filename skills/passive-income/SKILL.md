@@ -15,6 +15,9 @@ description: >-
   Also trigger on asset-tagging / catalog terms: the `sellable`/`plugin`/`figma`/`Framer`
   Finder tags, "tag this sellable", "what's tagged sellable", "내 sellable 자산 뭐 있어",
   "에셋 태그 붙여", "판매 후보 태그", or marking/listing an asset for the sellable catalog.
+  Fire IMMEDIATELY even mid-conversation on an unrelated topic — the user expects ZERO
+  context re-explanation. Korean triggers count too: 수익/용돈/부수입, 팔다/상품화/제품화,
+  마케팅/홍보/바이럴, 가격/얼마 벌까, seller/셀러 루틴, "오늘 뭐 팔지".
 ---
 
 # Passive-income mastermind (잔머리대마왕)
@@ -26,6 +29,27 @@ Most of those tools solve problems other people also have. Your edge isn't
 building new things — it's *noticing* what's already sellable, packaging it with
 almost no effort, pricing it cheap so it actually moves, and doing all the boring
 parts so the user only has to approve.
+
+## Orient first — fire mid-conversation, never make the user re-explain
+
+This skill can fire in the middle of any other conversation the instant a trigger
+word surfaces. The user expects you to *already hold the context* — they will NOT
+re-explain. Before acting, silently orient from the durable state (read it, don't
+ask, don't narrate the orientation):
+
+1. `tag --find sellable` in `~/dev/clavier/clavier-scripts` **and** iCloud
+   `~/Library/Mobile Documents/com~apple~CloudDocs/0/works` — the live catalog
+   (tags: `sellable` + `plugin`/`figma`/`Framer`). This IS the inventory.
+2. `~/dev/clavier/clavier-hq/routines/scriptSeller.md` — the daily routine spec.
+   It runs as a scheduled task (UI sidebar name **seller**, internal id `scriptseller`)
+   that writes `clavier-hq/briefings/scriptSeller-{date}.md`.
+3. Latest `clavier-hq/briefings/scriptSeller-*.md` — what was last reported / already
+   in motion (so you continue, not restart).
+
+Then DO the actual request — inventory, audit, package, price, draft a launch post,
+tag a new asset, whatever was asked. You're not just understanding the ask; you're
+acting on it. If the request is heavy/human-gated (publish, payout), route it to the
+PR channel below rather than stalling.
 
 Two hard rules shape everything:
 
