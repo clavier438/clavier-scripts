@@ -25,9 +25,11 @@ Most screenshot tools capture the visible area only. This one:
 ## Install
 
 ```bash
-pip install playwright pillow
+pip install playwright pillow reportlab
 playwright install chromium
 ```
+
+`reportlab` builds the PDF by streaming one JPEG frame at a time (DCTDecode passthrough — no full-bitmap decode), which keeps memory flat on large, long-scroll sites. Without it the build falls back to Pillow's `save_all`, which holds every decoded frame in memory at once and can OOM on big sites.
 
 ## Usage
 
@@ -81,3 +83,4 @@ exports/
 - Python 3.9+
 - Playwright (`pip install playwright && playwright install chromium`)
 - Pillow (`pip install pillow`)
+- ReportLab (`pip install reportlab`) — preferred PDF builder (low-memory streaming); falls back to Pillow if absent

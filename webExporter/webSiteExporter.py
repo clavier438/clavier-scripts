@@ -2032,19 +2032,23 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
     frames_index.sort(key=lambda e: (vp_rank.get(e["viewport"], 99), e["page_idx"]))
 
     if frames_index:
-        # streaming PDF build — reportlab 이 frame 단위 page write + 즉시 메모리 release.
-        # 기존 PIL save_all 은 모든 frame batch 빌드 → 큰 사이트 OOM (OCI 956MB 사례 확인).
+        # 큰 사이트 OOM 방지: 프레임을 한 장씩만 처리하고, raw 비트맵으로 디코딩하지 않는다.
+        # 기존 PIL save_all 은 모든 프레임을 동시에 디코딩 적재 → 큰 사이트 OOM (OCI 956MB 사례).
         try:
             from reportlab.pdfgen import canvas as _rl_canvas
-            from reportlab.lib.utils import ImageReader as _RLImageReader
             c = _rl_canvas.Canvas(out_pdf)
             for entry in frames_index:
                 w, h = entry["width"], entry["height"]
                 c.setPageSize((w, h))
-                # ImageReader(path) — reportlab 이 lazy 로 stream. 페이지마다 1장 메모리 → release.
-                c.drawImage(_RLImageReader(entry["path"]), 0, 0,
+                # JPEG 파일경로를 그대로 넘긴다 → reportlab 이 DCTDecode 패스스루로 원본 JPEG
+                # 바이트를 디코딩 없이 임베드(pdfdoc.loadImageFromJPEG). ImageReader 로 감싸면
+                # drawImage 가 getRGBData()로 프레임마다 전체 raw RGB 디코딩(긴 스크롤=수백 MB)
+                # → 패스스루가 깨지고 PDF 도 Flate 재인코딩으로 커진다.
+                c.drawImage(entry["path"], 0, 0,
                             width=w, height=h, preserveAspectRatio=False)
                 c.showPage()
+            # reportlab 은 압축된 페이지 스트림을 save() 까지 메모리에 모은다(디스크 점진 flush X).
+            # 단 raw 비트맵을 동시에 들지 않으므로 PIL 경로 OOM 원인(전체 프레임 디코딩 적재)은 제거됨.
             c.save()
             kb = os.path.getsize(out_pdf) // 1024
             log(f"\n✓ 단일 PDF: {os.path.basename(out_pdf)}  ({len(frames_index)} 페이지, {kb}KB) [streaming]")
