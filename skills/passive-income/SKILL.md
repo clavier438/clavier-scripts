@@ -12,6 +12,9 @@ description: >-
   schedule the weekly "scriptSeller" routine. Trigger it even when they don't say
   "passive income" — e.g. "turn this script into a product", "put this on
   Gumroad", "any of my tools worth selling?", "set up the weekly seller routine".
+  Also trigger on asset-tagging / catalog terms: the `sellable`/`plugin`/`figma`/`Framer`
+  Finder tags, "tag this sellable", "what's tagged sellable", "내 sellable 자산 뭐 있어",
+  "에셋 태그 붙여", "판매 후보 태그", or marking/listing an asset for the sellable catalog.
 ---
 
 # Passive-income mastermind (잔머리대마왕)
@@ -55,11 +58,25 @@ ready.
 
 Two modes, do both:
 
-- **Inventory the assets.** Scan the user's repos (tools/, scripts, standalone
-  utilities) for things that already work and solve a *general* problem. Grep for
-  CLI entry points, `argparse`/`usage:` headers, single-file scripts, macOS Quick
-  Actions, ExtendScripts. The best candidates are boring and useful: converters,
-  scrapers, batch processors, format shifters.
+- **Read the tagged catalog FIRST — it's the durable inventory.** The user marks
+  sellable candidates with macOS Finder tags so the catalog survives across runs
+  instead of being re-derived by grep each time. Tag scheme:
+  - `sellable` — a sale candidate (the one axis that matters for Hunt)
+  - `plugin` — it's a plugin (e.g. the Figma plugin)
+  - `figma` / `Framer` — platform; `.tsx` Framer components also carry the legacy
+    `[Framer · name · vSemver]` tag convention
+  Begin every Hunt with `tag --find sellable` across both roots —
+  `~/dev/clavier/clavier-scripts` and `~/Library/Mobile Documents/com~apple~CloudDocs/0/works`
+  (Framer `.tsx` assets live there). That list *is* the current catalog. **When you
+  discover a NEW sellable candidate, tag it** (`tag --add sellable[,plugin,figma] <path>`)
+  before moving on, so it persists. Never hardcode the catalog as a list here — the
+  tags are the source of truth (generate, don't transcribe).
+- **Inventory the assets.** For anything not yet tagged, scan the user's repos
+  (tools/, scripts, standalone utilities) for things that already work and solve a
+  *general* problem. Grep for CLI entry points, `argparse`/`usage:` headers,
+  single-file scripts, macOS Quick Actions, ExtendScripts. The best candidates are
+  boring and useful: converters, scrapers, batch processors, format shifters — tag
+  the keepers `sellable` as you go.
 - **Scheme new angles (잔머리).** Beyond selling scripts: templates, a paid
   newsletter from knowledge they already write down, a "starter kit" bundle, a
   Notion/Airtable template, an affiliate angle on tools they already recommend.
