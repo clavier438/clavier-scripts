@@ -168,6 +168,38 @@ Airtable Scripting Extension 작업 시 — **`capabilities/airtable-scripting.m
 
 위반 시 사용자 폭발 (2026-05-04 인용): "*책임지는 새끼 없이 오합지졸로 떠돌아다녀서 잘하고있는지 확인조차 있는지없는지도몰랐다*". DECISIONS.md 2026-05-04 ADR "STL 원칙 + Closer 신설" 참조.
 
+## 근본 3분류 agent hook — 근거 / 자리 / 책임 (2026-05-29~) ★ hook 강제
+
+반복 실수를 *근본 3분류* 로 환원, hook event 2개에 박음 (DECISIONS 5/29 ADR):
+
+| 근본 실수 | 교정 = | hook (event) | 흡수한 메모리 |
+|---|---|---|---|
+| **추측** (현실 근거 없이) | **근거** Grounding | `before-action` (PreToolUse) | reference_class / docs_first / verify_install / automation_order / data_source / How Big Things Get Done |
+| **흩뜨림** (잘못된 자리·구조) | **자리** Placement | `before-action` (PreToolUse) | 단일뇌 / SvelteKit / GitHub+Doppler SSOT / 아키텍처 의도 / commit big-picture |
+| **떠넘김** (판단·완수 회피) | **책임** Ownership | `before-reply` (Stop) | no_quick_options / ownership / followthrough |
+
+- `pre-tool-use.agent-before-action.md` — 행동 직전. 근거(추측 아닌가) + 자리(올바른 위치인가) 2 축.
+- `stop.agent-before-reply.md` — 응답 직전. 책임(떠넘기지 않았나) 1 축. 가치관 메모리 로드 후 derive 강제.
+
+verifier = 별도 Claude 인스턴스 (메인의 "사용자 만족 동기" 비공유). 컨벤션 외 파일 = drift. 8 subagent fire → 2 환원 (`feedback_single_solution` 적용).
+
+---
+
+
+## 외부 도구 코드 작성 전 reference-class 의무 (2026-05-28~) ★ hook 강제
+
+**Framer / Notion / Airtable / Cloudflare / 3rd-party SDK 코드 작성 시점에 reference-class 탐색 (WebSearch/WebFetch 로 working case + URL 인용) 이 트랜스크립트에 없으면 도구 호출 자체가 차단됨.**
+
+차단 메커니즘 — **reference-class agent hook**:
+- PreToolUse 매처: `Write|Edit|mcp__design-bridge__codeFiles_(setContent|create)`
+- 별도 Claude 인스턴스 (verifier subagent) 가 매번 트랜스크립트 검사
+- WebSearch/WebFetch ≥2 + URL 인용 ≥1 + 30자 본문 미충족 → `permissionDecision: deny`
+- `clavier-scripts/tools/claude-hooks/pre-tool-use.agent-reference-class.md` 가 verifier prompt 정의 (bootstrap.sh Step 5b 가 settings.json 에 자동 등록)
+
+이 hook 은 메모리 권유 (`feedback_reference_class.md`) 의 의지 의존 한계를 닫기 위해 박힘 (2026-05-28 Framer 사건 처방). 권유 영역 → 구조 영역. DECISIONS.md 2026-05-28 ADR + CONCEPTS.md #17 "반복 실수 차단의 구조 패턴" 참조.
+
+---
+
 ## 능력 떠넘기기 전 self-check (2026-05-04~, B1 병목 차단)
 
 **"사용자가 직접 하셔야 합니다" 발화 전 반드시 self-check.** 어제 이 패턴으로 사용자가 폭발 — 사실 Claude 가 직접 가능했던 것을 떠넘김.

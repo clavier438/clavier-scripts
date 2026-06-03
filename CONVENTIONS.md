@@ -139,6 +139,38 @@ iCloud `clavier.env` 직접 편집 금지 — `doppler-mirror-icloud`로 자동 
 
 ---
 
+## 근본 3분류 agent hook — 근거 / 자리 / 책임 (2026-05-29~) ★ hook 강제
+
+반복 실수를 *근본 3분류* 로 환원, hook event 2개에 박음 (DECISIONS 5/29 ADR):
+
+| 근본 실수 | 교정 = | hook (event) | 흡수한 메모리 |
+|---|---|---|---|
+| **추측** (현실 근거 없이) | **근거** Grounding | `before-action` (PreToolUse) | reference_class / docs_first / verify_install / automation_order / data_source / How Big Things Get Done |
+| **흩뜨림** (잘못된 자리·구조) | **자리** Placement | `before-action` (PreToolUse) | 단일뇌 / SvelteKit / GitHub+Doppler SSOT / 아키텍처 의도 / commit big-picture |
+| **떠넘김** (판단·완수 회피) | **책임** Ownership | `before-reply` (Stop) | no_quick_options / ownership / followthrough |
+
+- `pre-tool-use.agent-before-action.md` — 행동 직전. 근거(추측 아닌가) + 자리(올바른 위치인가) 2 축.
+- `stop.agent-before-reply.md` — 응답 직전. 책임(떠넘기지 않았나) 1 축. 가치관 메모리 로드 후 derive 강제.
+
+verifier = 별도 Claude 인스턴스 (메인의 "사용자 만족 동기" 비공유). 컨벤션 외 파일 = drift. 8 subagent fire → 2 환원 (`feedback_single_solution` 적용).
+
+---
+
+
+## 외부 도구 코드 작성 전 reference-class 의무 (2026-05-28~) ★ 구조 강제
+
+**Framer / Notion / Airtable / Cloudflare / 3rd-party SDK 코드 작성 = reference-class 탐색 (WebSearch/WebFetch ≥ 2 + URL 인용 ≥ 1 + 30자 본문) 이 트랜스크립트에 없으면 도구 호출 자체가 차단됨.**
+
+차단 메커니즘 = **reference-class agent hook** (clavier-hq DECISIONS 5/28 ADR):
+- `clavier-scripts/tools/claude-hooks/pre-tool-use.agent-reference-class.md` 가 verifier subagent prompt
+- PreToolUse 매처: `Write|Edit|mcp__design-bridge__codeFiles_(setContent|create)`
+- 별도 Claude 인스턴스가 트랜스크립트 검사 후 `permissionDecision: allow|deny`
+- 차단 사유 표시되면 → WebSearch/WebFetch 먼저 + URL+30자 인용 명시 후 재시도
+
+이 hook 은 메모리 권유 (`feedback_reference_class.md`) 의 의지 의존 한계를 닫음. 5/28 Framer FractionPad 사건 (2h 손실) 처방.
+
+---
+
 ## 결정 전파 자동 검증 (Defense in Depth, 2026-04-28~)
 
 clavier-hq `DECISIONS.md`에 새 ADR 추가 시 **즉시** `doc-coverage <개념>` 또는 `doc-coverage --recent` 호출. ❌ 표시된 12개 표준 문서 모두 갱신 후 다음 작업 시작.

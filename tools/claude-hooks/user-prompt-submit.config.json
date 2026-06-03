@@ -68,7 +68,13 @@
   },
   {
     "domain": "doppler",
-    "keywords": ["doppler", "doppler.*config", "doppler.*secret", "doppler run", "DOPPLER_TOKEN"],
+    "keywords": [
+      "doppler", "doppler.*config", "doppler.*secret", "doppler run", "DOPPLER_TOKEN",
+      "API\\s*키", "api\\s*key", "토큰", "token", "비밀번호", "password",
+      "시크릿", "secret\\s*값", "키.*알려", "키.*어디", "키.*없",
+      "환경\\s*변수", "env\\.md", "\\$\\{?[A-Z_]+_TOKEN", "\\$\\{?[A-Z_]+_KEY",
+      "AIRTABLE_PAT", "FRAMER_TOKEN", "CLOUDFLARE_API_TOKEN", "GITHUB_TOKEN"
+    ],
     "files": [
       "clavier-scripts/tools/capabilities/doppler.md"
     ]
