@@ -1878,7 +1878,7 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
         return ok, fail, captured
 
 # ── 메인 ──────────────────────────────────────────────────
-async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False, download_images: bool = False, download_fonts: bool = False, extract_colors: bool = False):
+async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False, download_images: bool = False, download_fonts: bool = False, extract_colors: bool = False, urls: list = None):
     os.makedirs(output_dir, exist_ok=True)
 
     # site_name + 로그 파일: 같은 netloc 의 sub-path base 도 충돌 없도록 base_url 전체로 슬러그
@@ -1925,7 +1925,11 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
         )
         await ctx.add_init_script(STEALTH_INIT_SCRIPT)
         pg        = await ctx.new_page()
-        pages     = await discover_pages(pg, base_url, max_pages)
+        if urls:
+            pages = urls
+            log(f"  [urls] discover 크롤 스킵 — 지정 {len(urls)}개 URL 직접 캡처")
+        else:
+            pages = await discover_pages(pg, base_url, max_pages)
         await ctx.close()
         await browser_d.close()
 
@@ -2085,6 +2089,7 @@ if __name__ == "__main__":
     parser.add_argument("--download-images",   action="store_true",     help="(부가) 각 페이지의 모든 이미지(img/srcset 최대/background-image)를 images/<page>/ 에 다운로드")
     parser.add_argument("--download-fonts",    action="store_true",     help="(부가) 각 페이지의 웹폰트(@font-face woff/woff2/ttf/otf)를 fonts/<page>/ 에 다운로드 + _loaded.txt")
     parser.add_argument("--extract-colors",    action="store_true",     help="(부가) 각 페이지의 렌더 컬러를 빈도순 브랜드 팔레트로 추출 → colors/<page>.json + .png 스와치")
+    parser.add_argument("--urls",              default=None,            help="(레이아웃 종류별 캡처) discover 크롤을 스킵하고 콤마구분 URL 리스트만 캡처 — 한 종류 대표 N개를 직접 지정할 때")
     args = parser.parse_args()
 
     if not urlparse(args.url).scheme:
@@ -2092,4 +2097,5 @@ if __name__ == "__main__":
         sys.exit(1)
 
     out = args.output or os.path.join(BOOKS_DIR, urlparse(args.url).netloc.replace("www.", ""))
-    asyncio.run(run(args.url, out, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, args.download_images, args.download_fonts, args.extract_colors))
+    url_list = [u.strip() for u in args.urls.split(",") if u.strip()] if args.urls else None
+    asyncio.run(run(args.url, out, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, args.download_images, args.download_fonts, args.extract_colors, url_list))
