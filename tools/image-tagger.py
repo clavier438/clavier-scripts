@@ -66,6 +66,12 @@ AXES = {
             "warm": "웜", "cool": "쿨", "neutral": "뉴트럴", "muted": "뮤트",
             "vivid": "비비드", "monochrome": "모노", "earthy": "어시", "pastel": "파스텔",
         },
+        # macOS Finder 태그 색 인덱스 (0=none,1=gray,2=green,3=purple,4=blue,5=yellow,6=red,7=orange)
+        # 톤만 색을 입혀 파인더 사이드바/색점에서 한눈에 구분. neutral·monochrome 은 무채라 둘 다 gray.
+        "colors": {
+            "warm": 7, "cool": 4, "neutral": 1, "muted": 5,
+            "vivid": 6, "monochrome": 1, "earthy": 2, "pastel": 3,
+        },
     },
     "finish": {                 # 색상이 아닌 후처리 기법 (톤과 직교)
         "prefix": "후보정",
@@ -224,7 +230,8 @@ def call_vision(jpeg_bytes, model, api_key, tool, retries=4):
 
 
 def result_to_tags(result):
-    """classify_photo.input → '피사체:공간' 형태 한글 Finder 태그 리스트."""
+    """classify_photo.input → '피사체:공간' 형태 한글 Finder 태그 리스트.
+    색이 정의된 축(톤)은 '톤:웜\\n7' 처럼 색 인덱스를 붙여 파인더에서 색점으로 표시."""
     tags = []
     for axis, conf in AXES.items():
         val = result.get(axis)
@@ -232,7 +239,11 @@ def result_to_tags(result):
         for v in vals:
             ko = conf["ko"].get(v)
             if ko:
-                tags.append(f"{conf['prefix']}:{ko}")
+                tag = f"{conf['prefix']}:{ko}"
+                color = conf.get("colors", {}).get(v)
+                if color:
+                    tag += f"\n{color}"
+                tags.append(tag)
     return tags
 
 
