@@ -90,6 +90,27 @@ AXES = {
             "layered": "레이어드", "symmetrical": "대칭",
         },
     },
+    # ── 계산 축 (비전 아님 — 이미지/캡처 메타에서 도출, build_tool 스키마에서 제외) ──
+    "ratio": {                  # 비율 — 표시(렌더) 비율 우선, 없으면 원본 픽셀 비율
+        "prefix": "비율",
+        "multi": False,
+        "computed": True,
+        "ko": {
+            "square": "정사각", "portrait": "세로", "tall": "긴세로",
+            "landscape": "가로", "wide": "와이드", "pano": "파노라마",
+        },
+    },
+    "webfx": {                  # 웹단(CSS)에서 가한 보정 — 다운로드 파일엔 없음. 캡처 시 webExporter 가 기록.
+        "prefix": "웹보정",
+        "multi": True,
+        "computed": True,
+        "ko": {
+            "grayscale": "흑백", "contrast": "고대비", "low_contrast": "저대비",
+            "bright": "밝기", "blur": "블러", "sepia": "세피아",
+            "saturate": "채도강조", "desaturate": "채도감소",
+            "blend": "블렌드", "translucent": "반투명", "overlay": "오버레이",
+        },
+    },
 }
 
 
@@ -97,6 +118,8 @@ def build_tool():
     """강제 호출할 tool 정의 — input_schema enum 으로 출력 vocab 고정."""
     props = {}
     for axis, conf in AXES.items():
+        if conf.get("computed"):     # 비율·웹보정은 비전이 아니라 계산 → 스키마 제외
+            continue
         vals = list(conf["ko"].keys())
         if conf["multi"]:
             props[axis] = {
@@ -115,7 +138,7 @@ def build_tool():
         "input_schema": {
             "type": "object",
             "properties": props,
-            "required": list(AXES.keys()),
+            "required": [a for a, c in AXES.items() if not c.get("computed")],
         },
     }
 
@@ -163,7 +186,8 @@ def prep_image(path, max_edge=MAX_EDGE):
         img = Image.open(path)
         img = img.convert("RGB")
     except Exception:
-        return None, []
+        return None, [], None
+    orig = img.size            # 원본 (w,h) — 비율 계산용 (thumbnail 전)
     img.thumbnail((max_edge, max_edge))
     buf = io.BytesIO()
     img.save(buf, "JPEG", quality=82, optimize=True)
@@ -178,7 +202,59 @@ def prep_image(path, max_edge=MAX_EDGE):
             dom.append(f"#{r:02x}{g:02x}{b:02x}")
     except Exception:
         pass
-    return buf.getvalue(), dom
+    return buf.getvalue(), dom, orig
+
+
+def ratio_bucket(size):
+    """(w,h) → 비율 en 값. 표시 비율이 있으면 그걸로(레이아웃 크롭), 없으면 원본."""
+    if not size or not size[0] or not size[1]:
+        return None
+    r = size[0] / size[1]
+    if r < 0.66: return "tall"
+    if r < 0.9:  return "portrait"
+    if r <= 1.1: return "square"
+    if r <= 1.5: return "landscape"
+    if r <= 2.1: return "wide"
+    return "pano"
+
+
+def load_webfx(root):
+    """webExporter 가 캡처 시 기록한 _webfx.json (filename→{dw,dh,filter,blend,opacity,overlay}) 로드."""
+    p = os.path.join(root, "_webfx.json")
+    if os.path.exists(p):
+        try:
+            return json.load(open(p, encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def webfx_values(fx):
+    """CSS fx 메타 → 웹보정 en 값. 보정이 *파일이 아니라 웹(컴포넌트)* 에 있을 때 잡는다."""
+    if not fx:
+        return []
+    out, flt = [], (fx.get("filter") or "").lower()
+    def num(fn):
+        m = re.search(fn + r"\(([\d.]+)", flt)
+        return float(m.group(1)) if m else None
+    if "grayscale(" in flt and (num("grayscale") or 0) > 0.5: out.append("grayscale")
+    c = num("contrast")
+    if c is not None and c > 1.15: out.append("contrast")
+    if c is not None and c < 0.85: out.append("low_contrast")
+    b = num("brightness")
+    if b is not None and abs(b - 1) > 0.15: out.append("bright")
+    if "blur(" in flt: out.append("blur")
+    if "sepia(" in flt and (num("sepia") or 0) > 0.3: out.append("sepia")
+    s = num("saturate")
+    if s is not None and s > 1.2: out.append("saturate")
+    if s is not None and s < 0.8: out.append("desaturate")
+    if (fx.get("blend") or "normal").lower() not in ("normal", ""): out.append("blend")
+    try:
+        if fx.get("opacity") is not None and float(fx["opacity"]) < 0.92: out.append("translucent")
+    except Exception:
+        pass
+    if fx.get("overlay"): out.append("overlay")
+    return out
 
 
 def call_vision(jpeg_bytes, model, api_key, tool, retries=4):
@@ -305,9 +381,10 @@ def main():
           f"{', dry-run' if args.dry_run else ''})\n")
 
     records, in_tok, out_tok, skipped, failed = [], 0, 0, 0, 0
+    webfx_map = load_webfx(root)             # 웹단 보정 메타 (webExporter 캡처 시 기록, 없으면 {})
     for i, path in enumerate(images, 1):
         rel = os.path.relpath(path, root)
-        jpeg, dom = prep_image(path, max_edge)   # dom(지배색)은 양쪽 모드 다 유용
+        jpeg, dom, size = prep_image(path, max_edge)   # dom=지배색, size=원본(w,h)
         if jpeg is None:
             print(f"  {i:>3}/{len(images)} ⊘ 열기 실패(스킵) {rel}"); skipped += 1; continue
         if precomputed is not None:
@@ -322,6 +399,11 @@ def main():
                 print(f"  {i:>3}/{len(images)} ✗ {rel} — {e}"); failed += 1; continue
         in_tok += usage.get("input_tokens", 0)
         out_tok += usage.get("output_tokens", 0)
+        # 계산 축 머지: 비율(표시 비율 우선, 없으면 원본) + 웹보정(CSS fx 메타)
+        fx = webfx_map.get(os.path.basename(path)) or {}
+        dsize = (fx["dw"], fx["dh"]) if fx.get("dw") and fx.get("dh") else size
+        result["ratio"] = ratio_bucket(dsize)
+        result["webfx"] = webfx_values(fx)
         tags = result_to_tags(result)
         if not args.dry_run:
             merged = merge_tags(get_finder_tags(path), tags)
@@ -350,7 +432,7 @@ def main():
             json.dump(records, f, ensure_ascii=False, indent=2)
         with open(os.path.join(root, "_tags.csv"), "w", encoding="utf-8", newline="") as f:
             w = csv.writer(f)
-            w.writerow(["file", "subject", "tone", "finish", "composition", "dominant_hex"])
+            w.writerow(["file", "subject", "tone", "finish", "composition", "ratio", "webfx", "dominant_hex"])
             for r in records:
                 w.writerow([
                     r["file"],
@@ -358,6 +440,8 @@ def main():
                     r.get("tone", ""),
                     "|".join(r.get("finish", []) if isinstance(r.get("finish"), list) else [r.get("finish", "")]),
                     r.get("composition", ""),
+                    r.get("ratio", ""),
+                    "|".join(r.get("webfx", []) if isinstance(r.get("webfx"), list) else [r.get("webfx", "")]),
                     "|".join(r.get("dominant_hex", [])),
                 ])
         with open(os.path.join(root, "_tag-summary.json"), "w", encoding="utf-8") as f:
