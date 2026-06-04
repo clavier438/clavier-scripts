@@ -1,0 +1,15 @@
+name,url,note
+byredo,https://www.byredo.com/,
+aesop,https://www.aesop.com/,BLOCKED: Cloudflare bot challenge (403 cf-mitigated) — fast/headless 둘 다 실패. 실브라우저 캡처 필요
+aman,https://www.aman.com/,
+rapha,https://www.rapha.cc/,
+muji,https://www.muji.com/,BLOCKED: HTTP/2 stream reset (봇 핑거프린트 차단) — 실브라우저 캡처 필요
+skims,https://skims.com/,
+mtmlabo,https://www.mtmlabo.com/,
+mukayu,https://mukayu.com/,UNREACHABLE: :443 connect 실패 (103.5.178.60, geo/IP 차단 추정 · 無何有 ryokan JP)
+lemaire,https://www.lemaire.fr/,
+filippa-k,https://www.filippa-k.com/us/en/fiber-traceability-initiative.html,
+sigma,https://www.sigma-global.com/en/,
+leica,https://www.leica-camera.com/,
+gajoen,https://gajoen.jp/en/cuisine/,
+milestonehotel,https://milestonehotel.com/,
