@@ -15,6 +15,7 @@
 - [레퍼런스: scheduled-tasks sleep silent fail](reference_scheduled_tasks_sleep_fail.md) — macOS sleep 중 cron 발화 못 함, briefings/* + pmset 으로 진단, pmset repeat 으로 해결
 - [피드백: 현재 상태는 묻기 전에 먼저](feedback_status_upfront.md) — 도구/브리핑 설계 시 상태를 별도 조회 뒤에 숨기지 말고 진입 즉시 표시
 - [피드백: git 기능 적극 제안](feedback_git_workflow.md) — 브랜치/태그/stash 등을 사용자가 묻기 전에 먼저 제안할 것
+- [피드백: 브랜치 이름 짓기](feedback_branch_naming.md) — 기능 확정 전엔 틀린 이름 박지 말고 중립 임시명으로, 기능 나오면 리네임
 - [피드백: 깃 커밋 범위](feedback_git.md) — git commit은 관리 repo(scripts/oci/platform-workers)에 한정
 - [피드백: platform-workers 배포·머지 프로세스](feedback_deploy_workflow.md) — 브랜치→커밋→수동배포 검증(mukayu 먼저)→main 머지(CI 재배포)
 - [피드백: Clean Architecture 원칙](feedback_clean_architecture.md) — SOLID 원칙 적용, 비슷한 기능은 같은 방식으로 구현, Claude가 스스로 점검해서 먼저 제안
@@ -24,6 +25,7 @@
 - [피드백: 데이터 소스 직접 읽기](feedback_data_source.md) — CSV/JSON 파일이 있으면 하드코딩 말고 파일 파싱해서 사용할 것
 - [피드백: 공식 문서 우선 원칙](feedback_docs_first.md) — 새 API 연동 시 공식 docs/예제 먼저, 바퀴 재발명 금지
 - [피드백: 레퍼런스 클래스 탐색 방법론](feedback_reference_class.md) — 구현 전 동작 중인 케이스 먼저 탐색, 소스코드 직접 획득 우선, 한계 평가 후 합의하고 시작
+- [피드백: 스킬 먼저 확인](feedback_check_skills_first.md) — 다단계 작업 손코딩 전 available skills + ~/.claude/skills + ~/bin 먼저 확인 (Dyakova run 교정)
 - [피드백: 설치 전 타겟 지원 검증](feedback_verify_before_install.md) — brew/npm/pip 설치 직전 그 도구가 사용자 타겟(앱/플랫폼) 지원하는지 docs 1회 검증
 - [사용자 프로필](user_profile.md) — 역할, 목표, 작업 스타일 (응대 방식 조정용)
 - [프로젝트: hotelAgency_ops](project_hotel_agency_ops.md) — Notion→Airtable 마이그레이션, Worker 배포 완료, Framer 연동 대기 중
@@ -31,3 +33,4 @@
 - [인프라: Airtable 파이프라인](project_airtable_pipeline.md) — OCI→GDrive 싱크, schema.json 포맷, 클로드 워크스페이스 ID
 - [인프라: 보유 인프라 현황](project_infrastructure.md) — OCI/GCloud/Cloudflare/Scriptable 조합 제안 기준
 - [레퍼런스: Google Drive API](reference_google_drive_api.md) — OAuth 자격증명 위치, refresh token 재사용 방법
+- [제약: Anthropic API 크레딧 부족](project_anthropic_key_no_credits.md) — Doppler 키 잔액 부족, 비전/LLM 직접호출 막힘 → 세션/subagent `--from-json` 우회
