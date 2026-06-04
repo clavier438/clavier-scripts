@@ -55,15 +55,20 @@ VIEWPORT_CONFIGS = [(k, v) for k, v in VIEWPORTS.items() if k not in _SKIP_VIEWP
 LOAD_RETRY_ATTEMPTS = int(os.environ.get("WEBEXP_LOAD_RETRY", "1"))   # 차단/timeout URL 빠르게 skip
 LOAD_TIMEOUT_MS     = int(os.environ.get("WEBEXP_LOAD_TIMEOUT_MS", "30000"))  # default 30s (이전 120s)
 LOAD_RETRY_BACKOFF  = [0.0, 5.0, 15.0]  # seconds before each attempt (첫 시도 즉시)
-URL_START_JITTER    = float(os.environ.get("WEBEXP_URL_JITTER", "2.0"))  # URL 진입 시 0~N초 랜덤 stagger (rate limit 회피)
-VIEWPORT_STAGGER    = float(os.environ.get("WEBEXP_VIEWPORT_STAGGER", "1.0"))  # 같은 URL 의 viewport 사이 sleep (rate limit 회피)
+# sequential 모드 (현재 기본): 서버는 요청을 1개씩 받으므로 큰 jitter 불필요.
+# 병렬 크롤링이나 공격적 차단 사이트엔 WEBEXP_URL_JITTER=2.0 으로 올려서 사용.
+URL_START_JITTER    = float(os.environ.get("WEBEXP_URL_JITTER", "0.5"))  # URL 진입 시 0~N초 랜덤 stagger (rate limit 회피)
+VIEWPORT_STAGGER    = float(os.environ.get("WEBEXP_VIEWPORT_STAGGER", "0.3"))  # 같은 URL 의 viewport 사이 sleep (rate limit 회피)
 
 # ── 메모리 워터마크 (OCI 956MB OOM 방어) ──────────────────────
 # streaming 패턴: URL 1개 처리 → 즉시 jpeg 디스크 flush + image close → 다음.
 # /proc/meminfo MemAvailable 폴링. floor 도달 = browser 재시작 + GC + 회복까지 wait.
-# 비-Linux 면 자동 비활성 (floor=0). MEM_FLOOR_MB 직접 지정하면 PCT 무시.
+# MEM_FLOOR_MB 직접 지정하면 PCT 무시.
+# macOS: 20% × 16GB = 3276MB은 Chrome 닫아도 항상 floor 아래 → 매 URL마다 60s wait 유발.
+#        macOS는 inactive 페이지를 압력 즉시 회수하므로 10%로 충분.
 WEBEXP_MEM_FLOOR_MB      = int(os.environ.get("WEBEXP_MEM_FLOOR_MB", "0"))    # 절대 floor (0=auto)
-WEBEXP_MEM_FLOOR_PCT     = float(os.environ.get("WEBEXP_MEM_FLOOR_PCT", "20"))  # MemTotal × N%
+_default_floor_pct       = "10" if sys.platform == "darwin" else "20"
+WEBEXP_MEM_FLOOR_PCT     = float(os.environ.get("WEBEXP_MEM_FLOOR_PCT", _default_floor_pct))
 WEBEXP_PAGES_PER_RESTART = int(os.environ.get("WEBEXP_PAGES_PER_RESTART", "5"))  # N URL 마다 chrome 재기동
 WEBEXP_URL_HARD_TIMEOUT_S = int(os.environ.get("WEBEXP_URL_HARD_TIMEOUT_S", "0"))  # per-URL 전체 watchdog 초 (0=viewport수 기반 auto). hang 시 그 URL 통째 skip.
 WEBEXP_MEM_WAIT_S        = float(os.environ.get("WEBEXP_MEM_WAIT_S", "5"))    # floor 미만 시 polling interval
@@ -232,6 +237,13 @@ async def wait_for_memory(label: str = "") -> bool:
     floor_mb = _MEM_FLOOR_KB // 1024
     log(f"  [mem] floor 도달 — avail {avail_mb}MB < {floor_mb}MB ({label}) — GC+wait")
     import gc as _gc
+    _gc.collect()
+    # macOS: OS가 inactive 페이지를 압력 즉시 회수 — polling이 오히려 다른 프로세스에 메모리
+    # 점유 시간을 주므로 역효과. 3s flat wait 후 진행 (실측: 60s 기다려도 회복 안 되는 케이스 존재).
+    if sys.platform == "darwin":
+        await asyncio.sleep(3.0)
+        log(f"  [mem] resume — avail {mem_available_kb() // 1024}MB after 3s (macOS flat wait)")
+        return True
     waited = 0.0
     while mem_available_kb() < _MEM_FLOOR_KB and waited < WEBEXP_MEM_WAIT_MAX_S:
         _gc.collect()
