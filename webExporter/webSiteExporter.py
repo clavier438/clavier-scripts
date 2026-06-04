@@ -1492,38 +1492,49 @@ async def capture_viewport(page, vp_name: str, vp_conf: dict) -> Image.Image:
 # ── URL 하나 처리 ─────────────────────────────────────────
 async def _download_page_images(page, output_dir: str, base_name: str) -> int:
     """페이지의 모든 이미지(img src/currentSrc + picture srcset 최대 + CSS background-image)를
-    다운로드. page.request 사용 → 페이지 쿠키/UA 유지(봇 차단 회피). images/<page>/ 에 저장."""
+    다운로드. page.request 사용 → 페이지 쿠키/UA 유지(봇 차단 회피). images/<page>/ 에 저장.
+    + 각 이미지의 *웹단 CSS fx*(filter/mix-blend-mode/opacity)·렌더 크기를 _webfx.json 에 기록 —
+    보정이 파일이 아니라 컴포넌트(CSS)에 있을 때 image-tagger 가 '웹보정'·표시'비율' 로 잡게."""
     try:
-        img_urls = await page.evaluate(r"""() => {
-            const urls = new Set();
+        fx_map = await page.evaluate(r"""() => {
+            const map = {};
             const abs = (u) => { try { return new URL(u, location.href).href; } catch(e) { return null; } };
-            document.querySelectorAll('img').forEach(img => {
-                const s = img.currentSrc || img.src;
-                if (s && !s.startsWith('data:')) { const a = abs(s); if (a) urls.add(a); }
-            });
+            const rank = (f) => (f.filter && f.filter !== 'none' ? 2 : 0)
+                              + (f.blend && f.blend !== 'normal' ? 1 : 0) + (f.opacity < 1 ? 1 : 0);
+            const put = (u, el) => {
+                if (!u || u.startsWith('data:')) return;
+                const a = abs(u); if (!a) return;
+                const cs = getComputedStyle(el); const r = el.getBoundingClientRect();
+                const f = { filter: cs.filter, blend: cs.mixBlendMode, opacity: parseFloat(cs.opacity),
+                            dw: Math.round(r.width), dh: Math.round(r.height) };
+                if (!map[a] || rank(f) > rank(map[a])) map[a] = f;   // 같은 url 이면 더 보정된 쪽 채택
+            };
+            document.querySelectorAll('img').forEach(img => put(img.currentSrc || img.src, img));
             document.querySelectorAll('source[srcset]').forEach(src => {
                 const cands = src.srcset.split(',').map(x => x.trim().split(/\s+/)[0]).filter(Boolean);
-                if (cands.length) { const a = abs(cands[cands.length-1]); if (a && !a.startsWith('data:')) urls.add(a); }
+                if (cands.length) put(cands[cands.length-1], src.parentElement || src);
             });
             document.querySelectorAll('*').forEach(el => {
                 const bg = getComputedStyle(el).backgroundImage;
                 if (bg && bg !== 'none') {
                     const re = /url\((["']?)([^"')]+)\1\)/g; let m;
                     while ((m = re.exec(bg)) !== null) {
-                        if (m[2] && !m[2].startsWith('data:')) { const a = abs(m[2]); if (a) urls.add(a); }
+                        if (m[2] && !m[2].startsWith('data:')) put(m[2], el);
                     }
                 }
             });
-            return [...urls];
+            return map;
         }""")
     except Exception:
         return 0
+    img_urls = list(fx_map.keys())
     if not img_urls:
         return 0
     img_dir = os.path.join(output_dir, "images", base_name)
     os.makedirs(img_dir, exist_ok=True)
     saved = 0
     seen: set = set()
+    webfx: dict = {}
     for u in img_urls:
         try:
             resp = await page.request.get(u, timeout=20000)
@@ -1542,10 +1553,16 @@ async def _download_page_images(page, output_dir: str, base_name: str) -> int:
             seen.add(fname)
             with open(os.path.join(img_dir, fname), "wb") as f:
                 f.write(body)
+            webfx[fname] = fx_map.get(u, {})    # 파일명 → 웹단 fx (image-tagger 가 읽음)
             saved += 1
         except Exception:
             pass
-    log(f"  [images] {saved}/{len(img_urls)}장 → images/{base_name}/")
+    try:
+        with open(os.path.join(img_dir, "_webfx.json"), "w", encoding="utf-8") as f:
+            json.dump(webfx, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    log(f"  [images] {saved}/{len(img_urls)}장 → images/{base_name}/ (+_webfx.json)")
     return saved
 
 async def export_url(url: str, output_dir: str, scroll_time: int,
