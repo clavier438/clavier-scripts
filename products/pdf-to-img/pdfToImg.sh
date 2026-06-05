@@ -28,7 +28,7 @@ EOF
 }
 
 # ── 의존성 확인 ───────────────────────────────────────────────────────────────
-if ! command -v convert &>/dev/null; then
+if ! command -v magick &>/dev/null; then
   echo "오류: ImageMagick이 설치되어 있지 않습니다." >&2
   echo "      설치 방법: brew install imagemagick ghostscript" >&2
   exit 1
@@ -44,7 +44,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     -f|--format)
       [[ -z "${2-}" || "${2}" == -* ]] && { echo "오류: $1 뒤에 포맷을 지정하세요." >&2; exit 1; }
-      format="${2:l}"
+      format="${2,,}"
       shift 2 ;;
     -o|--output)
       [[ -z "${2-}" || "${2}" == -* ]] && { echo "오류: $1 뒤에 디렉토리를 지정하세요." >&2; exit 1; }
@@ -96,18 +96,18 @@ for file in "$@"; do
   fi
 
   # 확장자가 .pdf 가 아니면 건너뜀 (대소문자 무시)
-  if [[ "${file:l}" != *.pdf ]]; then
+  if [[ "${file,,}" != *.pdf ]]; then
     echo "[건너뜀] PDF 아님: $file"
     (( skipped++ )); continue
   fi
 
-  base="${file:t:r}"                         # 확장자를 제거한 파일명
-  outdir="${output_dir:-${file:h}}"          # 출력 디렉토리 (미지정 시 원본 위치)
+  base="$(basename "$file" .pdf)"            # 확장자를 제거한 파일명
+  outdir="${output_dir:-$(dirname "$file")}" # 출력 디렉토리 (미지정 시 원본 위치)
   out="${outdir}/${base}.${format}"          # 출력 경로 prefix
 
   echo "[변환 중] $file  →  $outdir/${base}[...].${format}"
 
-  if convert -density "$density" "$file" "$out" 2>&1; then
+  if magick -density "$density" "$file" "$out" 2>&1; then
     (( converted++ ))
   else
     echo "[오류] 변환 실패: $file" >&2
