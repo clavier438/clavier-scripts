@@ -330,6 +330,34 @@ def merge_tags(existing, new_axis_tags):
     return kept + new_axis_tags
 
 
+def _have_exiftool():
+    import shutil
+    return shutil.which("exiftool") is not None
+
+
+def write_xmp_keywords(path, tags):
+    """태그를 XMP-dc:Subject 키워드로 파일에 임베드 → Apple Photos·Photomator·Lightroom 등
+    '온갖 곳'에서 키워드로 인식. exiftool 사용(webp 무손실, 재인코딩 X). 없으면 조용히 스킵.
+    Finder 태그(xattr)는 그 앱들이 못 읽어서 — 파일 안 메타데이터로도 박아야 인식됨."""
+    kws = []
+    for t in tags:
+        base = t.split("\n")[0]                       # 색 인덱스 제거
+        kws.append(base)
+        if ":" in base:
+            kws.append(base.split(":", 1)[1])         # 값만(실내·웜) 도 검색 편하게
+    kws = list(dict.fromkeys(kws))
+    if not kws:
+        return
+    args = ["exiftool", "-overwrite_original", "-q", "-XMP-dc:Subject="]
+    for k in kws:
+        args.append(f"-XMP-dc:Subject+={k}")
+    args.append(path)
+    try:
+        subprocess.run(args, capture_output=True, timeout=20)
+    except (FileNotFoundError, Exception):
+        pass
+
+
 def find_images(root, exts):
     out = []
     for dirpath, _, files in os.walk(root):
@@ -351,7 +379,12 @@ def main():
                          "(이 세션의 Claude 가 직접 분류한 결과 등). "
                          "형식: [{\"file\":\"<파일명>\",\"subject\":[..],\"tone\":\"..\","
                          "\"finish\":[..],\"composition\":\"..\"}, ...]")
+    ap.add_argument("--no-xmp", action="store_true",
+                    help="XMP 키워드 임베드 끄기 (기본: 태그를 XMP-dc:Subject 로도 박아 "
+                         "Apple Photos·Photomator 등에서 키워드 인식. exiftool 필요)")
     args = ap.parse_args()
+    if not args.no_xmp and not args.dry_run and not _have_exiftool():
+        print("⚠ exiftool 없음 — XMP 키워드 스킵(Finder 태그는 정상). 켜려면: brew install exiftool\n")
     max_edge = args.max_edge
 
     # 분류 출처: --from-json(=사전 분류) 이면 API 불필요, 아니면 비전 API 키 필요
@@ -408,6 +441,8 @@ def main():
         if not args.dry_run:
             merged = merge_tags(get_finder_tags(path), tags)
             set_finder_tags(path, merged)
+            if not args.no_xmp:
+                write_xmp_keywords(path, tags)   # 파일 안 XMP 키워드 (Apple Photos·Photomator 인식)
         records.append({"file": rel, "path": path, **result,
                         "dominant_hex": dom, "tags": tags})
         print(f"  {i:>3}/{len(images)} {'·' if args.dry_run else '✓'} {rel}\n"

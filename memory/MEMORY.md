@@ -34,3 +34,4 @@
 - [인프라: 보유 인프라 현황](project_infrastructure.md) — OCI/GCloud/Cloudflare/Scriptable 조합 제안 기준
 - [레퍼런스: Google Drive API](reference_google_drive_api.md) — OAuth 자격증명 위치, refresh token 재사용 방법
 - [제약: Anthropic API 크레딧 부족](project_anthropic_key_no_credits.md) — Doppler 키 잔액 부족, 비전/LLM 직접호출 막힘 → 세션/subagent `--from-json` 우회
+- [프로젝트: design-recon (브랜드 아이덴티티 리버스 엔지니어링)](project_design_recon.md) — 모든 웹/이미지/폰트/아이콘/컬러 추출의 통합 목표. 이미지=포토디렉션 아키텍처, 샘플링=패턴커버리지. 상세 `clavier-scripts/DESIGN_RECON.md`
