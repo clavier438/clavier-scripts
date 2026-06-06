@@ -88,7 +88,7 @@ check_coverage() {
         IFS='|' read -r path label <<< "$entry"
         if [[ ! -f "$path" ]]; then
             printf "  ${YELLOW}⚠️  %-25s 파일 없음${OFF}\n" "$label"
-            ((missing++))
+            missing=$((missing + 1))   # ((missing++)) 는 0→1 시 exit 1 반환 → set -e 로 루프 사망(버그). 산술대입은 항상 exit 0.
             continue
         fi
         # grep -c 는 매치 0건일 때 exit code 1 — `|| echo 0` 쓰면 "0\n0" 오염됨.
@@ -100,7 +100,7 @@ check_coverage() {
             printf "  ${GREEN}✅ %-25s${OFF} ${DIM}%d회${OFF}\n" "$label" "$count"
         else
             printf "  ${RED}❌ %-25s 0회 — 갱신 필요${OFF}\n" "$label"
-            ((missing++))
+            missing=$((missing + 1))   # set -e 안전 (위 동일 버그 회피)
         fi
     done
 
