@@ -238,3 +238,7 @@ Claude Code가 추가 컨텍스트로 자동 주입
 framer-sync, control-tower 등 platform-workers는 **D1을 단일 진실 소스**로 운영. KV write 일일 한도가 계정 단위(1000회)인 위험을 D1(100K/일)로 회피. 자세한 워커별 D1 ID는 clavier-hq/SYSTEM_ENV.md 참조. framer-sync 표준 4 테이블: `worker_state`, `collection_items`, `collection_fields`, **`airtable_cache`** (2026-04-28 airtable_cache 도입으로 data:{table} 이전). **webp-cache KV→R2 이전 완료 (2026-04-30)**: `webp-cache` 바이너리는 R2 버킷(`framer-sync-webp-cache`)으로 이전 — KV에 바이너리 write 없음. health-check-worker는 Airtable이 SSOT라 KV/D1 둘 다 미사용.
 
 보조 유틸: `webExporter/webSiteExporter.py` 의 `webSiteExporter discover_pages` 가 인덱스 페이지네이션 1~3p × detail 3개 모델로 진화(2026-04-28).
+
+## design-recon 파이프라인 (2026-06-05 추가)
+
+`DESIGN_RECON.md` 가 SSOT. `tools/recon.py` 오케스트레이터 한 번 호출로 캡처 → 레이어 정리 → `recon/_layers.json` 멀티태그 매니페스트 생성 → `tools/brandguide.py` 자동 호출까지 스크립트만으로 완주한다. 보고서는 `recon/brandguide_v<NN>.html` 단일 산출물로, `_layers.json` 태그를 읽어 채워진 레이어만 섹션 렌더한다. 레이어 상태를 폴더 존재 같은 암묵 규칙이 아니라 명시적 태그 매니페스트로 표현하는 게 핵심. DECISIONS 2026-06-05 참조.
