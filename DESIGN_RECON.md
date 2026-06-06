@@ -22,16 +22,27 @@
 
 → 목표 산출물 = 브랜드별 **"아이덴티티 구성 리포트"** = `recon/brandguide_v<NN>.html` (각 레이어를 어떻게 설계했나, styled HTML 단일 산출. DECISIONS 2026-06-05).
 
-## 사용법 — 스크립트만으로 (single command)
+## 사용법 — 단일 진입점 `brandRe` (workerCtl/framer 패턴)
+
+사용자는 **명령 하나 `brandRe`** 에서 동사만 고른다. 내부 모듈(webExporter·recon·image-tagger·brandguide)은 그대로 — `brandRe` 는 얇은 라우터(front door). DECISIONS 2026-06-06 brandRe ADR.
 
 ```bash
-recon books/<host>/        # 캡처 폴더 → recon/ 정리 + _layers.json + brandguide.html 자동 생성 (한 줄)
-brandguide recon/<host>/   # 보고서만 재생성 (_layers.json 없으면 자동 생성, 단독 실행 가능)
+brandRe <url>              # 풀 파이프라인: 캡처 → 정리 → HTML 보고서 (한 줄)
+brandRe capture <url>      # 로컬 webExporter 캡처 → books/<host>/ (PDF + images/)
+brandRe organize <host>    # 정리 (photos·icons·_layers.json + 보고서 자동)
+brandRe tag <host>         # 사진 6축 비전 분류 (image-tagger) — _tags.json 채움
+brandRe report <host>      # brandguide HTML 보고서만 (재)생성
+brandRe status [<host>]    # 레이어 멀티태그 상태 — 없으면 books/ 전체 목록
+brandRe open <host>        # 보고서 브라우저로 열기
 ```
 
-- `recon` 이 끝까지 완주: 레이어 추출 → `_layers.json` 매니페스트 → `brandguide_v<NN>.html`.
+`brandRe status <host>` 가 핵심 — workerCtl `status` 처럼 *어느 레이어까지 됐고 다음에 뭘 하면 되는지* 를 멀티태그로 보여준다 (✓ ready / ◐ pending / · missing + `다음:` 힌트). books 루트 = `$BRANDRE_BOOKS` > `./books`.
+
+> **내부 모듈** (직접 호출도 가능, 평소엔 `brandRe` 로): `recon.py`(=organize 엔진) · `brandguide.py`(=report 렌더) · `image-tagger.py`(=tag) · webExporter(=capture). `brandRe` 가 이들을 순서대로 부른다.
+
 - 보고서 = **HTML brandguide 하나** (구 `_report_v<NN>.md` 폐기). 서술 리드는 `claude` CLI(구독 빌링, 1회) — 없으면 findings-only.
 - **레이어 멀티태그 매니페스트** (`recon/_layers.json`): 각 레이어 `{status, count, tags:[...]}`. brandguide 는 폴더를 stat 하지 않고 *태그를 읽어* 섹션 포함을 결정 → 채워진 레이어만 렌더, 없으면 graceful skip. (예: `_tags.json` 없으면 photos 섹션만 빠짐.)
+- **캡처 두 경로**: `brandRe capture`(로컬 webExporter, PDF+images, 빠름) vs `webexp`(OCI 원격 크롤, 무거운 사이트). 로컬 캡처는 colors/fonts 미생성 — 해당 레이어는 status 에서 `·`(missing) 로 정직히 표시.
 
 ## 포토디렉션 아키텍처 — 분석 방법
 
