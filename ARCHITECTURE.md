@@ -242,3 +242,5 @@ framer-sync, control-tower 등 platform-workers는 **D1을 단일 진실 소스*
 ## design-recon 파이프라인 (2026-06-05 추가)
 
 `DESIGN_RECON.md` 가 SSOT. `tools/recon.py` 오케스트레이터 한 번 호출로 캡처 → 레이어 정리 → `recon/_layers.json` 멀티태그 매니페스트 생성 → `tools/brandguide.py` 자동 호출까지 스크립트만으로 완주한다. 보고서는 `recon/brandguide_v<NN>.html` 단일 산출물로, `_layers.json` 태그를 읽어 채워진 레이어만 섹션 렌더한다. 레이어 상태를 폴더 존재 같은 암묵 규칙이 아니라 명시적 태그 매니페스트로 표현하는 게 핵심. DECISIONS 2026-06-05 참조.
+
+사용자 진입점은 `brandRe` 단일 front door (workerCtl 패턴) — 내부 모듈(recon·brandguide·image-tagger·webExporter)을 verb(capture/organize/tag/report/status/open)로 호출하는 얇은 라우터다. 사용자는 모듈 개별 스크립트 대신 `brandRe <verb>` 한 단어만 안다. DECISIONS 2026-06-06 참조.
