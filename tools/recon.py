@@ -181,6 +181,11 @@ def organize(host_dir):
         r = subprocess.run([PY, os.path.join(TOOLS, "brandguide.py"), recon], capture_output=True, text=True)
         if r.returncode == 0:
             layers.append("brandguide(html)")
+            # brandguide 가 html 을 만든 뒤 _layers.json 재기록 — report 레이어를
+            # has:brandguide 로 갱신 (step5 시점엔 html 이 없어 pending 으로 stale).
+            layer_tags = _build_layer_tags(recon, photos_dir)
+            json.dump(layer_tags, open(os.path.join(recon, "_layers.json"), "w", encoding="utf-8"),
+                      ensure_ascii=False, indent=2)
         else:
             print(f"  ⚠ brandguide 생성 실패: {r.stderr.strip()[:200]}")
 
