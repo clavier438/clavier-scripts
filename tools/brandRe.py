@@ -241,9 +241,45 @@ def die(msg):
     print(red("✗ ") + msg)
     sys.exit(1)
 
+def cmd_folder(args):
+    """brandRe folder <폴더> — 이미 가진 사진 폴더를 분석 (URL 캡처 대신).
+    폴더 사진 → books/<name>/images/ → organize(photos webp 변환) → tag → report.
+    디렉션 분석은 이미지 자체만 보므로 출처(URL/로컬) 무관. --as <이름> 으로 books 폴더명 지정."""
+    rest = list(args)
+    name = None
+    if "--as" in rest:
+        i = rest.index("--as")
+        if i + 1 >= len(rest):
+            die("--as 뒤에 이름이 필요합니다")
+        name = rest[i + 1]; del rest[i:i + 2]
+    if not rest:
+        die("usage: brandRe folder <이미지폴더> [--as <이름>]")
+    src = os.path.abspath(os.path.expanduser(rest[0]))
+    if not os.path.isdir(src):
+        die(f"폴더 아님: {src}")
+    name = (name or os.path.basename(src.rstrip("/")) or "folder").replace(os.sep, "-").replace(" ", "-")
+    exts = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".bmp", ".tiff"}
+    imgs = [f for f in glob.glob(os.path.join(src, "**", "*"), recursive=True)
+            if os.path.isfile(f) and os.path.splitext(f)[1].lower() in exts
+            and not os.path.basename(f).startswith(".")]
+    if not imgs:
+        die(f"이미지 없음: {src}")
+    dest = os.path.join(books_root(), name)
+    images_dir = os.path.join(dest, "images")
+    os.makedirs(images_dir, exist_ok=True)
+    print(bold(f"═══ brandRe {name} — 로컬 폴더 분석 ═══"))
+    print(dim(f"  출처 {src}  ({len(imgs)}장)"))
+    for f in imgs:
+        shutil.copy2(f, images_dir)
+    print(green(f"✓ {len(imgs)}장 → {dest}"))
+    # 기존 파이프라인 재사용 (reuse-first): organize(photos webp + _layers + 보고서) → tag(비전 + 보고서 갱신)
+    cmd_organize([dest])
+    cmd_tag([dest])
+
 HELP = """brandRe — 브랜드 아이덴티티 리버스 엔지니어링 단일 진입점 (design-recon)
 
   brandRe <url>              풀 파이프라인: 캡처 → 정리 → HTML 보고서
+  brandRe <폴더> | folder <폴더>   이미 가진 사진 폴더 분석 (캡처 생략) [--as <이름>]
   brandRe capture <url>      로컬 webExporter 캡처 → books/<host>/ (PDF + images/)
   brandRe organize <host>    정리 (photos·icons·_layers.json + 보고서 자동)
   brandRe tag <host>         사진 6축 비전 분류 (image-tagger) — _tags.json 채움
@@ -268,9 +304,13 @@ def main():
     table = {
         "capture": cmd_capture, "organize": cmd_organize, "tag": cmd_tag,
         "report": cmd_report, "open": cmd_open, "status": cmd_status,
+        "folder": cmd_folder, "ingest": cmd_folder,
     }
     if verb in table:
         table[verb](rest)
+    elif os.path.isdir(os.path.expanduser(verb)):
+        # 동사가 아니고 실재하는 폴더면 = 이미 가진 사진 → 로컬 폴더 분석 (캡처 생략)
+        cmd_folder([verb] + rest)
     elif urlparse(verb).scheme or "." in verb and "/" not in verb:
         # 동사가 아니고 URL/도메인처럼 보이면 풀 파이프라인
         cmd_full(verb)
