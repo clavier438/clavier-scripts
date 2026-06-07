@@ -80,6 +80,15 @@ def _build_layer_tags(recon, photos_dir):
     else:
         tags["icons"] = {"status": "missing", "tags": ["needs:site-icons"]}
 
+    # luts — 컬러그레이딩 .cube (photo-lut, organize 자동 생성). 정책별 N개.
+    cubes = glob.glob(os.path.join(recon, "luts", "*.cube"))
+    if cubes:
+        tags["luts"] = {"status": "ready", "count": len(cubes),
+                        "files": sorted(os.path.basename(c) for c in cubes),
+                        "tags": ["has:luts"] + ([f"split:{len(cubes)}"] if len(cubes) > 1 else [])}
+    else:
+        tags["luts"] = {"status": "missing", "tags": ["needs:photo-lut"]}
+
     # report — 단일 산출물 = brandguide HTML (md 보고서 폐기, HTML 단일화. DECISIONS 2026-06-05)
     guides = sorted(glob.glob(os.path.join(recon, "brandguide_v*.html")))
     ready_layers = [k for k in ("photos", "palette", "fonts", "icons")

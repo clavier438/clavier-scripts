@@ -312,6 +312,26 @@ def render_icons_section(sec_n, icon_layer, leads):
 </section>"""
 
 
+def render_lut_section(sec_n, lut_layer, leads):
+    """컬러그레이딩 LUT 섹션 — photo-lut 가 뽑은 .cube 다운로드 + 설명 (recon/luts/)."""
+    files = lut_layer.get("files") or []
+    if not files:
+        return ""
+    lead = leads.get("luts", "")
+    multi = len(files) > 1
+    items = "".join(f'<li><a href="luts/{fn}" download>{fn}</a></li>' for fn in files)
+    note = (f"컬러그레이딩 LUT <b>{len(files)}개</b>"
+            + ("(정책별 분리)" if multi else "")
+            + " — Lightroom·Capture One·Premiere·DaVinci 에서 적용. 사진 그레이딩을 톤 구간별 split-toning 으로 역추출한 .cube.")
+    return f"""
+<section>
+  <div class="sec-h"><span class="sec-n">{sec_n:02d}</span><span class="sec-t">Color · Grading LUT</span></div>
+  {"" if not lead else f'<p class="lead">{lead}</p>'}
+  <p class="note">{note}</p>
+  <ul>{items}</ul>
+</section>"""
+
+
 # ── 메인 생성기 ────────────────────────────────────────────────────────────
 def generate(recon_dir, dry=False, model="sonnet"):
     recon_dir = os.path.abspath(os.path.expanduser(recon_dir))
@@ -356,6 +376,10 @@ def generate(recon_dir, dry=False, model="sonnet"):
 
     if layers["icons"]["status"] == "ready":
         sections.append(render_icons_section(sec_n, layers["icons"], leads))
+        sec_n += 1
+
+    if layers.get("luts", {}).get("status") == "ready":
+        sections.append(render_lut_section(sec_n, layers["luts"], leads))
         sec_n += 1
 
     cover = render_cover(brand, host, layers, leads, photos_dir)
