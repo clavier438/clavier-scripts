@@ -1668,20 +1668,21 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
             # prepare_page의 전체 스크롤이 IO를 자연스럽게 발동시킴
             # → 요소들이 visible 상태로 전환, 이후 캡쳐 시 유지
             # hard timeout 60s — chrome promise 가 영원히 resolve 안 되는 페이지 (work.co/grid 등) 방어
+            #
+            # best-effort: prepare_page 는 enhancement(쿠키배너 제거·lazy 해제·스크롤 트리거)일 뿐이고,
+            # goto 는 이미 성공해 페이지가 로드된 상태다. prepare 가 timeout/오류여도 *로드된 페이지를
+            # 통째로 버리지 않고* 그대로 capture 로 진행한다 — 페이지가 정말 망가졌으면(navigation 으로
+            # context 파괴 등) 아래 capture_viewport 의 except 가 graceful 하게 fail 처리한다.
+            # (2026-06-07: prepare_page 60s timeout/ctx-destroyed 잔존 flaky 가 멀쩡히 로드된 뷰포트를
+            #  통째 skip 시키던 회귀 처방. 같은 URL 의 다른 뷰포트는 캡처되는데 한 뷰포트만 prepare 가
+            #  느려 0 장 나오던 비대칭 제거. ref: playwright "execution context destroyed" 처리 관례 =
+            #  비핵심 evaluate 실패는 무시하고 계속.)
             try:
                 await asyncio.wait_for(prepare_page(page), timeout=60)
             except asyncio.TimeoutError:
-                log(f"  [WARN] prepare_page timeout 60s ({vp_name}) — skip")
-                try: await ctx.close()
-                except Exception: pass
-                fail += 1
-                continue
+                log(f"  [WARN] prepare_page timeout 60s ({vp_name}) — best-effort, 로드된 페이지 그대로 캡처")
             except Exception as e:
-                log(f"  [WARN] prepare_page 오류 ({vp_name}): {type(e).__name__} — skip")
-                try: await ctx.close()
-                except Exception: pass
-                fail += 1
-                continue
+                log(f"  [WARN] prepare_page 오류 ({vp_name}): {type(e).__name__} — best-effort, 로드된 페이지 그대로 캡처")
 
             try:
                 # capture_viewport 도 hard 120s — 큰 페이지 stitching 충분
