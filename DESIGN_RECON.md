@@ -28,6 +28,7 @@
 
 ```bash
 brandRe <url>              # 풀 파이프라인: 캡처 → 정리 → HTML 보고서 (한 줄)
+brandRe <폴더>             # 이미 가진 사진 폴더 분석 (캡처 생략 → organize→tag→report, --as <이름>)
 brandRe capture <url>      # 로컬 webExporter 캡처 → books/<host>/ (PDF + images/)
 brandRe organize <host>    # 정리 (photos·icons·_layers.json + 보고서 자동)
 brandRe tag <host>         # 사진 6축 비전 분류 (image-tagger) — _tags.json 채움
