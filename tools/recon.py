@@ -134,6 +134,13 @@ def organize(host_dir):
         subprocess.run([PY, os.path.join(TOOLS, "image-dedup.py"), photos], capture_output=True)
         n = len(glob.glob(os.path.join(photos, "*.webp")))
         layers.append(f"photos({n})")
+        # 1b) photos → recon/luts/ : 컬러그레이딩 LUT (정책별 .cube). 색만 보므로 tag 불필요.
+        if n:
+            luts = os.path.join(recon, "luts"); os.makedirs(luts, exist_ok=True)
+            subprocess.run([PY, os.path.join(TOOLS, "photo-lut.py"), photos,
+                            "--outdir", luts, "--title", host], capture_output=True, text=True)
+            nl = len(glob.glob(os.path.join(luts, "*.cube")))
+            if nl: layers.append(f"luts({nl})")
 
     # 2) colors/ → recon/palette.json
     cj = sorted(glob.glob(os.path.join(host_dir, "colors", "*.json")))

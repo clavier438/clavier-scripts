@@ -15,7 +15,7 @@
 | 레이어 | 질문 | 도구 |
 |---|---|---|
 | **IA / 레이아웃** | 어떤 페이지 유형·구조로 짰나 | `webExporter` 캡처, `site-layout-capture` 스킬 |
-| **포토디렉션** | 어떤 사진 유형을·어떤 톤/보정/구도/비율로·어디에 | `image-tagger` (6축) → `photo-pattern` |
+| **포토디렉션** | 어떤 사진 유형을·어떤 톤/보정/구도/비율로·어디에 | `image-tagger` (6축) → `photo-pattern` → `photo-lut` (그레이딩 .cube LUT) |
 | **타이포그래피** | 어떤 서체 시스템 | `webExporter --download-fonts` |
 | **아이코노그래피** | 어떤 아이콘 시스템 (라이브러리 vs 자체 SVG, 전달방식) | `site-icons.py` |
 | **컬러** | 브랜드 팔레트 | `webExporter --extract-colors` |
@@ -72,7 +72,7 @@ exhaustive download 가 아니라 **패턴 커버리지**가 목표:
 
 ## 툴킷 (현재)
 
-`webExporter/webSiteExporter.py` (캡처·이미지/폰트/컬러 추출 + 이미지별 웹fx/렌더크기 `_webfx.json`) · `recon.py` (per-host 레이어 정리 + `_layers.json` 매니페스트 + brandguide 자동 호출 = 파이프라인 오케스트레이터) · `image-ref-fetch.py` (정적 수집) · `image-tagger.py` (6축 분류 → Finder + XMP 키워드) · `photo-pattern.py` (사진 문법 findings 계산) · `brandguide.py` (findings + 레이어 태그 → HTML 보고서 렌더) · `image-dedup.py` (중복 제거, perceptual) · `site-icons.py` (아이콘 시스템 식별).
+`webExporter/webSiteExporter.py` (캡처·이미지/폰트/컬러 추출 + 이미지별 웹fx/렌더크기 `_webfx.json`) · `recon.py` (per-host 레이어 정리 + `_layers.json` 매니페스트 + brandguide 자동 호출 = 파이프라인 오케스트레이터) · `image-ref-fetch.py` (정적 수집) · `image-tagger.py` (6축 분류 → Finder + XMP 키워드) · `photo-pattern.py` (사진 문법 findings 계산) · `brandguide.py` (findings + 레이어 태그 → HTML 보고서 렌더) · `image-dedup.py` (중복 제거, perceptual) · `photo-lut.py` (사진 → 컬러그레이딩 `.cube` 3D LUT, 톤 구간별 split-toning 포착 + 정책별 자동 분리, organize 가 `recon/luts/` 자동 생성) · `site-icons.py` (아이콘 시스템 식별).
 
 비용: 분류=비전. **image-tagger 가 claude CLI 구독 빌링(`tools/lib/claude_cli.py`, copy.mjs 방식)으로 전환(2026-06-07) — 별도 API 크레딧 0.** `--json-schema` 로 6축 구조화 출력, `ANTHROPIC_API_KEY` 불필요. claude CLI 미인증 환경(OCI cron 등)에선 `--from-json` 우회(세션/subagent 분류 → 주입) 유지. `memory/project_anthropic_key_no_credits` 참조.
 
