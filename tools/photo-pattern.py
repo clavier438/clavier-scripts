@@ -93,21 +93,7 @@ def next_version(brand_dir, prefix="_report_v"):
     v = f"{mx+1:02d}"
     return f"v{v}", os.path.join(brand_dir, f"{prefix}{v}.md"), os.path.join(brand_dir, f"{prefix}{v}.prompt.md")
 
-def run_claude(prompt, model="sonnet"):
-    """claude CLI spawn (copy.mjs 패턴) — 구독 빌링이라 API 크레딧 불필요. 없거나 실패하면 None."""
-    if not shutil.which("claude"):
-        return None
-    try:
-        p = subprocess.run(
-            ["claude", "-p", "--system-prompt", "", "--output-format", "json", "--model", model,
-             "--disallowed-tools", "Bash Read Write Edit Glob Grep WebFetch WebSearch Task"],
-            input=prompt, capture_output=True, text=True, timeout=180)
-        if p.returncode != 0:
-            return None
-        data = json.loads(p.stdout)
-        return None if data.get("is_error") else str(data.get("result", "")).strip()
-    except Exception:
-        return None
+from claude_cli import run_claude   # 구독 빌링 claude CLI — image-tagger·brandguide 와 공유 (복붙 제거)
 
 def findings_md(recs):
     """계산된 findings (아키타입·룰·문법) 를 마크다운으로."""

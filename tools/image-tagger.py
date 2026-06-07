@@ -5,11 +5,10 @@
 #   ① 피사체 ② 톤(색감) ③ 후보정 ④ 구도 네 축으로 태깅 → 파인더에서 바로 거름.
 #   "사진을 어떻게 후보정·연출해 조합하는가" 를 디자인 레퍼런스로 학습하기 위한 도구.
 #
-# 분류 엔진: Claude 비전 API (강제 tool 호출로 고정 vocab JSON 보장).
+# 분류 엔진: claude CLI (구독 빌링 — 별도 API 크레딧 0). lib/claude_cli.py 공유 헬퍼.
 #   - 이미지당 1회 호출. 768px 로 줄여 JPEG 재인코딩(토큰 절감 + AVIF/WebP/PNG 통일).
-#   - 모델 기본 claude-haiku-4-5 (비전·tool 지원 최저가). 이미지 토큰 ≈ w*h/750.
-#   reference: https://platform.claude.com/docs/en/docs/build-with-claude/vision
-#             https://platform.claude.com/docs/en/docs/build-with-claude/tool-use/overview
+#   - --json-schema 로 고정 vocab JSON 보장(구 강제 tool 호출 대체). 모델 기본 haiku.
+#   - copy.mjs 와 동일 방식(claude -p, system 슬롯 X). vision 검증·근거 = lib/claude_cli.py 헤더.
 #
 # 출력(비파괴):
 #   - 원본 이미지 파일에 Finder 태그 부착 (xattr, 원본 픽셀 안 건드림)
@@ -17,14 +16,13 @@
 #   - <dir>/_tags.csv    표 형태
 #   - <dir>/_tag-summary.json + 콘솔  사이트 단위 조합 패턴 (피사체/톤/후보정 분포 %)
 #
-# 사용법 (ANTHROPIC_API_KEY 는 Doppler 에 있음 → doppler run 으로 주입):
-#   doppler run -- webExporter/.venv/bin/python tools/image-tagger.py "<images 폴더>"
-#   ... --limit 8 --dry-run     # 샘플 N장만, 태그는 안 박고 결과만 출력 (비용·품질 확인)
+# 사용법 (claude CLI 구독 인증만 있으면 됨 — API 키·doppler 불필요):
+#   webExporter/.venv/bin/python tools/image-tagger.py "<images 폴더>"
+#   ... --limit 8 --dry-run     # 샘플 N장만, 태그는 안 박고 결과만 출력 (품질 확인)
 #
 # 의존성: Pillow (webExporter/.venv 에 있음). 그 외는 stdlib 만.
 
-import os, sys, re, json, csv, base64, argparse, subprocess, plistlib, io, unicodedata
-import urllib.request, urllib.error
+import os, sys, re, json, csv, argparse, subprocess, plistlib, io, unicodedata
 from collections import Counter
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
@@ -32,19 +30,17 @@ try:
     import freshness  # noqa: F401  (repo freshness 체크 — 없는 환경(OCI 등)에서도 동작하게 선택적)
 except ImportError:
     pass
+from claude_cli import run_claude, have_claude   # 구독 빌링 claude CLI 단일 헬퍼 (lib 공유)
 
 try:
     from PIL import Image
 except ImportError:
     print("❌ Pillow 필요. webExporter venv 로 실행:")
-    print("   doppler run -- webExporter/.venv/bin/python tools/image-tagger.py <dir>")
+    print("   webExporter/.venv/bin/python tools/image-tagger.py <dir>")
     sys.exit(1)
 
-API_URL = "https://api.anthropic.com/v1/messages"
-API_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-haiku-4-5"
 MAX_EDGE = 768            # 비전 입력 long-edge px (토큰 절감, 태깅엔 충분)
-MAX_TOKENS = 400
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".bmp", ".tiff"}
 
 # ── 분류 vocab (영문 enum = 모델 출력 안정용 / 한글 = Finder 태그 표시용) ──────────
@@ -115,7 +111,8 @@ AXES = {
 
 
 def build_tool():
-    """강제 호출할 tool 정의 — input_schema enum 으로 출력 vocab 고정."""
+    """강제 호출할 tool 정의 — input_schema enum 으로 출력 vocab 고정.
+    claude CLI 에는 이 안의 input_schema 를 --json-schema 로 넘겨 structured_output 을 강제한다."""
     props = {}
     for axis, conf in AXES.items():
         if conf.get("computed"):     # 비율·웹보정은 비전이 아니라 계산 → 스키마 제외
@@ -146,7 +143,7 @@ def build_tool():
 SYSTEM_PROMPT = (
     "너는 부티크 호텔·스테이·브랜드의 마케팅 사진을 디자인 레퍼런스로 분석하는 아트 디렉터다. "
     "각 사진이 '무엇을(피사체) / 어떤 색감(톤) / 어떤 후처리 기법(후보정) / 어떤 배치(구도)' 로 "
-    "연출됐는지 판단해 classify_photo 도구로만 답하라. "
+    "연출됐는지 판단해 분류한다. "
     "주어진 enum 값만 쓰고, 추측이 어려워도 가장 가까운 값을 반드시 고른다. "
     "톤은 색온도/채도의 지배적 인상(웜·쿨·뮤트 등), 후보정은 색이 아닌 기법(그레인·고대비·흑백 등)이다. "
     "특별한 후처리가 없으면 finish 에 natural 을 넣는다. 순수 흑백이면 tone=monochrome 이고 finish 에 bw."
@@ -257,52 +254,20 @@ def webfx_values(fx):
     return out
 
 
-def call_vision(jpeg_bytes, model, api_key, tool, retries=4):
-    """비전 API 1회 호출 → classify_photo.input(dict) + usage 반환. 429/5xx 백오프."""
-    b64 = base64.standard_b64encode(jpeg_bytes).decode()
-    body = json.dumps({
-        "model": model,
-        "max_tokens": MAX_TOKENS,
-        "system": SYSTEM_PROMPT,
-        "tools": [tool],
-        "tool_choice": {"type": "tool", "name": "classify_photo"},
-        "messages": [{
-            "role": "user",
-            "content": [
-                {"type": "image", "source": {
-                    "type": "base64", "media_type": "image/jpeg", "data": b64}},
-                {"type": "text", "text": "이 사진을 분류해줘."},
-            ],
-        }],
-    }).encode()
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": API_VERSION,
-        "content-type": "application/json",
-    }
-    backoff = 2
-    for attempt in range(retries):
-        req = urllib.request.Request(API_URL, data=body, headers=headers, method="POST")
-        try:
-            with urllib.request.urlopen(req, timeout=60) as resp:
-                data = json.loads(resp.read())
-            for block in data.get("content", []):
-                if block.get("type") == "tool_use" and block.get("name") == "classify_photo":
-                    return block["input"], data.get("usage", {})
-            raise RuntimeError("tool_use 블록 없음: " + json.dumps(data)[:200])
-        except urllib.error.HTTPError as e:
-            code = e.code
-            msg = e.read().decode(errors="replace")[:200]
-            if code in (429, 500, 502, 503, 504, 529) and attempt < retries - 1:
-                import time; time.sleep(backoff); backoff *= 2
-                continue
-            raise RuntimeError(f"HTTP {code}: {msg}")
-        except urllib.error.URLError as e:
-            if attempt < retries - 1:
-                import time; time.sleep(backoff); backoff *= 2
-                continue
-            raise RuntimeError(f"네트워크: {e}")
-    raise RuntimeError("재시도 소진")
+def classify_photo(jpeg_bytes, model, schema):
+    """jpeg bytes 를 임시파일로 떠서 claude CLI 비전(구독 빌링)에 넘겨 분류.
+    네 축(subject/tone/finish/composition)을 채운 dict | None(실패). lib/claude_cli.run_claude 재사용.
+    구 call_vision(REST API 직접호출) 대체 — copy.mjs 와 동일한 구독 빌링 경로."""
+    import tempfile
+    tf = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+    try:
+        tf.write(jpeg_bytes); tf.close()
+        prompt = (SYSTEM_PROMPT + "\n\n주어진 사진을 네 축(피사체·톤·후보정·구도)으로 "
+                  "분류해 스키마의 각 필드를 채워라. 주어진 enum 값만 쓴다.")
+        return run_claude(prompt, model, image_paths=[tf.name],
+                          json_schema=schema, timeout=120)
+    finally:
+        os.unlink(tf.name)
 
 
 def result_to_tags(result):
@@ -375,7 +340,7 @@ def main():
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--max-edge", type=int, default=MAX_EDGE)
     ap.add_argument("--from-json", default=None,
-                    help="비전 API 대신 미리 분류한 JSON 을 받아 태그만 부착 "
+                    help="비전 호출 대신 미리 분류한 JSON 을 받아 태그만 부착 "
                          "(이 세션의 Claude 가 직접 분류한 결과 등). "
                          "형식: [{\"file\":\"<파일명>\",\"subject\":[..],\"tone\":\"..\","
                          "\"finish\":[..],\"composition\":\"..\"}, ...]")
@@ -387,15 +352,14 @@ def main():
         print("⚠ exiftool 없음 — XMP 키워드 스킵(Finder 태그는 정상). 켜려면: brew install exiftool\n")
     max_edge = args.max_edge
 
-    # 분류 출처: --from-json(=사전 분류) 이면 API 불필요, 아니면 비전 API 키 필요
+    # 분류 출처: --from-json(=사전 분류) 이면 claude CLI 불필요, 아니면 구독 빌링 claude CLI 필요
     precomputed = None
     if args.from_json:
         with open(os.path.expanduser(args.from_json), encoding="utf-8") as f:
             precomputed = {os.path.basename(r["file"]): r for r in json.load(f)}
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not args.from_json and not api_key:
-        print("❌ ANTHROPIC_API_KEY 없음. Doppler 로 주입하거나(--from-json 쓰면 불필요):")
-        print("   doppler run -- webExporter/.venv/bin/python tools/image-tagger.py", args.dir)
+    if not args.from_json and not have_claude():
+        print("❌ claude CLI 없음 — 구독 빌링 비전 분류에 필요. 설치: https://code.claude.com")
+        print("   (또는 --from-json 으로 사전 분류한 JSON 주입)")
         sys.exit(1)
 
     root = os.path.abspath(os.path.expanduser(args.dir))
@@ -408,12 +372,12 @@ def main():
     if not images:
         print(f"이미지 없음: {root}"); sys.exit(0)
 
-    tool = build_tool()
+    schema = build_tool()["input_schema"]   # claude CLI --json-schema 로 구조화 출력 강제
     engine = "from-json" if precomputed is not None else args.model
     print(f"[{engine}] {len(images)}장 처리 시작 (max-edge {max_edge}px"
           f"{', dry-run' if args.dry_run else ''})\n")
 
-    records, in_tok, out_tok, skipped, failed = [], 0, 0, 0, 0
+    records, skipped, failed = [], 0, 0
     webfx_map = load_webfx(root)             # 웹단 보정 메타 (webExporter 캡처 시 기록, 없으면 {})
     for i, path in enumerate(images, 1):
         rel = os.path.relpath(path, root)
@@ -424,14 +388,10 @@ def main():
             result = precomputed.get(os.path.basename(path))
             if result is None:
                 print(f"  {i:>3}/{len(images)} ⊘ 분류 JSON 에 없음(스킵) {rel}"); skipped += 1; continue
-            usage = {}
         else:
-            try:
-                result, usage = call_vision(jpeg, args.model, api_key, tool)
-            except Exception as e:
-                print(f"  {i:>3}/{len(images)} ✗ {rel} — {e}"); failed += 1; continue
-        in_tok += usage.get("input_tokens", 0)
-        out_tok += usage.get("output_tokens", 0)
+            result = classify_photo(jpeg, args.model, schema)
+            if not result:
+                print(f"  {i:>3}/{len(images)} ✗ {rel} — claude CLI 분류 실패/빈 응답"); failed += 1; continue
         # 계산 축 머지: 비율(표시 비율 우선, 없으면 원본) + 웹보정(CSS fx 메타)
         fx = webfx_map.get(os.path.basename(path)) or {}
         dsize = (fx["dw"], fx["dh"]) if fx.get("dw") and fx.get("dh") else size
@@ -483,7 +443,6 @@ def main():
             json.dump(summary, f, ensure_ascii=False, indent=2)
 
     # ── 콘솔 리포트 ──
-    cost = in_tok / 1e6 * 1.0 + out_tok / 1e6 * 5.0   # Haiku 4.5 대략 단가(추정), 실값은 콘솔서 확인
     print(f"\n── 완료: {n}장 분류"
           f"{f', {skipped}장 스킵' if skipped else ''}"
           f"{f', {failed}장 실패' if failed else ''} ──")
@@ -491,7 +450,7 @@ def main():
         print("조합 패턴(사이트 단위):")
         for prefix, dist in summary["axes"].items():
             print(f"  {prefix}: " + ", ".join(f"{k} {v}" for k, v in dist.items()))
-    print(f"토큰: in {in_tok:,} / out {out_tok:,}  (≈ ${cost:.4f}, 추정단가)")
+    print("분류: claude CLI 구독 빌링 (별도 API 크레딧 없음)")
     if not args.dry_run and n:
         print(f"→ Finder 태그 부착 완료 + _tags.json / _tags.csv / _tag-summary.json 저장")
 
