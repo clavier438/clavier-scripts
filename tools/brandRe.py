@@ -110,15 +110,9 @@ def cmd_tag(args):
     if not os.path.isdir(photos):
         die(f"photos 없음: {photos}\n   먼저 'brandRe organize {os.path.basename(hd)}'")
     print(bold(f"▶ tag {os.path.basename(hd)}") + dim(f"  ({photos})"))
-    # image-tagger 는 비전 — API 크레딧 고갈 시 막힘(project_anthropic_key_no_credits).
-    # 구독 빌링 우회(claude CLI/세션 --from-json)는 아직 native 화 전 → 정직히 안내.
-    env = os.environ.get("ANTHROPIC_API_KEY")
-    extra = args[1:]
-    if not env and "--from-json" not in extra:
-        print(yellow("⚠ ANTHROPIC_API_KEY 없음 — 비전 분류 API 경로 불가."))
-        print(dim("   우회: doppler run -- 로 주입하거나, 세션/subagent 가 분류해 --from-json 주입."))
-        print(dim("   (구독 빌링 claude CLI 비전 경로는 아직 native 미구현 — DESIGN_RECON.md 참조)"))
+    # 비전 분류 가용성(설치/인증)은 image-tagger.py 가 자체 판단·안내한다 — brandRe 는 호출 위임만.
     py = VENV_PY if os.path.exists(VENV_PY) else PY
+    extra = args[1:]
     r = subprocess.run([py, os.path.join(TOOLS, "image-tagger.py"), photos] + extra)
     if r.returncode == 0:
         # 태깅 후 보고서 갱신 (사진 섹션 채워짐)
