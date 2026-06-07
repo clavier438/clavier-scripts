@@ -40,7 +40,7 @@ brandRe open <host>        # 보고서 브라우저로 열기
 
 > **내부 모듈** (직접 호출도 가능, 평소엔 `brandRe` 로): `recon.py`(=organize 엔진) · `brandguide.py`(=report 렌더) · `image-tagger.py`(=tag) · webExporter(=capture). `brandRe` 가 이들을 순서대로 부른다.
 
-- 보고서 = **HTML brandguide 하나** (구 `_report_v<NN>.md` 폐기). 서술 리드는 `claude` CLI(구독 빌링, 1회) — 없으면 findings-only.
+- 보고서 = **HTML brandguide 하나** (구 `_report_v<NN>.md` 폐기). 서술 리드 *및 비전 분류(image-tagger)* 모두 `claude` CLI 구독 빌링 — 서술은 없으면 findings-only. (AI 호출 통일: docs/decisions/2026-06-07-vision-claude-cli-billing.md)
 - **레이어 멀티태그 매니페스트** (`recon/_layers.json`): 각 레이어 `{status, count, tags:[...]}`. brandguide 는 폴더를 stat 하지 않고 *태그를 읽어* 섹션 포함을 결정 → 채워진 레이어만 렌더, 없으면 graceful skip. (예: `_tags.json` 없으면 photos 섹션만 빠짐.)
 - **캡처 두 경로**: `brandRe capture`(로컬 webExporter, PDF+images, 빠름) vs `webexp`(OCI 원격 크롤, 무거운 사이트). 로컬 캡처는 colors/fonts 미생성 — 해당 레이어는 status 에서 `·`(missing) 로 정직히 표시.
 
@@ -73,7 +73,7 @@ exhaustive download 가 아니라 **패턴 커버리지**가 목표:
 
 `webExporter/webSiteExporter.py` (캡처·이미지/폰트/컬러 추출 + 이미지별 웹fx/렌더크기 `_webfx.json`) · `recon.py` (per-host 레이어 정리 + `_layers.json` 매니페스트 + brandguide 자동 호출 = 파이프라인 오케스트레이터) · `image-ref-fetch.py` (정적 수집) · `image-tagger.py` (6축 분류 → Finder + XMP 키워드) · `photo-pattern.py` (사진 문법 findings 계산) · `brandguide.py` (findings + 레이어 태그 → HTML 보고서 렌더) · `image-dedup.py` (중복 제거, perceptual) · `site-icons.py` (아이콘 시스템 식별).
 
-비용: 분류=비전. 크레딧 없으면 세션/subagent 우회, 규모 크면 API 소액충전이 압도적으로 쌈(haiku ~$0.001/장). `memory/project_anthropic_key_no_credits` 참조.
+비용: 분류=비전. **image-tagger 가 claude CLI 구독 빌링(`tools/lib/claude_cli.py`, copy.mjs 방식)으로 전환(2026-06-07) — 별도 API 크레딧 0.** `--json-schema` 로 6축 구조화 출력, `ANTHROPIC_API_KEY` 불필요. claude CLI 미인증 환경(OCI cron 등)에선 `--from-json` 우회(세션/subagent 분류 → 주입) 유지. `memory/project_anthropic_key_no_credits` 참조.
 
 ## 다음 (미정립 — 이 문서가 정립 과정)
 

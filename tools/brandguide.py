@@ -28,21 +28,8 @@ def next_version(recon_dir, prefix="brandguide_v"):
     return f"v{v}", os.path.join(recon_dir, f"{prefix}{v}.html")
 
 
-# ── claude CLI (구독 빌링) ──────────────────────────────────────────────────
-def run_claude(prompt, model="sonnet"):
-    if not shutil.which("claude"):
-        return None
-    try:
-        p = subprocess.run(
-            ["claude", "-p", "--system-prompt", "", "--output-format", "json", "--model", model,
-             "--disallowed-tools", "Bash Read Write Edit Glob Grep WebFetch WebSearch Task"],
-            input=prompt, capture_output=True, text=True, timeout=180)
-        if p.returncode != 0:
-            return None
-        data = json.loads(p.stdout)
-        return None if data.get("is_error") else str(data.get("result", "")).strip()
-    except Exception:
-        return None
+# ── claude CLI (구독 빌링) 호출 = lib/claude_cli.run_claude 재사용 (복붙 제거) ──
+from claude_cli import run_claude   # image-tagger·photo-pattern 과 공유 (reuse-first)
 
 
 # ── 데이터 로더 ────────────────────────────────────────────────────────────
