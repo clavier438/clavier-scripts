@@ -32,7 +32,7 @@
 ## 한계 / 후속
 
 - Reinhard 류 **전역 그레이딩** — 색온도·split·콘트라스트 무드는 잡지만 로컬 마스킹/정밀 톤커브는 근사. 부족하면 채널 히스토그램(CDF) 매칭으로 정밀화.
-- `_layers.json`/brandguide 의 LUT 섹션은 후속 (현재 `recon/luts/` + `summary.md` 까지).
+- `_layers.json` lut 레이어 + brandguide "Color · Grading LUT" 섹션(다운로드 링크) **완료** (2026-06-07 후속 — recon._build_layer_tags + brandguide.render_lut_section). split-toning 요약을 섹션에 표시하는 건 추가 후속.
 - `image-dedup` 이 photos 를 줄이므로 LUT 도 대표 사진 기준 (실사진엔 영향 적음).
 
 ## reference
