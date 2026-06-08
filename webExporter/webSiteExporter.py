@@ -1565,8 +1565,155 @@ async def _download_page_images(page, output_dir: str, base_name: str) -> int:
     log(f"  [images] {saved}/{len(img_urls)}장 → images/{base_name}/ (+_webfx.json)")
     return saved
 
+async def _download_page_fonts(page, output_dir: str, base_name: str) -> int:
+    """페이지의 모든 웹폰트(@font-face src url woff/woff2/ttf/otf/eot)를 다운로드.
+    page.request 사용 → 페이지 쿠키/UA 유지(봇 차단 회피). fonts/<page>/ 에 저장.
+    + _loaded.txt = document.fonts 로 실제 로드 확인된 family/style/weight 목록."""
+    try:
+        data = await page.evaluate(r"""() => {
+            const urls = new Set();
+            const abs = (u) => { try { return new URL(u, location.href).href; } catch(e) { return null; } };
+            // @font-face src url — 같은 origin 은 cssRules 직접, cross-origin(CORS 차단)은 href 수집 후 Python 에서 fetch
+            const crossOrigin = [];
+            for (const sheet of document.styleSheets) {
+                let rules;
+                try { rules = sheet.cssRules || sheet.rules; } catch(e) { if (sheet.href) crossOrigin.push(sheet.href); continue; }
+                if (!rules) continue;
+                for (const rule of rules) {
+                    const isFF = (rule.type === 5) || (rule.constructor && rule.constructor.name === 'CSSFontFaceRule');
+                    if (!isFF) continue;
+                    const src = rule.style && rule.style.getPropertyValue('src');
+                    if (!src) continue;
+                    const re = /url\((["']?)([^"')]+)\1\)/g; let m;
+                    while ((m = re.exec(src)) !== null) {
+                        if (m[2] && !m[2].startsWith('data:')) { const a = abs(m[2]); if (a) urls.add(a); }
+                    }
+                }
+            }
+            // 실제 로드된 폰트 패밀리 (document.fonts)
+            const loaded = [];
+            try { document.fonts.forEach(f => { if (f.status === 'loaded') loaded.push(`${f.family} | ${f.style} | ${f.weight}`); }); } catch(e){}
+            return { urls: [...urls], crossOrigin: [...new Set(crossOrigin)], loaded: [...new Set(loaded)] };
+        }""")
+    except Exception:
+        return 0
+    font_urls = list(data.get("urls", [])) if isinstance(data, dict) else []
+    loaded = data.get("loaded", []) if isinstance(data, dict) else []
+    # cross-origin 시트(cssRules 접근 차단)는 CSS 를 직접 fetch 해 @font-face url 파싱 (CDN 폰트 회수)
+    for href in (data.get("crossOrigin", []) if isinstance(data, dict) else []):
+        try:
+            r = await page.request.get(href, timeout=15000)
+            if not r.ok:
+                continue
+            css = await r.text()
+            for m in re.finditer(r'url\((["\']?)([^"\')]+)\1\)', css):
+                u = m.group(2)
+                if u and not u.startswith("data:") and re.search(r"\.(woff2?|ttf|otf|eot)", u, re.I):
+                    font_urls.append(urljoin(href, u))
+        except Exception:
+            pass
+    font_urls = list(dict.fromkeys(font_urls))  # dedup, 순서 유지
+    if not font_urls and not loaded:
+        return 0
+    font_dir = os.path.join(output_dir, "fonts", base_name)
+    os.makedirs(font_dir, exist_ok=True)
+    if loaded:
+        try:
+            with open(os.path.join(font_dir, "_loaded.txt"), "w", encoding="utf-8") as f:
+                f.write("\n".join(loaded))
+        except Exception:
+            pass
+    saved = 0
+    seen: set = set()
+    for u in font_urls:
+        try:
+            resp = await page.request.get(u, timeout=20000)
+            if not resp.ok:
+                continue
+            body = await resp.body()
+            if not body:
+                continue
+            fname = os.path.basename(urlparse(u).path) or "font"
+            fname = re.sub(r"[^\w\-.]", "_", fname)[:90]
+            if not os.path.splitext(fname)[1]:
+                fname += ".woff"
+            if fname in seen:
+                stem, ext = os.path.splitext(fname)
+                fname = f"{stem}_{saved}{ext}"
+            seen.add(fname)
+            with open(os.path.join(font_dir, fname), "wb") as f:
+                f.write(body)
+            saved += 1
+        except Exception:
+            pass
+    log(f"  [fonts] {saved}/{len(font_urls)}개 + loaded {len(loaded)} → fonts/{base_name}/")
+    return saved
+
+
+async def _extract_page_colors(page, output_dir: str, base_name: str) -> int:
+    """페이지의 렌더된 컬러(getComputedStyle color/background/border/outline)를 빈도순 수집 →
+    브랜드 팔레트. colors/<page>.json(css/hex/rgb/count) + colors/<page>.png(스와치 시각화)."""
+    try:
+        colors = await page.evaluate(r"""() => {
+            const freq = {};
+            const props = ['color','backgroundColor','borderTopColor','borderRightColor',
+                           'borderBottomColor','borderLeftColor','outlineColor'];
+            const add = (c) => {
+                if (!c) return;
+                if (c === 'transparent' || c === 'rgba(0, 0, 0, 0)') return;
+                freq[c] = (freq[c] || 0) + 1;
+            };
+            for (const el of document.querySelectorAll('*')) {
+                const cs = getComputedStyle(el);
+                for (const p of props) add(cs[p]);
+            }
+            return Object.entries(freq).sort((a,b)=>b[1]-a[1]).slice(0,40);
+        }""")
+    except Exception:
+        return 0
+    if not colors:
+        return 0
+    def to_hex(c):
+        nums = re.findall(r"[\d.]+", c)
+        if len(nums) < 3:
+            return None
+        r, g, b = int(float(nums[0])), int(float(nums[1])), int(float(nums[2]))
+        return f"#{r:02x}{g:02x}{b:02x}", (r, g, b)
+    palette = []
+    for c, count in colors:
+        hx = to_hex(c)
+        if not hx:
+            continue
+        palette.append({"css": c, "hex": hx[0], "rgb": list(hx[1]), "count": count})
+    if not palette:
+        return 0
+    col_dir = os.path.join(output_dir, "colors")
+    os.makedirs(col_dir, exist_ok=True)
+    try:
+        with open(os.path.join(col_dir, f"{base_name}.json"), "w", encoding="utf-8") as f:
+            json.dump(palette, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+    try:
+        from PIL import ImageDraw
+        sw = 80; per = 20; n = len(palette)
+        cols = min(n, per); rows = (n + per - 1) // per
+        img = Image.new("RGB", (max(sw * cols, sw), sw * rows), "white")
+        d = ImageDraw.Draw(img)
+        for idx, p in enumerate(palette):
+            rr, cc = divmod(idx, per)
+            x0, y0 = cc * sw, rr * sw
+            d.rectangle([x0, y0, x0 + sw - 1, y0 + sw - 1], fill=tuple(p["rgb"]))
+        img.save(os.path.join(col_dir, f"{base_name}.png"))
+    except Exception:
+        pass
+    log(f"  [colors] {len(palette)}색 팔레트 → colors/{base_name}.json")
+    return len(palette)
+
+
 async def export_url(url: str, output_dir: str, scroll_time: int,
-                     sem: asyncio.Semaphore, browser, download_images: bool = False) -> tuple[int, int]:
+                     sem: asyncio.Semaphore, browser, download_images: bool = False,
+                     download_fonts: bool = False, extract_colors: bool = False) -> tuple[int, int]:
     """
     뷰포트마다 새 컨텍스트 + 새 페이지 로드.
     - 각 뷰포트 치수로 처음부터 로드 → IO가 올바른 치수 기준으로 자연스럽게 발동
@@ -1723,6 +1870,16 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
                     await asyncio.wait_for(_download_page_images(page, output_dir, base_name), timeout=180)
                 except Exception as e:
                     log(f"  [images] 다운로드 실패/timeout: {type(e).__name__}")
+            if download_fonts and vp_name == "desktop" and page is not None:
+                try:
+                    await asyncio.wait_for(_download_page_fonts(page, output_dir, base_name), timeout=120)
+                except Exception as e:
+                    log(f"  [fonts] 다운로드 실패/timeout: {type(e).__name__}")
+            if extract_colors and vp_name == "desktop" and page is not None:
+                try:
+                    await asyncio.wait_for(_extract_page_colors(page, output_dir, base_name), timeout=60)
+                except Exception as e:
+                    log(f"  [colors] 추출 실패/timeout: {type(e).__name__}")
 
             await ctx.close()
 
@@ -1733,7 +1890,7 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
         return ok, fail, captured
 
 # ── 메인 ──────────────────────────────────────────────────
-async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False, download_images: bool = False):
+async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False, download_images: bool = False, download_fonts: bool = False, extract_colors: bool = False, urls: list = None):
     os.makedirs(output_dir, exist_ok=True)
 
     # site_name + 로그 파일: 같은 netloc 의 sub-path base 도 충돌 없도록 base_url 전체로 슬러그
@@ -1780,7 +1937,7 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
         )
         await ctx.add_init_script(STEALTH_INIT_SCRIPT)
         pg        = await ctx.new_page()
-        pages     = await discover_pages(pg, base_url, max_pages)
+        pages     = urls if urls else await discover_pages(pg, base_url, max_pages)
         await ctx.close()
         await browser_d.close()
 
@@ -1837,7 +1994,7 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
             log(f"\n[{i}/{len(pages)}]")
             try:
                 ok, fail, captured = await asyncio.wait_for(
-                    export_url(url, output_dir, scroll_time, sem_dummy, browser, download_images),
+                    export_url(url, output_dir, scroll_time, sem_dummy, browser, download_images, download_fonts, extract_colors),
                     timeout=url_hard_timeout,
                 )
             except asyncio.TimeoutError:
@@ -1934,10 +2091,14 @@ if __name__ == "__main__":
     parser.add_argument("--concurrency", "-c", type=int, default=2,    help="URL 동시 처리 수 (작은 사이트 ban 잦으면 1, 큰 사이트는 3)")
     parser.add_argument("--keep-frames",       action="store_true",     help="PDF 빌드 후 frames/ 보존 (디폴트: 삭제 — 출력 디렉터리에는 PDF+로그만)")
     parser.add_argument("--download-images",   action="store_true",     help="(부가) 각 페이지의 모든 이미지(img/srcset 최대/background-image)를 images/<page>/ 에 다운로드")
+    parser.add_argument("--download-fonts",    action="store_true",     help="(부가) 각 페이지의 웹폰트(@font-face woff/woff2/ttf/otf)를 fonts/<page>/ 에 다운로드 + _loaded.txt")
+    parser.add_argument("--extract-colors",    action="store_true",     help="(부가) 각 페이지의 렌더 컬러를 빈도순 브랜드 팔레트로 추출 → colors/<page>.json + .png 스와치")
+    parser.add_argument("--urls",              default=None,            help="(레이아웃 종류별 캡처) discover 크롤 스킵, 콤마구분 URL 리스트만 캡처 — 종류별 대표 N개 직접 지정")
     args = parser.parse_args()
 
     if not urlparse(args.url).scheme:
         print("[ERROR] URL에 https:// 를 포함해주세요")
         sys.exit(1)
 
-    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, args.download_images))
+    url_list = [u.strip() for u in args.urls.split(",") if u.strip()] if args.urls else None
+    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, args.download_images, args.download_fonts, args.extract_colors, url_list))
