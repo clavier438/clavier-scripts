@@ -47,6 +47,7 @@ wrapper_body() {
         py)     interp="python3" ;;
         mjs|js) interp="node" ;;
         rb)     interp="ruby" ;;
+        swift)  interp="swift" ;;
         *)      return 1 ;;
     esac
     cat <<WRAPPER_EOF
@@ -92,7 +93,7 @@ install_scripts() {
         echo "  [wrap]   $name → $filename"
         ((count++))
     done < <(find "$src_dir" -maxdepth 1 -type f \
-        \( -name "*.sh" -o -name "*.py" -o -name "*.rb" -o -name "*.js" -o -name "*.mjs" \) \
+        \( -name "*.sh" -o -name "*.py" -o -name "*.rb" -o -name "*.js" -o -name "*.mjs" -o -name "*.swift" \) \
         -print0)
 
     # Dead entry cleanup — source 가 사라진 옛 wrapper / dead symlink 정리.
