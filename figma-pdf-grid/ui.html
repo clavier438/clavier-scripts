@@ -5,47 +5,82 @@
 <style>
   body { font: 12px -apple-system, sans-serif; margin: 0; padding: 16px; color: #333; }
   h3 { margin: 0 0 4px; font-size: 14px; }
-  .sub { color: #888; margin: 0 0 14px; }
-  label { display: block; margin: 12px 0 4px; font-weight: 600; }
+  .sub { color: #888; margin: 0 0 12px; }
+  label { display: block; margin: 10px 0 4px; font-weight: 600; }
+  input[type=text] { width: 100%; padding: 5px 7px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
   input[type=file] { width: 100%; }
-  input[type=number] { width: 70px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }
+  input[type=number] { width: 60px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }
   .row { display: flex; gap: 14px; }
-  button { margin-top: 18px; width: 100%; padding: 11px; background: #18a0fb; color: #fff;
+  button { margin-top: 12px; width: 100%; padding: 10px; background: #18a0fb; color: #fff;
            border: none; border-radius: 6px; font-weight: 700; font-size: 13px; cursor: pointer; }
-  button:disabled { background: #cfd8df; cursor: default; }
+  button.alt { background: #eef1f4; color: #333; }
+  button:disabled { background: #cfd8df; color: #fff; cursor: default; }
+  hr { border: none; border-top: 1px solid #eee; margin: 16px 0; }
   #status { margin-top: 12px; color: #666; min-height: 16px; }
 </style>
 </head>
 <body>
   <h3>PDF Grid 배치</h3>
-  <p class="sub">PDF를 분해한 PNG들을 선택하면 그리드로 펼쳐 배치합니다.</p>
-
-  <label>PNG/JPG 파일 선택 (여러 장)</label>
-  <input type="file" id="files" accept="image/png,image/jpeg" multiple>
+  <p class="sub">① 로컬 서버 자동로드(클릭 1번) 또는 ② 파일 직접 선택</p>
 
   <div class="row">
-    <div><label>열 수</label><input type="number" id="cols" value="5" min="1"></div>
+    <div><label>열 수</label><input type="number" id="cols" value="3" min="1"></div>
     <div><label>간격(px)</label><input type="number" id="gap" value="40" min="0"></div>
-    <div><label>최대폭(px)</label><input type="number" id="maxw" value="800" min="0"></div>
+    <div><label>최대폭(px)</label><input type="number" id="maxw" value="0" min="0"></div>
   </div>
 
-  <button id="go" disabled>그리드 배치</button>
-  <div id="status">파일을 선택하세요</div>
+  <label>① 서버 URL (webp 자동로드)</label>
+  <input type="text" id="server" value="http://localhost:8787">
+  <button id="autoload">서버에서 자동 배치</button>
+
+  <hr>
+
+  <label>② 또는 파일 직접 선택</label>
+  <input type="file" id="files" accept="image/png,image/jpeg,image/webp" multiple>
+  <button id="go" class="alt" disabled>선택 파일 배치</button>
+
+  <div id="status">서버 자동로드 또는 파일 선택</div>
 
   <script>
-    var filesEl = document.getElementById('files');
-    var goEl = document.getElementById('go');
+    function opts() {
+      var cols = parseInt(document.getElementById('cols').value, 10) || 3;
+      var gap = parseInt(document.getElementById('gap').value, 10); if (isNaN(gap)) gap = 40;
+      var maxWidth = parseInt(document.getElementById('maxw').value, 10) || 0;
+      return { cols: cols, gap: gap, maxWidth: maxWidth };
+    }
     var statusEl = document.getElementById('status');
-    var selected = [];
 
+    // ① 서버 자동로드 — index.json(webp 파일명 배열) fetch → URL 리스트 → place-grid-urls
+    document.getElementById('autoload').onclick = async function () {
+      var base = document.getElementById('server').value.replace(/\/+$/, '');
+      statusEl.textContent = '서버 인덱스 읽는 중…';
+      try {
+        var res = await fetch(base + '/index.json');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        var list = await res.json();
+        list.sort(function (a, b) { return a.localeCompare(b, undefined, { numeric: true }); });
+        var urls = list.map(function (n) { return { name: n, url: base + '/' + n }; });
+        var o = opts();
+        statusEl.textContent = list.length + '장 자동 배치 중…';
+        parent.postMessage({ pluginMessage: {
+          type: 'place-grid-urls', urls: urls, cols: o.cols, gap: o.gap, maxWidth: o.maxWidth,
+          groupName: (base.split('/').pop() || 'amandayan')
+        } }, '*');
+      } catch (e) {
+        statusEl.textContent = '서버 실패: ' + e.message + ' (pdf-grid-serve.sh 실행 확인)';
+      }
+    };
+
+    // ② 파일 선택 (fallback)
+    var selected = [];
+    var filesEl = document.getElementById('files'), goEl = document.getElementById('go');
     filesEl.onchange = function () {
       selected = Array.prototype.slice.call(filesEl.files).sort(function (a, b) {
         return a.name.localeCompare(b.name, undefined, { numeric: true });
       });
       goEl.disabled = selected.length === 0;
-      statusEl.textContent = selected.length + '장 선택됨' + (selected.length ? ' (' + selected[0].name + ' …)' : '');
+      statusEl.textContent = selected.length + '장 선택됨';
     };
-
     goEl.onclick = async function () {
       goEl.disabled = true;
       statusEl.textContent = '읽는 중…';
@@ -54,15 +89,9 @@
         var buf = await selected[i].arrayBuffer();
         images.push({ name: selected[i].name, bytes: new Uint8Array(buf) });
       }
-      var cols = parseInt(document.getElementById('cols').value, 10) || 5;
-      var gap = parseInt(document.getElementById('gap').value, 10);
-      if (isNaN(gap)) gap = 40;
-      var maxWidth = parseInt(document.getElementById('maxw').value, 10) || 0;
-      // 그룹 이름: 첫 파일명에서 페이지 접미사 제거
-      var groupName = (selected[0] ? selected[0].name.replace(/[-_]?\d+\.\w+$/, '') : 'PDF Grid') || 'PDF Grid';
-      statusEl.textContent = '배치 중…';
+      var o = opts();
       parent.postMessage({ pluginMessage: {
-        type: 'place-grid', images: images, cols: cols, gap: gap, maxWidth: maxWidth, groupName: groupName
+        type: 'place-grid', images: images, cols: o.cols, gap: o.gap, maxWidth: o.maxWidth, groupName: 'PDF Grid'
       } }, '*');
     };
   </script>
