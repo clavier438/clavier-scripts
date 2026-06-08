@@ -32,6 +32,10 @@ export function createClient(pat) {
   return {
     getSchema: (baseId) => call('GET', `${META}/bases/${baseId}/tables`),
 
+    // 단일 record fetch (id 로). 기존엔 listRecords 로 우회했음 — 자연스러운 read 갭 보강(순수 추가).
+    getRecord: (baseId, tableId, recordId) =>
+      call('GET', `${API}/${baseId}/${tableId}/${recordId}`),
+
     async listRecords(baseId, tableId, opts = {}) {
       const all = [];
       let offset;
