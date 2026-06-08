@@ -1,0 +1,16 @@
+{
+  "_comment": "Airtable 오퍼 레코드의 필드명 → 템플릿 슬롯 매핑. 폴더=의미: 코드에 슬롯을 하드코딩하지 않고 여기서 표현. 후보를 배열로 두면 offer.mjs 가 레코드에 실제 존재하는 첫 필드를 쓴다(스키마 적응형). 레코드에 맞춰 자유롭게 고쳐라.",
+  "slots": {
+    "title":       ["제목", "title", "Name", "오퍼명"],
+    "hero_image":  ["대표이미지", "hero", "image", "이미지"],
+    "body_html":   ["본문", "body", "내용", "description"],
+    "cta_text":    ["버튼텍스트", "cta", "cta_text"],
+    "cta_url":     ["버튼링크", "cta_url", "link", "url"],
+    "footer_html": ["푸터", "footer"]
+  },
+  "defaults": {
+    "cta_text": "자세히 보기",
+    "footer_html": "이 메일은 오퍼 안내를 위해 발송되었습니다."
+  },
+  "archive_url_field": "스티비아카이브"
+}
