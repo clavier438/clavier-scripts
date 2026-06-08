@@ -43,6 +43,78 @@ def red(s):   return _c("31", s)
 def cyan(s):  return _c("36", s)
 
 
+# ── 대화형 입력 (workerCtl 의 prompt/selectFromList 패턴을 Python 으로) ──────
+# 정신: Enter = 기본값(그전의 값) 유지. workerCtl.mjs line 435~456 의 "기본값 표시
+#   + Enter 로 유지" wizard 의미론과 동일. 비-TTY(파이프·자동화)면 입력을 막지
+#   않고 기본값으로 흘려보낸다 (main 이 비-TTY 면 애초에 help 로 빠지지만 이중 안전).
+SIDECAR = ".brandRe.json"
+
+def _tty():
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+def ask(label, default=None):
+    """한 줄 입력. default 있으면 [default] 표시 + Enter 로 유지."""
+    hint = f" {dim('[' + str(default) + ']')}" if default not in (None, "") else ""
+    try:
+        v = input(f"  {bold(label)}{hint}: ").strip()
+    except EOFError:
+        return default
+    return v or default
+
+def ask_yn(label, default=False):
+    d = "Y/n" if default else "y/N"
+    try:
+        v = input(f"  {bold(label)} {dim('(' + d + ')')}: ").strip().lower()
+    except EOFError:
+        return default
+    if not v:
+        return default
+    return v in ("y", "yes", "ㅛ")
+
+def pick(items, label_fn, prompt_label="선택", extra=None):
+    """번호 메뉴 (selectFromList 패턴). extra=[(키, 표시)] 는 목록 뒤 특수 선택지.
+    반환: 고른 item / extra 키 문자열 / None(Enter·취소)."""
+    extra = extra or []
+    for i, it in enumerate(items, 1):
+        print(f"   {bold(str(i).rjust(2))}. {label_fn(it)}")
+    base = len(items)
+    for j, (_, disp) in enumerate(extra, 1):
+        print(f"   {bold(str(base + j).rjust(2))}. {disp}")
+    total = base + len(extra)
+    while True:
+        try:
+            raw = input(f"\n  {prompt_label} {dim('(1-' + str(total) + ', Enter=취소)')}: ").strip()
+        except EOFError:
+            return None
+        if not raw:
+            return None
+        if raw.isdigit():
+            n = int(raw)
+            if 1 <= n <= base:
+                return items[n - 1]
+            if base < n <= total:
+                return extra[n - base - 1][0]
+        print(red(f"  ✗ 1~{total} 중에서 입력해주세요"))
+
+def load_sidecar(host_dir):
+    p = os.path.join(host_dir, SIDECAR)
+    if os.path.exists(p):
+        try:
+            return json.load(open(p, encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+def save_sidecar(host_dir, data):
+    try:
+        cur = load_sidecar(host_dir)
+        cur.update(data)
+        json.dump(cur, open(os.path.join(host_dir, SIDECAR), "w", encoding="utf-8"),
+                  ensure_ascii=False, indent=2)
+    except Exception:
+        pass  # 편의 기능 — 저장 실패해도 파이프라인은 계속
+
+
 # ── 경로 헬퍼 ──────────────────────────────────────────────────────────────
 def books_root():
     return os.path.abspath(os.path.expanduser(os.environ.get("BRANDRE_BOOKS", "books")))
@@ -276,7 +348,105 @@ def cmd_folder(args):
     cmd_organize([dest])
     cmd_tag([dest])
 
+# ── 대화형 wizard (workerCtl 처럼 — 안내 따라 치거나 Enter 로 그전 값) ────────
+def interactive():
+    """brandRe (인자 없이) — 안내형. 기존 book 이어가기 또는 새 소스(URL/폴더).
+    각 단계는 cmd_* verb 를 그대로 호출 (reuse-first — wizard 는 얇은 오케스트레이터)."""
+    print(bold("═══ brandRe ═══") + dim("  design-recon 대화형 (Ctrl-C 종료)"))
+    root = books_root()
+    hosts = sorted(d for d in os.listdir(root)
+                   if os.path.isdir(os.path.join(root, d))) if os.path.isdir(root) else []
+    if hosts:
+        print(dim(f"\nbooks  {root}"))
+        choice = pick(hosts, lambda h: _book_label(root, h), "분석할 book",
+                      extra=[("__new__", cyan("+ 새로 (URL 캡처 또는 폴더)"))])
+    else:
+        print(dim("\n(아직 book 없음 — 새 소스로 시작)"))
+        choice = "__new__"
+    if choice is None:
+        print(dim("취소")); return
+    if choice == "__new__":
+        return _wizard_new(root)
+    return _wizard_host(os.path.join(root, choice))
+
+def _book_label(root, h):
+    lp = os.path.join(root, h, "recon", "_layers.json")
+    if os.path.exists(lp):
+        try:
+            layers = json.load(open(lp, encoding="utf-8"))
+            mark = green("✓ 보고서") if layers.get("report", {}).get("status") == "ready" else yellow("◐ 대기")
+        except Exception:
+            mark = dim("?")
+    else:
+        mark = dim("미정리")
+    return f"{h:24} {mark}"
+
+def _wizard_new(root):
+    src = ask("URL 또는 폴더 경로")
+    if not src:
+        print(dim("취소")); return
+    # 실재하는 폴더면 = 이미 가진 사진 → folder 파이프라인 (캡처 생략)
+    if os.path.isdir(os.path.expanduser(src)):
+        base = os.path.basename(os.path.expanduser(src).rstrip("/")) or "folder"
+        name = ask("books 폴더명", base)
+        dest = os.path.join(root, name)
+        save_sidecar_safe(dest, {"src": os.path.abspath(os.path.expanduser(src)), "name": name})
+        cmd_folder([src, "--as", name])
+        return
+    # URL → 캡처 옵션 (그전 값 = sidecar)
+    url = src if urlparse(src).scheme else "https://" + src
+    host = host_from_url(url)
+    prev = load_sidecar(os.path.join(root, host))
+    maxp = ask("최대 페이지 수", prev.get("max_pages", 3))
+    cmd_capture([url, "--max-pages", str(maxp)])
+    hd = host_dir_or_die(host)
+    save_sidecar(hd, {"url": url, "max_pages": maxp})
+    cmd_organize([hd])
+    _wizard_after(hd, host)
+
+def _wizard_host(hd):
+    host = os.path.basename(hd)
+    print(bold(f"\n{host}"))
+    cmd_status([hd])
+    print()
+    steps = [("organize", "정리 다시 (recon)"),
+             ("tag",      "사진 비전 분류 (claude 호출 — 시간·비용)"),
+             ("report",   "보고서 재생성"),
+             ("open",     "보고서 열기")]
+    label = dict(steps)
+    sel = pick([k for k, _ in steps], lambda k: label[k], "무엇을 할까요")
+    if not sel:
+        print(dim("취소")); return
+    {"organize": cmd_organize, "tag": cmd_tag, "report": cmd_report, "open": cmd_open}[sel]([hd])
+    if sel != "open":
+        _wizard_after(hd, host)
+
+def _wizard_after(hd, host):
+    """파이프라인 직후 — 미태깅이면 비전 분류 권유, 그리고 열기 제안."""
+    lp = os.path.join(recon_dir_of(hd), "_layers.json")
+    if os.path.exists(lp):
+        try:
+            layers = json.load(open(lp, encoding="utf-8"))
+        except Exception:
+            layers = {}
+        if layers.get("photos", {}).get("status") == "untagged":
+            if ask_yn("사진 비전 분류도 할까요? (claude 호출 — 사진 섹션 채움)", default=False):
+                cmd_tag([hd])
+    print(green("\n✓ 완료"))
+    if ask_yn("지금 보고서 열까요?", default=True):
+        cmd_open([hd])
+    else:
+        print(dim(f"   나중에: brandRe open {host}"))
+
+def save_sidecar_safe(host_dir, data):
+    """host_dir 가 아직 없을 수 있는 시점(folder dest 미생성) 대비 — 있을 때만 저장."""
+    if os.path.isdir(host_dir):
+        save_sidecar(host_dir, data)
+
+
 HELP = """brandRe — 브랜드 아이덴티티 리버스 엔지니어링 단일 진입점 (design-recon)
+
+  brandRe                    대화형 안내 (book 고르기 / 새 소스 / 단계 선택) ★
 
   brandRe <url>              풀 파이프라인: 캡처 → 정리 → HTML 보고서
   brandRe <폴더> | folder <폴더>   이미 가진 사진 폴더 분석 (캡처 생략) [--as <이름>]
@@ -296,11 +466,19 @@ def main():
     except Exception:
         pass
     args = sys.argv[1:]
-    if not args or args[0] in ("-h", "--help", "help"):
+    if args and args[0] in ("-h", "--help", "help"):
+        print(HELP.strip() if HELP else "brandRe")
+        return
+    if not args:
+        # workerCtl 처럼: TTY 면 대화형 안내, 비-TTY(파이프·자동화)면 help (입력 안 막음)
+        if _tty():
+            return interactive()
         print(HELP.strip() if HELP else "brandRe")
         return
     verb = args[0]
     rest = args[1:]
+    if verb in ("wizard", "i", "go"):
+        return interactive()
     table = {
         "capture": cmd_capture, "organize": cmd_organize, "tag": cmd_tag,
         "report": cmd_report, "open": cmd_open, "status": cmd_status,
