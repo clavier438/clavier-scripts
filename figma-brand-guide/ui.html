@@ -1,0 +1,82 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  body { font: 12px -apple-system, sans-serif; margin: 0; padding: 16px; color: #333; }
+  h3 { margin: 0 0 2px; font-size: 14px; } .sub { color: #888; margin: 0 0 14px; font-size: 11px; }
+  label { display:block; margin: 12px 0 4px; font-weight: 600; }
+  input[type=text] { width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+  input[type=file] { width: 100%; font-size: 11px; }
+  button { margin-top: 18px; width: 100%; padding: 11px; background: #cc3366; color:#fff; border:none; border-radius:6px; font-weight:700; font-size:13px; cursor:pointer; }
+  button:disabled { background:#d8c0c8; cursor:default; }
+  #status { margin-top: 12px; color:#666; min-height: 30px; font-size: 11px; line-height:1.5; }
+</style></head><body>
+  <h3>Brand Guide 생성</h3>
+  <p class="sub">분석 폴더(~/Pictures/imageRefs/&lt;brand&gt;)를 선택하면 Figma에 브랜드 스탠다드를 생성합니다.</p>
+  <label>브랜드명</label><input type="text" id="brand" placeholder="The Slow">
+  <label>URL</label><input type="text" id="url" placeholder="theslow.com">
+  <label>분석 폴더 선택 (폴더 전체)</label>
+  <input type="file" id="folder" webkitdirectory directory multiple>
+  <button id="go" disabled>Figma에 생성</button>
+  <div id="status"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+let files = [];
+$("folder").addEventListener("change", (e) => {
+  files = [...e.target.files];
+  const webps = files.filter(isPhoto).length;
+  $("status").textContent = `파일 ${files.length}개 (사진 ${webps}장)`;
+  $("go").disabled = !files.length;
+  // 폴더명으로 브랜드명 자동
+  const rp = files[0] && files[0].webkitRelativePath;
+  if (rp && !$("brand").value) $("brand").value = rp.split("/")[0];
+});
+function rel(f){ return f.webkitRelativePath || f.name; }
+function isPhoto(f){ const p = rel(f); return /\.webp$/i.test(p) && !/_palette\/|_assets\/|_fonts\//.test(p); }
+
+async function toPng(file) {
+  const bmp = await createImageBitmap(file);
+  let w = bmp.width, h = bmp.height, max = 720, s = Math.max(w,h) > max ? max/Math.max(w,h) : 1;
+  w = Math.round(w*s); h = Math.round(h*s);
+  const c = document.createElement("canvas"); c.width = w; c.height = h;
+  c.getContext("2d").drawImage(bmp, 0, 0, w, h);
+  const blob = await new Promise(r => c.toBlob(r, "image/png"));
+  return Array.from(new Uint8Array(await blob.arrayBuffer()));
+}
+async function readText(f){ return await f.text(); }
+
+$("go").addEventListener("click", async () => {
+  $("go").disabled = true;
+  try {
+    // 분류
+    const tagsF = files.find(f => /(^|\/)_tags\.json$/.test(rel(f)));
+    const palF  = files.filter(f => /_palette\/.*\.json$/.test(rel(f))).sort((a,b)=>rel(a).length-rel(b).length)[0];
+    const fontF = files.find(f => /_fonts\/_loaded\.txt$/.test(rel(f)));
+    const svgN  = files.filter(f => /_assets\/.*\.svg$/i.test(rel(f))).length;
+    const photos = files.filter(isPhoto);
+
+    const tags = tagsF ? JSON.parse(await readText(tagsF)) : [];
+    let palette = [];
+    if (palF) {
+      const raw = JSON.parse(await readText(palF));
+      const seen = new Set();
+      palette = raw.filter(c => c.hex && !seen.has(c.hex) && seen.add(c.hex)).slice(0, 8);
+    }
+    let fonts = [];
+    if (fontF) fonts = [...new Set((await readText(fontF)).split("\n").map(l => l.split("|")[0].trim()).filter(Boolean))];
+
+    $("status").textContent = `이미지 변환 중 (0/${photos.length})…`;
+    const images = [];
+    for (let i = 0; i < photos.length; i++) {
+      try { images.push({ name: photos[i].name, bytes: await toPng(photos[i]) }); } catch(e){}
+      if (i % 5 === 0) $("status").textContent = `이미지 변환 중 (${i+1}/${photos.length})…`;
+    }
+    $("status").textContent = "Figma에 생성 중…";
+    parent.postMessage({ pluginMessage: {
+      type: "build", brand: $("brand").value || "Brand", url: $("url").value || "",
+      tags, palette, images, fonts, svgCount: svgN
+    }}, "*");
+    $("status").textContent = `완료 → ${images.length}장 배치, ${tags.length} 분류`;
+  } catch (e) {
+    $("status").textContent = "오류: " + e.message;
+  }
+  $("go").disabled = false;
+});
+</script></body></html>
