@@ -18,10 +18,12 @@ metadata:
 **위임 메커니즘 지도 (Framer, 무엇을 무엇으로):**
 - 외형(모양 1개) → `ControlType.ComponentInstance`
 - 레이아웃(컨테이너) → `ControlType.ComponentInstance` + `cloneElement(…, children)` 주입
-- 반복 아이템(N개 이미지 등) → `ControlType.Array`(`control:{type}` 단수) — 개수 제한까지 사라짐. ※ `ControlType.Image` deprecated → `ControlType.ResponsiveImage`
+- 반복 아이템(N개 이미지 등) → `ControlType.Array`(`control:{type}` 단수) — 개수 제한 사라짐. **단, ⚠ Array 는 CMS 바인딩 불가 — 아래 ★ 함정 먼저 확인.** ※ `ControlType.Image` deprecated → `ControlType.ResponsiveImage`
 - 애니메이션 파라미터(곡선·시간) → `ControlType.Transition` 하나 (공유 Transition 변수 바인딩 가능 → simple 노브 easing/duration/bounce/source 통째 제거)
 - 변형마다 달라져야 하는 시각값(딤 등) → 슬롯 말고 **단순 prop**(Color/Number). prop 이라야 Framer 배리언트가 전환 시 자동 보간. (2026-06-02 dim 사례)
 
 **경계 — 위임하면 안 되는 것 (과잉 적용 방지):** 스칼라 *값노브*(autoplay·loop·startIndex·radius·objectFit·drag 임계값 등)는 컴포넌트/변수로 받을 게 아니라 그냥 값이다. 억지 위임은 또 다른 군더더기 = "막았다는 기분". 위임 대상 = 컴포넌트/레이아웃/반복아이템/애니메이션변수/배리언트-구동 시각값. 나머지 스칼라는 그대로 둔다. ("대부분 밖에서" ≠ "전부 밖에서".) 사용자가 "더 찾아봐"면 전수 감사 후 *되는 것/안 되는 것을 근거와 함께* 표로 보고.
+
+**★ Array vs 개별 슬롯 — CMS 바인딩 함정 (2026-06-05):** 반복되는 개별 prop(image1~10 등)이 군더더기처럼 보여도 *의도적 CMS 바인딩 우회*일 수 있다. Framer 에서 **개별 image prop(ControlType.Image/ResponsiveImage)은 각각 CMS 필드에 바인딩되지만 `ControlType.Array` 는 CMS 에 바인딩 불가.** 개별 슬롯을 Array 로 묶으면 "개수 무제한"을 얻는 대신 *바인딩 능력을 죽인다.* → 반복 prop 을 "단순화"하기 전 **각 슬롯이 개별 바인딩되는지(=의도적 제약 우회인지) 먼저 확인.** 이번 세션 image1~10 → Array 로 뭉갰다가 교정받음(사용자: "매뉴얼을 왜 저렇게 받아; 따로따로 바인딩되게 — 프레이머 제약 우회용"). **위임/단순화엔 *기능 비용*이 따를 수 있다 — 항상 트레이드오프(특히 바인딩/CMS/변형 연동) 확인.**
 
 관련: [[feedback_component_level_tone]] (외형/톤을 컴포넌트에 박는 같은 방향), [[feedback_reference_class]] (위임 패턴은 구현 전 동작 레퍼런스로 확인), [[feedback_framer_asset_convention]].
