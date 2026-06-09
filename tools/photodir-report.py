@@ -104,33 +104,32 @@ def main():
     ap.add_argument("--render-edge", type=int, default=460, help="before/after 렌더 long-edge")
     a = ap.parse_args()
     work = os.path.abspath(os.path.expanduser(a.work))
-    concepts = _load(os.path.join(work, "_concepts.json"))
+    treatments_man = _load(os.path.join(work, "_treatments.json"))
     subjects = _load(os.path.join(work, "_subjects.json"))
     tree = _load(os.path.join(work, "_lut_tree.json"))
     brief = _load(os.path.join(work, "brief.json"))
     brand = a.brand or (brief or {}).get("brand") or os.path.basename(os.path.dirname(work))
 
-    # 피사체 인덱스 (파일→subjects)
     subj_of = {r["file"]: r.get("subjects", []) for r in (subjects or [])}
 
-    # 컨셉 노드: lut_tree(잔차) + concepts(샘플) id 로 머지
-    lut_by_id = {c["id"]: c for c in (tree or {}).get("concepts", [])}
-    samp_by_id = {c["id"]: c for c in (concepts or {}).get("concepts", [])}
-    brief_concepts = {c["id"]: c for c in (brief or {}).get("concepts", [])}
-    order = list(samp_by_id) or list(lut_by_id)
+    # treatment 노드: lut_tree(base 잔차) + _treatments(샘플) + brief(미니) 를 id 로 머지
+    lut_by_id = {t["id"]: t for t in (tree or {}).get("treatments", [])}
+    samp_by_id = {g["id"]: g for g in (treatments_man or {}).get("groups", [])}
+    brief_t = {c["id"]: c for c in (brief or {}).get("concepts", [])}
+    order = [t["id"] for t in (tree or {}).get("treatments", [])] or list(samp_by_id)
+    base = (tree or {}).get("base")
 
     html = [_HEAD.replace("{{BRAND}}", esc(brand))]
-    # ── 브리프(창작면) ──
     if brief:
         html.append(_render_brief(brief))
-    # ── 증거 트리(분석면) ──
-    html.append('<section class="evidence"><h2>증거 — 디렉션 트리</h2>')
-    if tree and tree.get("core"):
-        html.append(f'<div class="core"><h3>CORE — 브랜드 코어 그레이드</h3>'
-                    f'<pre>{esc(tree["core"].get("describe",""))}</pre></div>')
-    for cid in order:
-        html.append(_render_concept(work, cid, samp_by_id.get(cid), lut_by_id.get(cid),
-                                    brief_concepts.get(cid), subj_of, a.render_edge))
+    html.append('<section class="evidence"><h2>증거 — treatment 트리 (어떻게 찍고·후보정)</h2>')
+    if base:
+        html.append(f'<div class="core"><h3>BASE — 브랜드 공통 후보정 (이 위에 각 treatment 가 얹힘)</h3>'
+                    f'<pre>{esc(base.get("describe",""))}</pre>'
+                    f'<p class="ev">3패널 = 추정 무보정(역LUT) → +BASE → +treatment(≈원본)</p></div>')
+    for tid in order:
+        html.append(_render_treatment(work, tid, samp_by_id.get(tid), lut_by_id.get(tid),
+                                      brief_t.get(tid), subj_of, base, a.render_edge))
     html.append('</section>')
     html.append(_FOOT)
 
@@ -181,51 +180,57 @@ def _render_brief(b):
     return "\n".join(h)
 
 
-def _render_concept(work, cid, samp, lut, briefc, subj_of, edge):
-    ko = (samp or {}).get("ko") or (lut or {}).get("id") or cid
+def _render_treatment(work, tid, samp, lut, briefc, subj_of, base, edge):
+    ko = (briefc or {}).get("ko") or (lut or {}).get("ko") or (samp or {}).get("describe") or tid
     n = (samp or {}).get("size") or (lut or {}).get("n") or 0
-    h = [f'<details class="cnode" open><summary><b>{esc(ko)}</b> '
+    desc = (lut or {}).get("describe", "") or (samp or {}).get("describe", "")
+    h = [f'<details class="cnode" open><summary><b>{esc(tid)} · {esc(ko)}</b> '
          f'<span class="n">{n}장</span></summary>']
-    # 잔차 (delta from core)
-    if lut and lut.get("delta_from_core"):
-        h.append('<div class="delta">Δcore: ' + " · ".join(esc(d) for d in lut["delta_from_core"]) + '</div>')
+    if desc:
+        h.append(f'<pre class="tdesc">{esc(desc)}</pre>')
+    # 잔차 (delta from base) + nested
+    if lut and lut.get("delta_from_base"):
+        h.append('<div class="delta">Δbase: ' + " · ".join(esc(d) for d in lut["delta_from_base"]) + '</div>')
         for sub in lut.get("subs", []):
             h.append(f'<div class="sub">└ {esc(sub["id"])} ({sub["n"]}장) Δ: '
-                     + " · ".join(esc(d) for d in sub.get("delta_from_concept", [])) + '</div>')
+                     + " · ".join(esc(d) for d in sub.get("delta_from_treatment", [])) + '</div>')
     # 미니 브리프
     if briefc and briefc.get("mini"):
         m = briefc["mini"]
-        h.append('<div class="mini"><b>미니브리프</b>')
-        if m.get("intent"): h.append(f'<p><i>{esc(m["intent"])}</i></p>')
+        h.append('<div class="mini"><b>미니브리프 — 어떻게 찍고·후보정</b>')
+        if m.get("shoot"): h.append(f'<p>촬영: {esc(m["shoot"])}</p>')
         if m.get("grade"): h.append(f'<p>그레이드: {esc(m["grade"])}</p>')
-        for rr in m.get("rules", []):
-            h.append(f'<p>· {esc(rr)}</p>')
+        if m.get("use"): h.append(f'<p><i>주 사용처: {esc(m["use"])}</i></p>')
         h.append('</div>')
-    # before/after 렌더 (대표 1장 + 컨셉 절대 cube)
-    sd = (samp or {}).get("dir")
-    samples = (samp or {}).get("samples", [])
-    if sd and samples:
+    # 3패널 before/after: 추정무보정(역LUT) → +BASE → +treatment(≈원본)
+    sd = (samp or {}).get("dir"); samples = (samp or {}).get("samples", [])
+    if sd and samples and lut:
         first = os.path.join(work, sd, samples[0])
-        cube_path = os.path.join(work, (lut or {}).get("cube", "")) if lut else ""
-        if os.path.exists(first):
+        inv = os.path.join(work, lut.get("inverse_cube", ""))
+        basef = os.path.join(work, (base or {}).get("cube", ""))
+        fwd = os.path.join(work, lut.get("cube", ""))
+        if os.path.exists(first) and os.path.exists(inv):
             try:
                 im = Image.open(first); im.thumbnail((edge, edge))
-                before = b64(im, edge)
-                after = before
-                if cube_path and os.path.exists(cube_path):
-                    after = b64(apply_cube(im, load_cube(cube_path)), edge)
-                h.append(f'<div class="ba"><figure><img src="{before}"><figcaption>before</figcaption></figure>'
-                         f'<figure><img src="{after}"><figcaption>after (LUT)</figcaption></figure></div>')
+                neutral = apply_cube(im, load_cube(inv))                 # 그레이드 제거 = 추정 무보정
+                panels = [(b64(neutral, edge), "추정 무보정 (역LUT)")]
+                if os.path.exists(basef):
+                    panels.append((b64(apply_cube(neutral, load_cube(basef)), edge), "+ BASE"))
+                if os.path.exists(fwd):
+                    panels.append((b64(apply_cube(neutral, load_cube(fwd)), edge), "+ treatment (≈원본)"))
+                h.append('<div class="ba">' + "".join(
+                    f'<figure><img src="{src}"><figcaption>{cap}</figcaption></figure>' for src, cap in panels)
+                    + '</div>')
             except Exception:
                 pass
-    # 피사체 교차표 (이 컨셉 샘플의 subject 분포)
+    # 피사체 교차표 (보조 — 이 treatment 가 어떤 피사체에 걸치나)
     from collections import Counter
     c = Counter(s for f in samples for s in subj_of.get(f, []))
     if c:
         tot = max(1, len(samples))
-        h.append('<div class="xtab">피사체: ' + " · ".join(
+        h.append('<div class="xtab">걸친 피사체: ' + " · ".join(
             f'{esc(k)} {round(100*v/tot)}%' for k, v in c.most_common(6)) + '</div>')
-    # 샘플 갤러리
+    # 샘플 갤러리 (다양성 추출 50)
     if sd and samples:
         h.append('<div class="gal">')
         for fn in samples:
@@ -263,6 +268,7 @@ blockquote{border-left:3px solid var(--amber);margin:1em 0;padding:.4em 1em;colo
 .evidence{margin-top:3em}.core pre{background:#15140f;padding:1em;border-radius:6px;color:var(--amber);font-size:13px;overflow:auto}
 .cnode{border:1px solid var(--line);border-radius:8px;margin:14px 0;padding:8px 16px;background:#111}
 .cnode summary{cursor:pointer;font-size:18px}.cnode .n{color:var(--dim);font-size:13px}
+.tdesc{background:#15140f;color:var(--dim);font-size:12px;padding:.4em .8em;border-radius:5px;margin:.3em 0}
 .delta{color:var(--amber);font-size:13px;font-family:monospace;margin:.5em 0}
 .sub{color:var(--dim);font-size:12px;font-family:monospace;margin-left:1em}
 .mini{background:#15140f;border-radius:6px;padding:.5em 1em;margin:.7em 0;font-size:14px}
