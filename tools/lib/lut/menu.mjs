@@ -1,11 +1,11 @@
 // menu.mjs — lut 인자 없이 실행 시 workerCtl 스타일 인터랙티브.
-//   최근 프로젝트 선택 / 경로 paste / 새 프로젝트 → 액션 (watch / render / preview).
+//   최근 프로젝트 선택 / 경로 paste / 새 프로젝트 → 액션 (watch / preview / render).
 
 import { existsSync } from "fs";
-import { resolve as resolvePath } from "path";
+import { join, resolve as resolvePath } from "path";
 import { bold, dim, cyan, green, yellow, gray } from "../cli-color.mjs";
 import { ask, selectNumber } from "../cli-prompt.mjs";
-import { scanProject } from "./scan.mjs";
+import { scanInput } from "./scan.mjs";
 
 /** 최근 프로젝트 목록 + paste + 새로 만들기. @returns {string|'NEW'|null} */
 export async function pickProject(recent) {
@@ -29,22 +29,21 @@ export async function pickProject(recent) {
   return resolvePath(pick);
 }
 
-/** 프로젝트 상태 패널 + 액션 선택. @returns {'watch'|'render'|'preview'|'exit'} */
+/** 프로젝트 상태 패널 + 액션 선택. @returns {'watch'|'preview'|'render'|'exit'} */
 export async function chooseAction(projectDir) {
-  const scan = scanProject(projectDir);
-  const sceneCount = scan.scenes.length;
-  const imgCount = scan.scenes.reduce((s, x) => s + x.images.length, 0);
+  const scan = scanInput(join(projectDir, "input"));
+  const imgCount = scan.units.reduce((s, u) => s + u.images.length, 0);
 
   console.log();
   console.log(`  ${dim("project")} ${projectDir.split("/").pop()}`);
-  console.log(`  ${dim("scenes ")} ${cyan(sceneCount + "개")} · ${cyan(imgCount + "장")}  ${scan.baseLut ? green("_base ✓") : dim("_base ✗")}`);
-  if (scan.unmatched.length) console.log(`  ${dim("skip   ")} ${yellow(scan.unmatched.join(", "))}`);
+  console.log(`  ${dim("folders")} ${cyan(scan.units.length + "개")} · ${cyan(imgCount + "장")}`);
+  if (scan.warnings.length) console.log(`  ${dim("⚠      ")} ${yellow(scan.warnings.map(w => w.rel).join(", "))} ${dim("(활성 cube 여러개)")}`);
   console.log();
 
   const items = [
-    { id: "watch",   label: green("watch") + dim("   — 실시간 미리보기 (저장 시 자동 갱신)") },
-    { id: "preview", label: cyan("preview") + dim(" — 미리보기 1회 처리 후 종료") },
-    { id: "render",  label: yellow("render") + dim("  — _out/ 에 원본 해상도 최종 출력") },
+    { id: "watch",   label: green("watch") + dim("   — 실시간 미리보기 (저장 시 _preview 자동)") },
+    { id: "preview", label: cyan("preview") + dim(" — _preview 1회 처리 후 종료") },
+    { id: "render",  label: yellow("render") + dim("  — output/vNN 원본 해상도 (버전 누적)") },
   ];
   const picked = await selectNumber(items, it => it.label);
   return picked ? picked.id : "exit";
