@@ -31,9 +31,11 @@ try:
 except ImportError:
     pass
 from claude_cli import run_claude, have_claude   # 구독 빌링 claude CLI 단일 헬퍼 (lib 공유)
+from image_formats import PHOTO_EXTS, register_heif  # 사진 확장자 단일 소스 + HEIF 디코딩 등록
 
 try:
     from PIL import Image
+    register_heif()  # .heic/.heif 도 Image.open 가능하게 (pillow-heif 없으면 graceful)
 except ImportError:
     print("❌ Pillow 필요. webExporter venv 로 실행:")
     print("   webExporter/.venv/bin/python tools/image-tagger.py <dir>")
@@ -41,7 +43,7 @@ except ImportError:
 
 DEFAULT_MODEL = "claude-haiku-4-5"
 MAX_EDGE = 768            # 비전 입력 long-edge px (토큰 절감, 태깅엔 충분)
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".bmp", ".tiff"}
+IMAGE_EXTS = PHOTO_EXTS
 
 # ── 분류 vocab (영문 enum = 모델 출력 안정용 / 한글 = Finder 태그 표시용) ──────────
 # 네 축은 서로 의미가 겹치지 않게 설계: 피사체=무엇, 톤=색감, 후보정=비색상 기법, 구도=배치.

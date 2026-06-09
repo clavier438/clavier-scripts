@@ -25,6 +25,7 @@ try:
     import freshness  # noqa: F401  (repo freshness 체크 — 없는 환경에서도 동작하게 선택적)
 except ImportError:
     pass
+from image_formats import PHOTO_EXTS  # 사진 확장자 단일 소스 (heic/heif 포함)
 
 TOOLS = os.path.dirname(os.path.realpath(__file__))
 REPO = os.path.dirname(TOOLS)
@@ -330,9 +331,8 @@ def cmd_folder(args):
     if not os.path.isdir(src):
         die(f"폴더 아님: {src}")
     name = (name or os.path.basename(src.rstrip("/")) or "folder").replace(os.sep, "-").replace(" ", "-")
-    exts = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".bmp", ".tiff"}
     imgs = [f for f in glob.glob(os.path.join(src, "**", "*"), recursive=True)
-            if os.path.isfile(f) and os.path.splitext(f)[1].lower() in exts
+            if os.path.isfile(f) and os.path.splitext(f)[1].lower() in PHOTO_EXTS
             and not os.path.basename(f).startswith(".")]
     if not imgs:
         die(f"이미지 없음: {src}")

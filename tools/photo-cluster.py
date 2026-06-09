@@ -31,9 +31,11 @@ try:
     import freshness  # noqa: F401  (repo freshness 체크 — 모든 .py tool 첫 import, 없는 환경도 동작)
 except ImportError:
     pass
+from image_formats import PHOTO_EXTS, register_heif  # 사진 확장자 단일 소스 + HEIF 디코딩 등록
 from PIL import Image
+register_heif()  # .heic/.heif 도 Image.open 가능하게 (pillow-heif 없으면 graceful)
 
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".bmp", ".tiff"}
+IMAGE_EXTS = PHOTO_EXTS
 GRID = 4                  # 4×4 그리드 → 16칸 × RGB = 48차원
 FEAT_DIM = GRID * GRID * 3 + 2   # +2 = 전역 채도·명도
 

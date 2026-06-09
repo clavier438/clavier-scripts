@@ -24,10 +24,12 @@ try:
     import freshness  # noqa: F401  (repo freshness 체크 — 모든 .py tool 첫 import, 없는 환경도 동작)
 except ImportError:
     pass
+from image_formats import PHOTO_EXTS, register_heif  # 사진 확장자 단일 소스 + HEIF 디코딩 등록
+register_heif()  # .heic/.heif 도 Image.open 가능하게 (pillow-heif 없으면 graceful)
 
 LUT_SIZE = 17          # 17^3 = 4913 점 (.cube 표준, 가벼움)
 SAMPLE_EDGE = 256      # 통계용 다운샘플 long-edge (속도)
-IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".bmp", ".tiff"}
+IMAGE_EXTS = PHOTO_EXTS
 
 # ── sRGB <-> CIELAB (D65) — 표준 색과학 변환 ─────────────────────────────────
 def _srgb_to_lin(c): return c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4

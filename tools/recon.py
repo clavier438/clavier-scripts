@@ -20,14 +20,16 @@ try:
     import freshness  # noqa: F401
 except ImportError:
     pass
+from image_formats import PHOTO_EXTS, register_heif  # 사진 확장자 단일 소스 + HEIF 디코딩 등록
 try:
     from PIL import Image
+    register_heif()  # .heic/.heif 도 Image.open 가능하게 (pillow-heif 없으면 graceful)
 except ImportError:
     Image = None
 
 TOOLS = os.path.dirname(os.path.realpath(__file__))
 PY = sys.executable
-IMG_EXT = (".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif")
+IMG_EXT = PHOTO_EXTS
 
 def _build_layer_tags(recon, photos_dir):
     """각 레이어의 상태를 멀티태그 dict 로 반환 — brandguide 등이 읽어 섹션 렌더 결정."""
