@@ -95,4 +95,45 @@ if [ -f "$ROUTINES_PENDING" ]; then
 이미 모두 등록돼있으면 마커만 조용히 삭제 (\`rm ~/.clavier/routines-pending\`)."
 fi
 
+# ── 🌿 Git 작업트리 지형 주입 — 멀티세션 브랜치 충돌 방지 (구조 장치 2/3) ──────
+# 콜로니는 repo 당 단일 클론인데 여러 세션이 그 *하나의 작업트리* 를 공유한다.
+# `git checkout` 은 작업트리 전역 상태 → 세션 A 작업 중 세션 B 의 checkout 이
+# A 의 브랜치를 갈아끼우고 커밋이 엉뚱한 브랜치에 얹힌다 (2026-06-08·09 실사고).
+# 정석 해법 = git worktree (세션별 독립 디렉토리). 매 세션 *지형을 보이게* 해서
+# 작업 시작 전 격리(wt)를 유도한다. front door = tools/wt.sh (~/bin/wt).
+# (best-effort, 네트워크 안 씀 — 로컬 worktree list 만. 실패해도 침묵 skip.)
+_wt_landscape() {
+    git -C "$_SCRIPTS_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+    local cur lines
+    cur="$(git -C "$_SCRIPTS_ROOT" symbolic-ref --short HEAD 2>/dev/null || echo detached)"
+    lines="$(git -C "$_SCRIPTS_ROOT" worktree list --porcelain 2>/dev/null | awk '
+        /^worktree /{p=substr($0,10)}
+        /^branch /{b=substr($0,8); sub("refs/heads/","",b); print "  · "p"  ["b"]"}
+        /^detached/{print "  · "p"  [detached]"}')"
+    [ -z "$lines" ] && return 0
+    local n; n="$(printf '%s\n' "$lines" | grep -c .)"
+
+    printf '# === 🌿 Git 작업트리 격리 — 멀티세션 브랜치 충돌 방지 ===\n\n'
+    printf 'clavier-scripts worktree 현황 (.git 공유, 각 = 독립 세션 후보):\n%s\n\n' "$lines"
+    if [ "$cur" != "main" ]; then
+        printf '⚠ **지금 공유 콜로니 클론이 main 이 아닌 `%s` 에 있습니다** — 다른 세션이 그 브랜치에서\n' "$cur"
+        printf '  작업 중일 수 있습니다. 이 클론에서 브랜치를 갈아끼우거나 커밋하지 마세요. 당신 작업은\n'
+        printf '  반드시 격리 worktree 에서:\n\n'
+    elif [ "$n" -gt 1 ]; then
+        printf '⚠ 동시 worktree %s개 = 다른 세션 활성 가능. 작업은 자신의 worktree 안에서만:\n\n' "$n"
+    else
+        printf '작업을 *시작하기 전에* 격리 worktree 를 만드세요 (브랜치 충돌의 근본 차단):\n\n'
+    fi
+    printf '    cd "$(wt new <branch>)"   # origin/main 기준 새 worktree+브랜치 생성 후 그리로 이동\n'
+    printf '    wt list                   # 현황   ·   wt audit  # stray 브랜치/orphan worktree 점검\n\n'
+    printf '규칙: 공유 클론(clavier-scripts)에서 `git checkout <다른-브랜치>` 금지 — 다른 세션 작업을\n'
+    printf '  갈아끼웁니다. 다른 브랜치가 필요하면 항상 `wt` 로 별도 worktree 에서. (설계: tools/wt.sh 헤더)\n'
+}
+_WT_BLOCK="$(_wt_landscape 2>/dev/null)"
+if [ -n "$_WT_BLOCK" ]; then
+    combined="$combined
+
+$_WT_BLOCK"
+fi
+
 echo "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":$(echo "$combined" | jq -Rs .)}}"
