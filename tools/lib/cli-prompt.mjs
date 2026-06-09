@@ -1,7 +1,7 @@
 // cli-prompt.mjs — workerCtl 스타일 인터랙티브 프롬프트 (싱글톤 readline).
 //
 // copy/menu.mjs 가 내부에 박아둔 readline 싱글톤 + selectNumber 패턴을 공유 lib 로 추출.
-// (lut/menu.mjs 가 2번째 사용처 — DRY. 기존 copy/menu.mjs 는 자체 구현 유지, 점진 이관.)
+// 사용처: lut/menu.mjs, copy/menu.mjs (둘 다 여기서 import — 자체 구현 없음).
 //
 // 싱글톤인 이유: `.question()` 은 매번 1회용 listener 등록 — 데이터가 미리 도착하면
 // line 이 버려짐 (특히 piped stdin). 'line' 이벤트로 항상 큐에 쌓고, ask 는 큐 dequeue.
