@@ -111,7 +111,7 @@ def main():
     # base forward + inverse
     open(os.path.join(lut_dir, "base.cube"), "w").write(pl.bake_cube(base, "base", a.strength))
     open(os.path.join(lut_dir, "base.inverse.cube"), "w").write(
-        pl.bake_cube(_neg_sig(base, pl), "base inverse (neutralize)", a.strength))
+        pl.bake_cube(base, "base inverse (neutralize)", a.strength, invert=True))
 
     tree = {"base": {"cube": "luts/base.cube", "inverse_cube": "luts/base.inverse.cube",
                      "signature": _sig_json(base, pl), "describe": pl.describe(base)},
@@ -123,7 +123,7 @@ def main():
         gid, sig = g["id"], g["sig"]
         open(os.path.join(lut_dir, f"{gid}.cube"), "w").write(pl.bake_cube(sig, gid, a.strength))
         open(os.path.join(lut_dir, f"{gid}.inverse.cube"), "w").write(
-            pl.bake_cube(_neg_sig(sig, pl), f"{gid} inverse", a.strength))
+            pl.bake_cube(sig, f"{gid} inverse", a.strength, invert=True))
         open(os.path.join(lut_dir, f"{gid}.residual.cube"), "w").write(
             pl.bake_cube(_delta_sig(sig, base, pl), f"{gid} residual on base", a.strength))
         node = {"id": gid, "ko": g["ko"], "n": g["n"], "dir": g["dir"],

@@ -57,24 +57,39 @@ def lab_to_rgb(L, a, b):
 ZONES = ("shadow", "mid", "high")
 def _zone(L): return "shadow" if L < 33 else "high" if L > 66 else "mid"
 
+def _percentiles(hist, ps):
+    """100-bin 휘도 히스토그램 → 퍼센타일 L 값들 (톤커브 제어점용)."""
+    tot = sum(hist) or 1
+    out, cum, i = [], 0, 0
+    for p in ps:
+        target = tot * p / 100.0
+        while i < len(hist) - 1 and cum + hist[i] < target:
+            cum += hist[i]; i += 1
+        out.append(float(i))
+    return tuple(out)
+
 def grading_signature(path):
-    """사진 → {zone: (L,a,b) 평균}. 톤 구간별 색 = split-toning/톤 형성 서명."""
+    """사진 → {zone:(L,a,b) 평균, '_lum':(p5,p50,p92)}. 톤 구간별 색(split-tone) + 휘도 분포(톤커브).
+    _lum = 브랜드의 '얼마나 어둡게/블랙크러시/하이라이트압축' 톤 성격 — 색이 아닌 *톤* 서명."""
     try:
         im = Image.open(path).convert("RGB"); im.thumbnail((SAMPLE_EDGE, SAMPLE_EDGE))
     except Exception:
         return None
     acc = {z: [0.0, 0.0, 0.0, 0] for z in ZONES}
+    hist = [0] * 101
     for r, g, b in im.getdata():
         L, A, B = rgb_to_lab(r / 255, g / 255, b / 255)
         z = acc[_zone(L)]; z[0] += L; z[1] += A; z[2] += B; z[3] += 1
+        hist[max(0, min(100, int(L)))] += 1
     sig = {}
     for z in ZONES:
         L, A, B, n = acc[z]
         sig[z] = (L / n, A / n, B / n) if n else None
+    sig["_lum"] = _percentiles(hist, (5, 50, 92))
     return sig
 
 def average_signatures(sigs):
-    """여러 사진 서명 → 구간별 평균 (그룹 그레이딩)."""
+    """여러 사진 서명 → 구간별 평균 + _lum 평균 (그룹 그레이딩)."""
     out = {}
     for z in ZONES:
         vals = [s[z] for s in sigs if s and s[z]]
@@ -83,6 +98,9 @@ def average_signatures(sigs):
             out[z] = (sum(v[0] for v in vals) / n, sum(v[1] for v in vals) / n, sum(v[2] for v in vals) / n)
         else:
             out[z] = None
+    lums = [s["_lum"] for s in sigs if s and s.get("_lum")]
+    if lums:
+        out["_lum"] = tuple(sum(v) / len(lums) for v in zip(*lums))
     return out
 
 # ── identity 격자에 그레이딩 베이크 → .cube ──────────────────────────────────
@@ -99,25 +117,57 @@ def _interp_ab(L, anchors):
             return (a0 + (a1 - a0) * t, b0 + (b1 - b0) * t)
     return (0.0, 0.0)
 
-def bake_cube(sig, title, strength=0.85):
-    """그레이딩 서명 → .cube 텍스트. 중립(무채 a=b=0) 대비 톤 구간별 (a,b) 시프트 적용.
-    각 구간의 색조(a,b)를 휘도에 따라 보간해 입히므로 split-toning 이 LUT 에 반영된다."""
+# 중립 기준 휘도 퍼센타일(균형 잡힌 사진의 p5/p50/p92 위치). 톤커브 입력측 앵커.
+_NEUTRAL_LUM = (8.0, 50.0, 90.0)
+
+def _tone_fn(lum, invert=False):
+    """브랜드 _lum(p5,p50,p92) → 휘도 리매핑 함수 L(0~100)→L. 중립→브랜드 (블랙크러시·미드다운).
+    invert=True 면 브랜드→중립(그레이드 제거). 단조 보장 위해 입력 정렬 후 선형보간."""
+    if not lum:
+        return None
+    pts = [(0.0, 0.0), (_NEUTRAL_LUM[0], lum[0]), (_NEUTRAL_LUM[1], lum[1]),
+           (_NEUTRAL_LUM[2], lum[2]), (100.0, 100.0)]
+    if invert:
+        pts = [(y, x) for x, y in pts]
+    pts = sorted(pts)
+    # 단조 증가 강제 (역변환 시 비단조 방지)
+    for i in range(1, len(pts)):
+        if pts[i][1] < pts[i - 1][1]:
+            pts[i] = (pts[i][0], pts[i - 1][1])
+
+    def f(L):
+        if L <= pts[0][0]:
+            return pts[0][1]
+        if L >= pts[-1][0]:
+            return pts[-1][1]
+        for i in range(len(pts) - 1):
+            x0, y0 = pts[i]; x1, y1 = pts[i + 1]
+            if x0 <= L <= x1:
+                t = (L - x0) / (x1 - x0) if x1 > x0 else 0.0
+                return y0 + (y1 - y0) * t
+        return L
+    return f
+
+def bake_cube(sig, title, strength=0.85, invert=False):
+    """그레이딩 서명 → .cube. *톤커브(휘도 L 리매핑)* + 톤구간별 (a,b) 색시프트 둘 다 베이크.
+    톤커브 = 브랜드의 어둡게/블랙크러시/하이라이트압축 성격(가장 정의적). invert=True 면 역변환."""
     anchors = []
     for z, Lref in (("shadow", 16), ("mid", 50), ("high", 83)):
         s = sig.get(z)
-        anchors.append((Lref, s[1], s[2]) if s else None)
-    anchors = [a for a in anchors if a]
+        if s:
+            anchors.append((Lref, -s[1], -s[2]) if invert else (Lref, s[1], s[2]))
+    tone = _tone_fn(sig.get("_lum"), invert)
     lines = [f'TITLE "{title}"', f"LUT_3D_SIZE {LUT_SIZE}",
              "DOMAIN_MIN 0.0 0.0 0.0", "DOMAIN_MAX 1.0 1.0 1.0", ""]
     N = LUT_SIZE - 1
-    # .cube 는 red 가 가장 빨리 변하는 순서 (r 안쪽 루프)
     for bi in range(LUT_SIZE):
         for gi in range(LUT_SIZE):
             for ri in range(LUT_SIZE):
                 r, g, b = ri / N, gi / N, bi / N
                 L, A, B = rgb_to_lab(r, g, b)
+                Lo = tone(L) if tone else L
                 da, db = _interp_ab(L, anchors)
-                ro, go, bo = lab_to_rgb(L, A + strength * da, B + strength * db)
+                ro, go, bo = lab_to_rgb(Lo, A + strength * da, B + strength * db)
                 lines.append(f"{ro:.6f} {go:.6f} {bo:.6f}")
     return "\n".join(lines) + "\n"
 
