@@ -156,6 +156,23 @@ def _render_brief(b):
         h.append('<p class="src">근거: ' + " · ".join(
             f'<a href="{esc(s)}">{esc(s.split("//")[-1].split("/")[0])}</a>' for s in intent["sources"]) + '</p>')
     h.append('</div>')
+    # 빛의 문법 (케이스스터디 통찰 — 시간/피사체가 아니라 결과물의 빛 구조)
+    lg = b.get("light_grammar")
+    if lg:
+        h.append('<div class="lg"><h2>빛의 문법 <span>왜 한 호텔로 보이는가</span></h2>')
+        if lg.get("thesis"):
+            h.append(f'<p>{esc(lg["thesis"])}</p>')
+        if lg.get("rules"):
+            h.append('<ul class="lgr">' + "".join(f'<li>{esc(r)}</li>' for r in lg["rules"]) + '</ul>')
+        sp = lg.get("shoot_vs_post", {})
+        if sp:
+            h.append('<div class="sp"><div><b>촬영에서</b><ul>'
+                     + "".join(f'<li>{esc(x)}</li>' for x in sp.get("shoot", [])) + '</ul></div>')
+            h.append('<div><b>후보정에서</b><ul>'
+                     + "".join(f'<li>{esc(x)}</li>' for x in sp.get("post", [])) + '</ul></div></div>')
+        if lg.get("note"):
+            h.append(f'<p class="ev">{esc(lg["note"])}</p>')
+        h.append('</div>')
     h.append('<div class="part"><h2>2 · 지배적 원칙 <span>Dominant Rules</span></h2>')
     for r in b.get("rules", []):
         h.append(f'<div class="rule"><b>{esc(r.get("id",""))}. {esc(r.get("title",""))}</b>'
@@ -264,6 +281,9 @@ blockquote{border-left:3px solid var(--amber);margin:1em 0;padding:.4em 1em;colo
 .rule{margin:1.1em 0}.rule b{color:var(--fg)}.exc{color:var(--dim);font-size:14px;border-left:2px solid var(--line);padding-left:.8em}
 .ev{color:#7fae7f;font-size:13px}.src{color:var(--dim);font-size:13px}.src a{color:var(--dim)}
 .cut{margin:.8em 0}.cut b{color:var(--amber)}
+.lg{background:#15140f;border:1px solid var(--amber);border-radius:8px;padding:.6em 1.4em;margin:1.5em 0}
+.lg h2{border:none;color:var(--amber)}.lgr{columns:2;font-size:14px}
+.sp{display:flex;gap:24px;margin-top:.6em}.sp>div{flex:1}.sp ul{font-size:13px;color:var(--dim);padding-left:1.1em}.sp b{color:var(--fg)}
 .q{background:#15140f;border:1px solid var(--line);border-radius:6px;padding:.6em 1.2em;margin-top:1.5em}
 .evidence{margin-top:3em}.core pre{background:#15140f;padding:1em;border-radius:6px;color:var(--amber);font-size:13px;overflow:auto}
 .cnode{border:1px solid var(--line);border-radius:8px;margin:14px 0;padding:8px 16px;background:#111}
