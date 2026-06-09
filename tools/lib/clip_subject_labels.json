@@ -1,0 +1,21 @@
+[
+  {"key":"interior","prompt":"an interior room photograph"},
+  {"key":"guest_room","prompt":"a hotel bedroom or guest suite interior"},
+  {"key":"bathroom_spa","prompt":"a bathroom, spa or wellness treatment room"},
+  {"key":"pool","prompt":"a swimming pool"},
+  {"key":"food","prompt":"a photograph of food or a plated dish"},
+  {"key":"drink","prompt":"a cocktail, glass of wine or beverage"},
+  {"key":"architecture","prompt":"building architecture or a facade exterior"},
+  {"key":"cityscape","prompt":"a city skyline, buildings or street"},
+  {"key":"nature","prompt":"plants, flowers, trees or natural landscape"},
+  {"key":"person","prompt":"a person or people"},
+  {"key":"portrait","prompt":"a close portrait of a person's face"},
+  {"key":"hands","prompt":"a close-up of hands"},
+  {"key":"still_life","prompt":"a still life arrangement of objects"},
+  {"key":"ceramic_craft","prompt":"ceramics, pottery, tea ware or craft objects"},
+  {"key":"artwork","prompt":"an artwork, sculpture or painting"},
+  {"key":"furniture","prompt":"furniture, a chair or table detail"},
+  {"key":"textile","prompt":"fabric, textile or material surface texture"},
+  {"key":"fireplace","prompt":"a fireplace or fire"},
+  {"key":"document","prompt":"a document, book, menu or printed text"}
+]
