@@ -153,6 +153,67 @@ def b64(path, edge=150, q=74):
     return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
 
 
+def _resid_sig(child, base):
+    """잔차 색 시프트 sig (child−base, ab만) — bake_cube 용. base 위에 얹는 레이어."""
+    out = {}
+    for z in pl.ZONES:
+        c, b = child.get(z), base.get(z)
+        if c and b:
+            out[z] = (0.0, c[1] - b[1], c[2] - b[2])
+    return out
+
+
+def _resid_words(child, base):
+    parts = []
+    for zk, zn in (("shadow", "섀도"), ("mid", "미드"), ("high", "하이")):
+        c, b = child.get(zk), base.get(zk)
+        if not (c and b):
+            continue
+        da, db, dl = c[1] - b[1], c[2] - b[2], c[0] - b[0]
+        if abs(da) < 2 and abs(db) < 2 and abs(dl) < 5:
+            continue
+        tag = []
+        if db > 2: tag.append("웜")
+        elif db < -2: tag.append("틸")
+        if da > 3: tag.append("마젠타")
+        elif da < -3: tag.append("그린")
+        if dl > 6: tag.append("밝")
+        elif dl < -6: tag.append("어둡")
+        parts.append(f"{zn} {''.join(tag) or '·'}(Δa{da:+.0f} Δb{db:+.0f} ΔL{dl:+.0f})")
+    return " · ".join(parts) or "≈base"
+
+
+def grade_of(paths):
+    """샘플 경로의 grading_signature(톤커브 _lum 포함) 평균. photo-lut 재사용."""
+    sg = [pl.grading_signature(p) for p in paths]
+    return pl.average_signatures([s for s in sg if s])
+
+
+def lut_section(work, base_grade, chunk_grades):
+    """LUT 구조 역추적: 공통 BASE LUT + 기법별 잔차 레이어. .cube 베이크 + HTML."""
+    lut_dir = os.path.join(os.path.expanduser(work), "luts"); os.makedirs(lut_dir, exist_ok=True)
+    open(os.path.join(lut_dir, "base.cube"), "w").write(pl.bake_cube(base_grade, "AmanNY base", 0.9))
+    lum = base_grade.get("_lum")
+    tone = (f"  |  톤커브 p5={lum[0]:.0f} p50={lum[1]:.0f} p92={lum[2]:.0f}"
+            f"  (중립 8/50/90 대비 {'미드 끌어내림·' if lum[1] < 46 else ''}{'블랙크러시' if lum[0] < 6 else '섀도보존'})") if lum else ""
+    H = ['<div class="lutbox"><h2>■ LUT 구조 역추적 (베이스 LUT + 기법별 잔차 레이어)</h2>',
+         '<p class="rule">브랜드 그레이드 = 공통 BASE LUT 한 장 + 각 기법이 그 위에 얹는 잔차(delta) 레이어. '
+         '실측 톤구간 LAB·톤커브에서 .cube 베이크 (체이닝하면 그 기법의 룩 복원).</p>',
+         f'<div class="lutbase"><b>BASE LUT</b> <span class="cf">luts/base.cube</span>'
+         f'<pre>{pl.describe(base_grade)}{tone}</pre></div>',
+         '<div class="lutkids"><b>잔차 레이어 (base 위에 얹힘)</b>']
+    for cid, ko, g in chunk_grades:
+        if not g:
+            continue
+        open(os.path.join(lut_dir, f"{cid}.residual.cube"), "w").write(
+            pl.bake_cube(_resid_sig(g, base_grade), f"{cid} residual", 0.9))
+        H.append(f'<div class="lutrow"><span class="lk">{ko.split(" — ")[0]}</span>'
+                 f'<span class="route">{_resid_words(g, base_grade)}</span>'
+                 f'<span class="cf">luts/{cid}.residual.cube</span></div>')
+    H.append('</div></div>')
+    return "\n".join(H)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("work"); ap.add_argument("folder"); ap.add_argument("--per", type=int, default=20)
@@ -204,6 +265,17 @@ def main():
         return (f'<div class="sw" title="{frac*100:.1f}%"><span style="background:rgb({c[0]},{c[1]},{c[2]})">'
                 f'</span><small>{frac*100:.1f}</small></div>')
 
+    # ── LUT 구조: grading_signature(톤커브 포함)를 샘플로 측정 (전체 재디코딩 회피) ──
+    print("LUT 구조 측정 중 (base + 기법별 grading_signature)…")
+    allp = [p for p, _, _, _ in rows]
+    base_grade = grade_of(sample(allp, 160))
+    chunk_grades = []
+    for cid, ko, _, _ in sorted(TECHNIQUES, key=lambda c: -len(assigned[c[0]])):
+        gp = [p for p, _, _ in assigned[cid]]
+        if gp:
+            chunk_grades.append((cid, ko, grade_of(sample(gp, 40))))
+    lut_html = lut_section(a.work, base_grade, chunk_grades)
+
     H = [_HEAD]
     H.append('<div class="core"><h2>■ 베이스 (전체에 깔리는 측정 기준)</h2>'
              f'<p class="n">{len(rows)}장 전체</p>'
@@ -214,6 +286,7 @@ def main():
              + "".join(sw(c, f) for c, f in primary) + '</div>'
              '<p class="rule" style="margin-top:.7em">액센트 — 채도 높은 비주류 색 (딥그린·레드·틸/네이비 등)</p><div class="pal">'
              + "".join(sw(c, f) for c, f in accent) + '</div></div>')
+    H.append(lut_html)
     H.append('<h2>■ 기법 (비배타 — 한 사진이 여러 기법 가질 수 있음 · 크기순)</h2>')
     for cid, ko, rule_txt, _ in sorted(TECHNIQUES, key=lambda c: -len(assigned[c[0]])):
         grp = assigned[cid]
@@ -249,6 +322,13 @@ h3{font-size:16px;margin:.2em 0;color:var(--amber)}
 .gal img{width:160px;height:160px;object-fit:cover;border-radius:3px}
 .palbox{background:#15140f;border:1px solid var(--line);border-radius:8px;padding:.5em 1.2em;margin:1em 0}
 .palbox h2{border:none;margin-top:.3em}
+.lutbox{background:#15140f;border:1px solid var(--amber);border-radius:8px;padding:.5em 1.2em;margin:1em 0}
+.lutbox h2{border:none;color:var(--amber);margin-top:.3em}
+.lutbase pre{background:#0d0d0f;padding:.6em .9em;border-radius:6px;color:var(--amber);font-size:12px;overflow:auto;white-space:pre-wrap}
+.lutbase b,.lutkids>b{color:var(--fg)}.lutkids{margin-top:.6em}
+.lutrow{display:flex;gap:10px;align-items:baseline;padding:.18em 0;border-bottom:1px solid #1c1a16;flex-wrap:wrap}
+.lutrow .lk{color:var(--amber);min-width:150px;font-weight:600}
+.lutrow .cf{color:var(--dim);font-size:10px;font-family:ui-monospace,monospace;margin-left:auto}
 .pal{display:flex;flex-wrap:wrap;gap:4px;margin-top:.3em}
 .sw{display:flex;flex-direction:column;align-items:center}
 .sw span{width:62px;height:62px;border-radius:4px;display:block;border:1px solid #0006}
