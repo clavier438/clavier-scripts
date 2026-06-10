@@ -24,7 +24,7 @@ try:
     import freshness  # noqa: F401  (repo freshness 체크 — 모든 .py tool 첫 import, 없는 환경도 동작)
 except ImportError:
     pass
-from image_formats import PHOTO_EXTS, register_heif  # 사진 확장자 단일 소스 + HEIF 디코딩 등록
+from image_formats import PHOTO_EXTS, register_heif, find_images  # 사진 확장자·재귀 탐색 단일 소스 + HEIF 디코딩
 register_heif()  # .heic/.heif 도 Image.open 가능하게 (pillow-heif 없으면 graceful)
 
 LUT_SIZE = 17          # 17^3 = 4913 점 (.cube 표준, 가벼움)
@@ -169,11 +169,10 @@ def main():
     ap.add_argument("--threshold", type=float, default=22.0, help="정책 분리 임계 색거리 (작을수록 잘게)")
     ap.add_argument("--outdir", default=None, help="LUT 출력 디렉토리 (기본: <folder>)")
     ap.add_argument("--title", default=None)
+    ap.add_argument("--no-recurse", action="store_true", help="하위 폴더 제외 (기본: 재귀 탐색)")
     a = ap.parse_args()
     root = os.path.abspath(os.path.expanduser(a.folder))
-    imgs = [f for f in glob.glob(os.path.join(root, "**", "*"), recursive=True)
-            if os.path.isfile(f) and os.path.splitext(f)[1].lower() in IMAGE_EXTS
-            and not os.path.basename(f).startswith(".")]
+    imgs = find_images(root, recursive=not a.no_recurse)
     if not imgs:
         print(f"이미지 없음: {root}"); sys.exit(1)
     items = [(p, grading_signature(p)) for p in imgs]

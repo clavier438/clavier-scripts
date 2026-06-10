@@ -2,8 +2,9 @@
 # image-dedup — 폴더에서 같은 사진(정확+근접) 제거. perceptual dhash 클러스터 → 클러스터당 1장만.
 # 보존 우선순위: 태그된 것 > 고해상(픽셀수). = "화질 다른 중복은 가장 큰 픽셀만 남기고 삭제".
 # 모든 사진 포맷(lib/image_formats PHOTO_EXTS, HEIC 포함). _cls.json·_tags.json 레코드도 정리. 오프라인·토큰 0.
-#   image-dedup.py <brand_dir>        # 한 폴더
-#   image-dedup.py --all <refs_root>  # 전 폴더
+#   image-dedup.py <brand_dir>          # 한 폴더 (기본 재귀 — 하위 폴더 포함)
+#   image-dedup.py <brand_dir> --no-recurse   # top-level 만
+#   image-dedup.py --all <refs_root>    # 전 폴더 (자식별로 따로)
 #   --dry 로 미리보기(삭제 안 함)
 import os, sys, glob, json
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
@@ -12,7 +13,7 @@ try:
 except ImportError:
     pass
 from PIL import Image
-from image_formats import PHOTO_EXTS, register_heif
+from image_formats import PHOTO_EXTS, register_heif, find_images
 THRESH = 6   # dhash hamming ≤6 = 같은 사진(근접 크롭/리사이즈 포함)
 
 def dhash(p, hs=8):
@@ -28,11 +29,9 @@ def dhash(p, hs=8):
     return b, w*h
 def ham(a, b): return bin(a ^ b).count("1")
 
-def dedup(folder, dry=False):
+def dedup(folder, dry=False, recursive=True):
     register_heif()  # HEIC/HEIF 도 Image.open 가능하게 (pillow-heif 없으면 graceful skip)
-    ws = sorted(p for p in glob.glob(os.path.join(folder, "*"))
-                if os.path.splitext(p)[1].lower() in PHOTO_EXTS
-                and not os.path.basename(p).startswith("."))
+    ws = find_images(folder, recursive=recursive)
     if not ws:
         return 0, 0, []
     tagged = set()
@@ -71,7 +70,10 @@ def dedup(folder, dry=False):
     return len(ws), len(remove), remove
 
 if __name__ == "__main__":
-    args = sys.argv[1:]; dry = "--dry" in args; args = [a for a in args if a != "--dry"]
+    args = sys.argv[1:]
+    dry = "--dry" in args
+    recursive = "--no-recurse" not in args
+    args = [a for a in args if a not in ("--dry", "--no-recurse")]
     if args and args[0] == "--all":
         root = os.path.expanduser(args[1] if len(args) > 1 else "~/Library/Mobile Documents/com~apple~CloudDocs/0/works/study/books/imageRefs")
         tot = trm = 0
@@ -79,11 +81,11 @@ if __name__ == "__main__":
         for b in sorted(os.listdir(root)):
             d = os.path.join(root, b)
             if not os.path.isdir(d): continue
-            n, r, _ = dedup(d, dry=dry)
+            n, r, _ = dedup(d, dry=dry, recursive=recursive)
             if n: print(f"{b:14}{n:>5}{r:>5}{n-r:>5}"); tot += n; trm += r
         print(f"\n전체 {tot} → 제거 {trm} → 남음 {tot-trm}  ({'미적용' if dry else '적용됨'})")
     elif args:
-        n, r, rm = dedup(os.path.expanduser(args[0]), dry=dry)
+        n, r, rm = dedup(os.path.expanduser(args[0]), dry=dry, recursive=recursive)
         print(f"{n}장 → 제거 {r} → 남음 {n-r}")
     else:
-        print("usage: image-dedup.py <dir> | --all [root] [--dry]")
+        print("usage: image-dedup.py <dir> [--no-recurse] | --all [root] [--dry]")

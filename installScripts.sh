@@ -30,7 +30,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${1:-$HOME/bin}"
 
 # 배포하지 않을 폴더 (도구/데이터 폴더) — tools 는 아래에서 특별 처리됨
-SKIP_DIRS=("webExporter" "Markdown2ID" "memory" "backup" ".git" ".claude" "PDF to JPEG.app" "PDF to JPEG.workflow" "tools" "cli")
+# figma-* 는 Figma 플러그인 프로젝트(manifest.json + 캔버스 안에서 도는 code.js) —
+# node CLI 가 아니므로 ~/bin wrapper 대상이 아님. webExporter/Markdown2ID 와 동급.
+SKIP_DIRS=("webExporter" "Markdown2ID" "memory" "backup" ".git" ".claude" "PDF to JPEG.app" "PDF to JPEG.workflow" "tools" "cli" "figma-brand-guide" "figma-pdf-grid")
 
 mkdir -p "$BIN_DIR"
 
