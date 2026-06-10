@@ -31,7 +31,7 @@ try:
 except ImportError:
     pass
 from claude_cli import run_claude, have_claude   # 구독 빌링 claude CLI 단일 헬퍼 (lib 공유)
-from image_formats import PHOTO_EXTS, register_heif  # 사진 확장자 단일 소스 + HEIF 디코딩 등록
+from image_formats import PHOTO_EXTS, register_heif, find_images  # 사진 확장자·재귀 탐색 단일 소스 + HEIF 디코딩
 
 try:
     from PIL import Image
@@ -325,18 +325,10 @@ def write_xmp_keywords(path, tags):
         pass
 
 
-def find_images(root, exts):
-    out = []
-    for dirpath, _, files in os.walk(root):
-        for fn in sorted(files):
-            if os.path.splitext(fn)[1].lower() in exts and not fn.startswith("."):
-                out.append(os.path.join(dirpath, fn))
-    return sorted(out)
-
-
 def main():
     ap = argparse.ArgumentParser(description="추출 이미지를 비전 분류 → Finder 태그")
-    ap.add_argument("dir", help="이미지 폴더 (재귀 탐색)")
+    ap.add_argument("dir", help="이미지 폴더 (기본 재귀 탐색 — 하위 폴더 포함)")
+    ap.add_argument("--no-recurse", action="store_true", help="하위 폴더 제외 (top-level 만)")
     ap.add_argument("--limit", type=int, default=0, help="앞에서 N장만 (0=전체, 샘플링용)")
     ap.add_argument("--dry-run", action="store_true", help="태그 안 박고 분류 결과만 출력")
     ap.add_argument("--model", default=DEFAULT_MODEL)
@@ -368,7 +360,7 @@ def main():
     if not os.path.isdir(root):
         print(f"❌ 폴더 아님: {root}"); sys.exit(1)
 
-    images = find_images(root, IMAGE_EXTS)
+    images = find_images(root, recursive=not args.no_recurse)
     if args.limit:
         images = images[:args.limit]
     if not images:

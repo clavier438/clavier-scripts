@@ -16,6 +16,9 @@ from pathlib import Path
 from PIL import Image
 from multiprocessing import Pool
 from datetime import datetime
+from image_formats import register_heif, find_images  # 재귀 탐색·확장자 단일 소스 + HEIF 디코딩
+
+register_heif()  # .heic/.heif 도 입력으로 변환 가능하게 (pillow-heif 없으면 graceful skip)
 
 def convert_image(args_tuple):
     """단일 이미지를 WebP로 변환"""
@@ -62,20 +65,13 @@ def convert_image(args_tuple):
     except Exception as e:
         return str(input_path), None, str(e)
 
-def convert_folder(folder, quality=95, dry=False):
-    """폴더 내 모든 이미지를 WebP로 변환"""
+def convert_folder(folder, quality=95, dry=False, recursive=True):
+    """폴더 내 모든 이미지를 WebP로 변환 (기본 재귀 — 하위 폴더 포함)."""
     folder = Path(folder)
 
-    # 지원하는 이미지 확장자 (WebP 제외)
-    image_patterns = ['*.jpg', '*.jpeg', '*.png', '*.bmp', '*.gif', '*.JPG', '*.JPEG', '*.PNG']
-
-    # 모든 이미지 파일 찾기
-    image_files = []
-    for pattern in image_patterns:
-        image_files.extend(glob.glob(str(folder / pattern)))
-
-    # 중복 제거 및 정렬
-    image_files = sorted(list(set(image_files)))
+    # 단일 탐색 소스(find_images) — 모든 사진 포맷. 단, 타겟(.webp)은 입력에서 제외.
+    image_files = [f for f in find_images(folder, recursive=recursive)
+                   if not f.lower().endswith(".webp")]
 
     if not image_files:
         return 0, 0, []
@@ -156,8 +152,10 @@ if __name__ == "__main__":
     parser.add_argument('--all', action='store_true', help='모든 폴더 변환')
     parser.add_argument('--quality', type=int, default=95, help='WebP 품질 (1-100, 기본 95)')
     parser.add_argument('--dry', action='store_true', help='미리보기 (변환 안 함)')
+    parser.add_argument('--no-recurse', action='store_true', help='하위 폴더 제외 (기본: 재귀 탐색)')
 
     args = parser.parse_args()
+    recursive = not args.no_recurse
 
     if args.all:
         # --all 모드: 모든 폴더에서 변환
@@ -167,7 +165,7 @@ if __name__ == "__main__":
         total_files = total_success = 0
         for brand_dir in sorted(root.iterdir()):
             if brand_dir.is_dir():
-                n, s, f = convert_folder(brand_dir, quality=args.quality, dry=args.dry)
+                n, s, f = convert_folder(brand_dir, quality=args.quality, dry=args.dry, recursive=recursive)
                 if n:
                     print(f"{brand_dir.name:20}{n:>5}{s:>5}{len(f):>5}")
                     total_files += n
@@ -176,7 +174,7 @@ if __name__ == "__main__":
         print(f"\n전체: {total_files} → {total_success} 성공, {total_files - total_success} 스킵 ({'미적용' if args.dry else '적용됨'})")
     elif args.path:
         # 단일 폴더 모드
-        n, s, failed = convert_folder(args.path, quality=args.quality, dry=args.dry)
+        n, s, failed = convert_folder(args.path, quality=args.quality, dry=args.dry, recursive=recursive)
         print(f"{n}개 → {s}개 변환, {len(failed)}개 실패 ({'미적용' if args.dry else '적용됨'})")
         if failed:
             for f, err in failed:

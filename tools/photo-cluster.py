@@ -31,7 +31,7 @@ try:
     import freshness  # noqa: F401  (repo freshness 체크 — 모든 .py tool 첫 import, 없는 환경도 동작)
 except ImportError:
     pass
-from image_formats import PHOTO_EXTS, register_heif  # 사진 확장자 단일 소스 + HEIF 디코딩 등록
+from image_formats import PHOTO_EXTS, register_heif, find_images  # 사진 확장자·재귀 탐색 단일 소스 + HEIF 디코딩
 from PIL import Image
 register_heif()  # .heic/.heif 도 Image.open 가능하게 (pillow-heif 없으면 graceful)
 
@@ -212,15 +212,14 @@ def main():
     ap.add_argument("--tile-cap", type=int, default=80, help="군집 contact-sheet 최대 타일 (기본 80)")
     ap.add_argument("--iters", type=int, default=25, help="k-means 반복 (기본 25)")
     ap.add_argument("--seed", type=int, default=0, help="결정론 seed (기본 0)")
+    ap.add_argument("--no-recurse", action="store_true", help="하위 폴더 제외 (기본: 재귀 탐색)")
     a = ap.parse_args()
 
     src = os.path.abspath(os.path.expanduser(a.src))
     out = os.path.abspath(os.path.expanduser(a.out))
     if not os.path.isdir(src):
         print(f"폴더 아님: {src}"); sys.exit(1)
-    imgs = sorted(f for f in glob.glob(os.path.join(src, "**", "*"), recursive=True)
-                  if os.path.isfile(f) and os.path.splitext(f)[1].lower() in IMAGE_EXTS
-                  and not os.path.basename(f).startswith("."))
+    imgs = find_images(src, recursive=not a.no_recurse)
     if not imgs:
         print(f"이미지 없음: {src}"); sys.exit(1)
 

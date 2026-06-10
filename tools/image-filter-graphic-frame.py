@@ -31,7 +31,7 @@ try:
     import freshness  # noqa: F401  (repo freshness 체크 — 없는 환경(OCI 등)에서도 동작하게 선택적)
 except ImportError:
     pass
-from image_formats import PHOTO_EXTS, register_heif
+from image_formats import PHOTO_EXTS, register_heif, find_images
 try:
     from PIL import Image
 except ImportError:
@@ -94,40 +94,39 @@ def graphic_frame_reason(path, tol=2, min_band=31):
     return None
 
 
-def scan_folder(folder, tol, min_band, delete, move_to, extensions):
+def scan_folder(folder, tol, min_band, delete, move_to, recursive=True):
     hits = []
-    files = sorted(f for f in os.listdir(folder)
-                   if os.path.splitext(f)[1].lower() in extensions and not f.startswith("."))
+    files = find_images(folder, recursive=recursive)
     if not files:
         print(f"[!] 이미지 없음: {folder}")
         return hits, 0
 
-    if move_to:
-        os.makedirs(move_to, exist_ok=True)
-
-    for fn in files:
-        path = os.path.join(folder, fn)
+    for path in files:
+        rel = os.path.relpath(path, folder)   # 재귀 시 하위 경로 보존 (이동·표시·기록 공통)
         reason = graphic_frame_reason(path, tol=tol, min_band=min_band)
         if reason:
-            hits.append({"file": fn, "reason": reason})
+            hits.append({"file": rel, "reason": reason})
             if move_to:
-                shutil.move(path, os.path.join(move_to, fn))
-                print(f"  📦 이동  {fn}  — {reason}")
+                dest = os.path.join(move_to, rel)
+                os.makedirs(os.path.dirname(dest), exist_ok=True)  # 하위 폴더 구조 유지
+                shutil.move(path, dest)
+                print(f"  📦 이동  {rel}  — {reason}")
             elif delete:
                 os.remove(path)
-                print(f"  🗑 삭제  {fn}  — {reason}")
+                print(f"  🗑 삭제  {rel}  — {reason}")
             else:
-                print(f"  🔍 감지  {fn}  — {reason}")
+                print(f"  🔍 감지  {rel}  — {reason}")
         else:
-            print(f"  ✅ 보존  {fn}")
+            print(f"  ✅ 보존  {rel}")
 
     return hits, len(files)
 
 
 def main():
     ap = argparse.ArgumentParser(description="그래픽 프레이밍(끝→끝 동일색 라인) 감지·격리·삭제")
-    ap.add_argument("folder", help="스캔할 이미지 폴더")
-    ap.add_argument("--move-to", metavar="DIR", help="감지된 이미지를 이 폴더로 이동 (검수용)")
+    ap.add_argument("folder", help="스캔할 이미지 폴더 (기본 재귀 — 하위 폴더 포함)")
+    ap.add_argument("--no-recurse", action="store_true", help="하위 폴더 제외 (top-level 만)")
+    ap.add_argument("--move-to", metavar="DIR", help="감지된 이미지를 이 폴더로 이동 (검수용, 하위 경로 유지)")
     ap.add_argument("--delete", action="store_true", help="감지된 이미지 실제 삭제")
     ap.add_argument("--tol", type=int, default=2,
                     help="단색 판정 채널 변동폭 허용 (기본 2 — 압축 노이즈 흡수, 0=정확히 동일색만)")
@@ -155,7 +154,7 @@ def main():
                               min_band=args.min_band,
                               delete=args.delete,
                               move_to=args.move_to,
-                              extensions=PHOTO_EXTS)
+                              recursive=not args.no_recurse)
 
     print(f"\n결과: 감지 {len(hits)}장 / 전체 {total}장")
     if args.move_to:
