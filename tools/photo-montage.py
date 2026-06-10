@@ -49,6 +49,29 @@ def collect(src):
                   and not os.path.basename(f).startswith("."))
 
 
+def is_framed(path):
+    """인스타 흰 테두리 레이아웃 감지 — 4변 중 3변 이상이 70%+ 순백·무채면 프레임.
+    변별로 따로 보므로 '한쪽만 밝은 하늘·창'(콘텐츠)과 '사방 흰 프레임'(레이아웃)을 구분.
+    흰 테두리를 강한 하이라이트로 오인해 톤·그레이드 측정이 오염되는 것을 차단."""
+    try:
+        im = Image.open(path).convert("RGB"); im.thumbnail((140, 140))
+    except Exception:
+        return False
+    w, h = im.size; px = im.load()
+    def white_frac(coords):
+        n = wht = 0
+        for x, y in coords:
+            r, g, b = px[x, y]; n += 1
+            if min(r, g, b) > 232 and (max(r, g, b) - min(r, g, b)) < 16:
+                wht += 1
+        return wht / n if n else 0
+    top = [(x, 1) for x in range(0, w, 2)]
+    bot = [(x, h - 2) for x in range(0, w, 2)]
+    left = [(1, y) for y in range(0, h, 2)]
+    right = [(w - 2, y) for y in range(0, h, 2)]
+    return sum(1 for s in (top, bot, left, right) if white_frac(s) > 0.7) >= 3
+
+
 def build_rows(metas, row_h, width, gap, last_row_scale_cap):
     """metas=[(path,w,h)] → justified 행 리스트. 각 행 = [(path, tw, th)] 폭이 width 에 꽉 참."""
     rows, cur, cur_w = [], [], 0
@@ -100,15 +123,17 @@ def main():
     bg = tuple(int(a.bg.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
 
     # 1) 원본 비율만 빠르게 수집 (픽셀 디코딩 없이 헤더로 — Image.open 은 lazy)
-    print(f"[photo-montage] {len(imgs)}장 비율 수집…")
-    metas = []
+    print(f"[photo-montage] {len(imgs)}장 비율 수집… (흰 테두리 프레임 제외)")
+    metas, framed = [], 0
     for p in imgs:
         try:
+            if is_framed(p):
+                framed += 1; continue
             with Image.open(p) as im:
                 metas.append((p, im.width, im.height))
         except Exception:
             continue
-    print(f"  → {len(metas)}장 ({len(imgs)-len(metas)} skip)")
+    print(f"  → {len(metas)}장 (흰테두리 {framed} 제외, {len(imgs)-len(metas)-framed} 기타 skip)")
 
     # 2) 자동 타일 크기 (지정 안 했으면 사진 수에서 역산 — MIN_ROW 바닥 보장)
     row_h = a.row_h
