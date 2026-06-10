@@ -136,4 +136,41 @@ if [ -n "$_WT_BLOCK" ]; then
 $_WT_BLOCK"
 fi
 
+# ── 🪣 흘림(spill) 브랜치 가시화 — Sentinel Code SSOT 보존물 (구조 통로) ──────
+# Sentinel(매일 03:45)이 "origin 에 안 올린 채 끝난 변경"(미커밋/미푸시)을 비파괴로
+# sentinel/spill/<date> 브랜치에 보존한다. 그 흘림을 *다음 작업 세션이 마주치게* 하는
+# 것이 이 표시 — 사용자가 맥락 속에서 쓸지/버릴지 판단한다 (설계: 흘림은 잃지 않되,
+# 판단은 맥락 있는 자리로 미룬다). 로컬 refs 만 — 네트워크 안 씀, 실패해도 침묵 skip.
+_spill_landscape() {
+    local _PW found="" repo path brs br
+    _PW="${PLATFORM_WORKERS:-$_SCRIPTS_ROOT/../platform-workers}"
+    for entry in "scripts:$_SCRIPTS_ROOT" "clavier-hq:$HQ" "platform-workers:$_PW"; do
+        repo="${entry%%:*}"; path="${entry#*:}"
+        [ -n "$path" ] && [ -d "$path/.git" ] || continue
+        brs="$(git -C "$path" for-each-ref --format='%(refname:short)' \
+            'refs/heads/sentinel/spill/*' 'refs/remotes/origin/sentinel/spill/*' 2>/dev/null \
+            | sed 's#^origin/##' | sort -u)"
+        [ -z "$brs" ] && continue
+        while IFS= read -r br; do
+            [ -n "$br" ] && found="$found  · $repo  $br\n"
+        done <<EOF
+$brs
+EOF
+    done
+    [ -z "$found" ] && return 0
+    printf '# === 🪣 흘림(spill) 브랜치 대기 — origin 에 안 올린 채 끝난 변경 ===\n\n'
+    printf 'Sentinel 이 비파괴 보존한 흘림입니다 — 네 작업물이지만 origin 에 안 올라간 것.\n'
+    printf '잃지 않게 브랜치로만 떠뒀습니다. 지금 보고 **쓸지/버릴지** 정하세요:\n\n'
+    printf "$found"
+    printf '\n    git -C <repo경로> log --stat <브랜치>      # 내용 확인\n'
+    printf '    git -C <repo경로> merge <브랜치>           # 유용하면 가져오기 (현재 브랜치로)\n'
+    printf '    git -C <repo경로> push origin --delete <브랜치>; git -C <repo경로> branch -D <브랜치>  # 버리기\n'
+}
+_SPILL_BLOCK="$(_spill_landscape 2>/dev/null)"
+if [ -n "$_SPILL_BLOCK" ]; then
+    combined="$combined
+
+$_SPILL_BLOCK"
+fi
+
 echo "{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":$(echo "$combined" | jq -Rs .)}}"
