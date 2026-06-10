@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-# image-dedup — 브랜드 폴더에서 같은 사진(정확+근접) 제거. perceptual dhash 클러스터 → 클러스터당 1장만.
-# 보존 우선순위: 태그된 것 > 고해상(픽셀수). _cls.json·_tags.json 의 제거 파일 레코드도 정리. 오프라인·토큰 0.
+# image-dedup — 폴더에서 같은 사진(정확+근접) 제거. perceptual dhash 클러스터 → 클러스터당 1장만.
+# 보존 우선순위: 태그된 것 > 고해상(픽셀수). = "화질 다른 중복은 가장 큰 픽셀만 남기고 삭제".
+# 모든 사진 포맷(lib/image_formats PHOTO_EXTS, HEIC 포함). _cls.json·_tags.json 레코드도 정리. 오프라인·토큰 0.
 #   image-dedup.py <brand_dir>        # 한 폴더
 #   image-dedup.py --all <refs_root>  # 전 폴더
 #   --dry 로 미리보기(삭제 안 함)
@@ -11,6 +12,7 @@ try:
 except ImportError:
     pass
 from PIL import Image
+from image_formats import PHOTO_EXTS, register_heif
 THRESH = 6   # dhash hamming ≤6 = 같은 사진(근접 크롭/리사이즈 포함)
 
 def dhash(p, hs=8):
@@ -19,7 +21,7 @@ def dhash(p, hs=8):
         g = im.convert("L").resize((hs+1, hs), Image.LANCZOS)
     except Exception:
         return None, 0
-    px = list(g.getdata()); b = 0; i = 0
+    px = g.tobytes(); b = 0; i = 0   # L 모드 1바이트/픽셀 — getdata 와 동일, deprecation 회피
     for r in range(hs):
         for c in range(hs):
             b |= (1 << i) if px[r*(hs+1)+c] > px[r*(hs+1)+c+1] else 0; i += 1
@@ -27,7 +29,10 @@ def dhash(p, hs=8):
 def ham(a, b): return bin(a ^ b).count("1")
 
 def dedup(folder, dry=False):
-    ws = sorted(glob.glob(os.path.join(folder, "*.webp")))
+    register_heif()  # HEIC/HEIF 도 Image.open 가능하게 (pillow-heif 없으면 graceful skip)
+    ws = sorted(p for p in glob.glob(os.path.join(folder, "*"))
+                if os.path.splitext(p)[1].lower() in PHOTO_EXTS
+                and not os.path.basename(p).startswith("."))
     if not ws:
         return 0, 0, []
     tagged = set()
