@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// door: framer    # ← scripts 브리핑 자기등록 (SSOT=이 줄). 섹션 바꾸려면 여기만.
 /**
  * framer — framer-sync 로컬 Node 디버그 CLI
  *

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# door: system    # ← scripts 브리핑 자기등록 (SSOT=이 줄). 섹션 바꾸려면 여기만.
 # wt.sh — 멀티세션 git 작업트리 격리 front door (~/bin/wt)
 #
 # === 왜 존재하는가 (근본 원인) =============================================

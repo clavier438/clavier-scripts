@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// door: framer    # ← scripts 브리핑 자기등록 (SSOT=이 줄). 섹션 바꾸려면 여기만.
 /**
  * offer — 오퍼를 마스터 템플릿으로 이메일 HTML 화 → (수동 발송) → 웹 아카이브를 Framer 오퍼 디테일에 연결
  *

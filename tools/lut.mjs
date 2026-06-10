@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// door: image    # ← scripts 브리핑 자기등록 (SSOT=이 줄). 섹션 바꾸려면 여기만.
 /**
  * lut — 이미지에 .cube LUT 을 결정론적으로 일괄 적용 (브랜드 톤 시스템화).
  *
