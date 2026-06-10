@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-# image — 로컬 이미지 폴더 처리 단일 front door (workerCtl / brandRe / framer 패턴).
+# img — 로컬 이미지 폴더 처리 단일 front door (workerCtl / brandRe / framer 패턴).
 #
 # 정신: 그룹 없이 ~/bin 에 우수수 떠돌던 image-*/photo-* 도구들을 동사 하나로 모은다.
-#   내부 모듈(image-filter-graphic-frame.py 등)은 그대로 두고, 사용자는 `image` 에서
+#   내부 모듈(image-filter-graphic-frame.py 등)은 그대로 두고, 사용자는 `img` 에서
 #   verb 만 고른다 — 얇은 라우터, 모듈성 유지 (CLAUDE.md framer 절 / reuse-first 스킬).
 #
-#   image deframe <folder> [옵션]   그래픽 프레이밍(가장자리 단색 패딩 띠) 감지 → 격리/삭제
-#   image help
+#   img deframe <folder> [옵션]   그래픽 프레이밍(가장자리 단색 패딩 띠) 감지 → 격리/삭제
+#   img help
 #
 # 향후 흡수 예정(현재 독립 ~/bin 도구): dedup · tag · convert · cluster · lut · pattern · ref-fetch.
 import os, sys, subprocess
@@ -31,9 +31,9 @@ def cmd_deframe(rest):
     return subprocess.run([_py(), os.path.join(TOOLS, "image-filter-graphic-frame.py")] + rest).returncode
 
 
-HELP = """image — 로컬 이미지 폴더 처리 (단일 front door)
+HELP = """img — 로컬 이미지 폴더 처리 (단일 front door)
 
-  image deframe <folder> [옵션]
+  img deframe <folder> [옵션]
       가장자리 단색 패딩 띠(레터박스·흰 여백·텍스트 카드 배경)로 프레이밍된
       이미지를 감지. 기본 dry-run (실제 변경 없음).
         --delete         감지된 것 삭제
@@ -42,7 +42,7 @@ HELP = """image — 로컬 이미지 폴더 처리 (단일 front door)
         --min-band N     그래픽으로 볼 최소 띠 두께 px (기본 31)
         --report PATH    결과 JSON 저장
 
-  image help
+  img help
 
 (향후 흡수 예정 — 현재 독립 도구: dedup · tag · convert · cluster · lut · pattern · ref-fetch)
 """
@@ -59,8 +59,7 @@ def main():
     }
     if verb in table:
         sys.exit(table[verb](rest) or 0)
-    die = f"알 수 없는 명령: {verb}\n  image help 로 사용법 확인"
-    sys.exit(die)
+    sys.exit(f"알 수 없는 명령: {verb}\n  img help 로 사용법 확인")
 
 
 if __name__ == "__main__":
