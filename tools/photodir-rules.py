@@ -53,10 +53,20 @@ def feat(path):
         return None
     sig = {z: (acc[z][0] / acc[z][3], acc[z][1] / acc[z][3], acc[z][2] / acc[z][3]) if acc[z][3] else None for z in ZONES}
     sh = acc["shadow"]
+    # 선명도(고주파 에너지) — 낮으면 스모키/헤이즈/블러/장노출 잔상 (디테일 뭉개짐)
+    gg = im.convert("L").resize((96, 96)); gp = list(gg.getdata()); W = 96
+    lacc = lc = 0
+    for y in range(1, 95):
+        base = y * W
+        for x in range(1, 95):
+            c = gp[base + x]
+            lap = 4 * c - gp[base + x - 1] - gp[base + x + 1] - gp[base - W + x] - gp[base + W + x]
+            lacc += lap * lap; lc += 1
     rule = {"sat": satsum / n, "meanL": sum(Ls) / n,
             "shadow_frac": sum(1 for x in Ls if x < 33) / n,
             "shadow_b": (sh[2] / sh[3]) if sh[3] else 0.0,
-            "red_strong": strongred / n}
+            "red_strong": strongred / n,
+            "sharp": ((lacc / lc) ** 0.5 / 255.0) if lc else 0.0}
     return sig, rule
 
 
@@ -64,6 +74,8 @@ def feat(path):
 CHUNKS = [
     ("mono",   "모노크롬 — 흑백·탈채", "채도 < 0.07",
      lambda f: f["sat"] < 0.07),
+    ("soft",   "스모키·블러·잔상 — 소프트/모션/헤이즈", "선명도 낮음 (sharp < 0.085)",
+     lambda f: f["sharp"] < 0.085),
     ("red",    "붉은 불빛의 밤 — 재즈·캔들·불", "강채도 레드/마젠타 + 어두움 (강레드>2% & 섀도>45%)",
      lambda f: f["red_strong"] > 0.02 and f["shadow_frac"] > 0.45),
     ("bright", "주광 — 코어를 깸 (예외)", "밝고 그림자 적음 (평균L>54 & 섀도<28%)",
@@ -123,6 +135,10 @@ def main():
         if (i + 1) % 300 == 0:
             print(f"  …{i+1}/{len(imgs)}")
     print(f"  → {len(rows)}장 (흰프레임 {framed} 제외)")
+    sps = sorted(r[2]["sharp"] for r in rows)
+    if sps:
+        q = lambda p: sps[min(len(sps) - 1, int(len(sps) * p))]
+        print(f"  선명도 분위: p10={q(.1):.3f} p20={q(.2):.3f} p30={q(.3):.3f} p50={q(.5):.3f} p80={q(.8):.3f}")
 
     # 규칙 우선순위로 청크 배정 (안 맞으면 core 에 남음)
     assigned = {c[0]: [] for c in CHUNKS}
