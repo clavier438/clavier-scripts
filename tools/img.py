@@ -48,9 +48,66 @@ HELP = """img — 로컬 이미지 폴더 처리 (단일 front door)
 """
 
 
+def _tty():
+    """대화형 가능 환경인가 (파이프·자동화면 False → HELP 출력, 입력 안 막음)."""
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _ask(q):
+    try:
+        return input(q).strip()
+    except (EOFError, KeyboardInterrupt):
+        print("\n취소")
+        sys.exit(0)
+
+
+def interactive():
+    """img (인자 없이) — 안내형 (workerCtl 패턴). 폴더 → 미리보기 → 모드 선택.
+    각 단계는 cmd_deframe 를 그대로 호출 (reuse-first — wizard 는 얇은 오케스트레이터).
+    verb 가 deframe 하나뿐이라 verb 메뉴는 생략 — 늘어나면 여기 선택지 추가."""
+    print("═══ img ═══  로컬 이미지 폴더 처리  (Ctrl-C 종료)\n")
+    raw = _ask("이미지 폴더 경로 (Finder 에서 끌어다 놓아도 됨): ")
+    if not raw:
+        print("취소")
+        return 0
+    folder = os.path.expanduser(raw.strip().strip("'\"").rstrip("/"))
+    if not os.path.isdir(folder):
+        sys.exit(f"폴더 없음: {folder}")
+
+    # ① 자동 미리보기 (dry-run) — 실제 변경 전에 몇 장 잡히는지 먼저 보여준다
+    print("\n▶ 미리보기 (실제 변경 없음) …\n", flush=True)  # subprocess 출력보다 먼저 나오게 flush
+    cmd_deframe([folder])
+
+    # ② 모드 선택
+    print("\n어떻게 할까요?")
+    print("  1) 격리 폴더로 이동  (검수용, 되돌리기 쉬움)")
+    print("  2) 삭제")
+    print("  3) 취소")
+    choice = _ask("선택 (1-3): ")
+    if choice == "1":
+        dest = os.path.join(folder, "_graphic_frames")
+        rc = cmd_deframe([folder, "--move-to", dest])
+        print(f"\n격리 완료 → {dest}")
+        subprocess.run(["open", dest], check=False)  # macOS — 검수용으로 폴더 열기
+        return rc
+    if choice == "2":
+        if _ask("정말 삭제합니다. 되돌릴 수 없습니다. 'yes' 입력: ") == "yes":
+            return cmd_deframe([folder, "--delete"])
+        print("취소")
+        return 0
+    print("취소")
+    return 0
+
+
 def main():
     args = sys.argv[1:]
-    if not args or args[0] in ("help", "-h", "--help"):
+    if not args:
+        # workerCtl 처럼: TTY 면 대화형, 비-TTY(파이프·자동화)면 HELP (입력 안 막음)
+        if _tty():
+            sys.exit(interactive() or 0)
+        print(HELP.strip())
+        return
+    if args[0] in ("help", "-h", "--help"):
         print(HELP.strip())
         return
     verb, rest = args[0], args[1:]
