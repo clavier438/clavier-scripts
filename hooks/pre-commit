@@ -181,7 +181,7 @@ if [ ${#frontdoor_orphans[@]} -gt 0 ]; then
         echo "    $o" >&2
     done
     echo "" >&2
-    echo "  → 기존 front door(image / brandRe / workerCtl / framer / copy) 의 verb 로 넣거나," >&2
+    echo "  → 기존 front door(img / brandRe / workerCtl / framer / copy) 의 verb 로 넣거나," >&2
     echo "     새 front door 를 만들어 그 verb 로만 노출하세요. ~/bin 독립 떠돌이 금지." >&2
     echo "  (정말 독립 진입점이어야 하면 무시 — 경고일 뿐 차단 아님)" >&2
     echo "" >&2
