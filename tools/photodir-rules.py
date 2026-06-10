@@ -53,35 +53,69 @@ def feat(path):
         return None
     sig = {z: (acc[z][0] / acc[z][3], acc[z][1] / acc[z][3], acc[z][2] / acc[z][3]) if acc[z][3] else None for z in ZONES}
     sh = acc["shadow"]
-    # 선명도(고주파 에너지) — 낮으면 스모키/헤이즈/블러/장노출 잔상 (디테일 뭉개짐)
+    # 선명도(고주파) — 전체 + 중앙/주변 분리. 포어그라운드 블러 = 중앙 샤프 + 주변 소프트.
     gg = im.convert("L").resize((96, 96)); gp = list(gg.getdata()); W = 96
-    lacc = lc = 0
+    lacc = lc = cacc = cc = eacc = ec = 0
     for y in range(1, 95):
-        base = y * W
+        base = y * W; cy = 26 <= y < 70
         for x in range(1, 95):
             c = gp[base + x]
             lap = 4 * c - gp[base + x - 1] - gp[base + x + 1] - gp[base - W + x] - gp[base + W + x]
-            lacc += lap * lap; lc += 1
-    rule = {"sat": satsum / n, "meanL": sum(Ls) / n,
+            e = lap * lap; lacc += e; lc += 1
+            if cy and 26 <= x < 70:
+                cacc += e; cc += 1
+            elif y < 13 or y > 82 or x < 13 or x > 82:
+                eacc += e; ec += 1
+    sharp = (lacc / lc) ** 0.5 / 255.0 if lc else 0.0
+    cen_sharp = (cacc / cc) ** 0.5 / 255.0 if cc else 0.0
+    edge_sharp = (eacc / ec) ** 0.5 / 255.0 if ec else 0.0
+    # 지배색 (양자화 6색) — 코퍼스 색 팔레트 집계용
+    doms = []
+    try:
+        q = im.quantize(6); palt = q.getpalette()
+        tot_px = im.size[0] * im.size[1]
+        for cnt, idx in sorted(q.getcolors(), reverse=True)[:6]:
+            doms.append(((palt[idx * 3], palt[idx * 3 + 1], palt[idx * 3 + 2]), cnt / tot_px))
+    except Exception:
+        pass
+    meanL = sum(Ls) / n
+    rule = {"sat": satsum / n, "meanL": meanL,
             "shadow_frac": sum(1 for x in Ls if x < 33) / n,
-            "high_frac": sum(1 for x in Ls if x > 66) / n,   # 밝은 빛이 쏟아지는 영역
+            "high_frac": sum(1 for x in Ls if x > 66) / n,    # 밝은 빛이 쏟아지는 영역
+            "contrast": (sum((x - meanL) ** 2 for x in Ls) / n) ** 0.5,  # 빛-어둠 대비(드라마)
             "shadow_b": (sh[2] / sh[3]) if sh[3] else 0.0,
             "red_strong": strongred / n,
-            "sharp": ((lacc / lc) ** 0.5 / 255.0) if lc else 0.0}
-    return sig, rule
+            "sharp": sharp, "cen_sharp": cen_sharp,
+            "fg_blur": (cen_sharp / edge_sharp) if edge_sharp > 0.001 else 1.0}
+    return sig, rule, doms
 
 
-# ── 청크 법칙 (AI 판단, 우선순위 순). predicate(rule)->bool. 확실한 것만, 과감하게. ──
-CHUNKS = [
-    ("mono",   "모노크롬 — 흑백·탈채", "채도 < 0.07",
-     lambda f: f["sat"] < 0.07),
-    ("soft",   "스모키·블러·잔상 — 소프트/모션/헤이즈", "선명도 낮음 (sharp < 0.085)",
-     lambda f: f["sharp"] < 0.085),
-    ("red",    "붉은 불빛의 밤 — 재즈·캔들·불", "강채도 레드/마젠타 + 어두움 (강레드>2% & 섀도>45%)",
-     lambda f: f["red_strong"] > 0.02 and f["shadow_frac"] > 0.45),
-    ("light", "성스러운 빛 — 확실한 광원이 부드럽게 쏟아짐 (공간·퍼실리티)",
-     "밝은 빛영역 큼 + 그림자 과하지 않음 (하이존>22% & 섀도<40%)",
+# ── 기법 태그 (비배타: 한 사진이 여러 기법 가질 수 있음. 동등한 그룹 아님). 측정 가능·무해석. ──
+TECHNIQUES = [
+    ("light",  "성스러운 빛 — 강한 광원이 부드럽게 쏟아짐 (공간·퍼실리티)",
+     "밝은 빛영역 큼 (하이존>22% & 섀도<40%)",
      lambda f: f["high_frac"] > 0.22 and f["shadow_frac"] < 0.40),
+    ("drama",  "드라마틱 하이라이트 — 빛 한 줄기 + 깊은 어둠",
+     "고대비 (대비>34)",
+     lambda f: f["contrast"] > 34),
+    ("deepsh", "깊은 그림자 — 저조도 키아로스쿠로",
+     "그림자 우세 (섀도>58%)",
+     lambda f: f["shadow_frac"] > 0.58),
+    ("fgblur", "몽환 베일 — 흐린 전경 너머의 찰나 (선택적 포어그라운드 블러 + 강한 후보정)",
+     "중앙 샤프 + 주변 소프트 (비율>1.9 & 중앙선명>0.09)",
+     lambda f: f["fg_blur"] > 1.9 and f["cen_sharp"] > 0.09),
+    ("soft",   "스모키·블러·잔상 — 전체 소프트/모션/헤이즈",
+     "전체 선명도 낮음 (sharp<0.085)",
+     lambda f: f["sharp"] < 0.085),
+    ("mono",   "모노크롬 — 흑백·탈채",
+     "채도<0.07",
+     lambda f: f["sat"] < 0.07),
+    ("red",    "붉은 불빛 — 재즈·캔들·불",
+     "강채도 레드/마젠타 (강레드>2%)",
+     lambda f: f["red_strong"] > 0.02),
+    ("teal",   "틸·네이비 쿨 — 스파·물·밤하늘",
+     "섀도 쿨/틸 (shadow b<-3)",
+     lambda f: f["shadow_b"] < -3.0),
 ]
 
 
@@ -125,33 +159,40 @@ def main():
     a = ap.parse_args()
     imgs = sorted(p for p in glob.glob(os.path.join(os.path.expanduser(a.folder), "**", "*"), recursive=True)
                   if os.path.splitext(p)[1].lower() in PHOTO_EXTS and not os.path.basename(p).startswith("."))
-    print(f"{len(imgs)}장 — 흰프레임 제외 + 피처 측정…")
-    rows = []                      # (path, sig, rule)
+    print(f"{len(imgs)}장 — 흰프레임 제외 + 피처·색 측정…")
+    rows = []                      # (path, sig, rule, doms)
     framed = 0
     for i, p in enumerate(imgs):
         if mont.is_framed(p):
             framed += 1; continue
         r = feat(p)
         if r:
-            rows.append((p, r[0], r[1]))
+            rows.append((p, r[0], r[1], r[2]))
         if (i + 1) % 300 == 0:
             print(f"  …{i+1}/{len(imgs)}")
     print(f"  → {len(rows)}장 (흰프레임 {framed} 제외)")
-    sps = sorted(r[2]["sharp"] for r in rows)
-    if sps:
-        q = lambda p: sps[min(len(sps) - 1, int(len(sps) * p))]
-        print(f"  선명도 분위: p10={q(.1):.3f} p20={q(.2):.3f} p30={q(.3):.3f} p50={q(.5):.3f} p80={q(.8):.3f}")
+    base_sig = avg([s for _, s, _, _ in rows])     # 베이스 = 전체 측정 (공통 바닥)
 
-    # 규칙 우선순위로 청크 배정 (안 맞으면 core 에 남음)
-    assigned = {c[0]: [] for c in CHUNKS}
-    core = []
-    for p, sig, ru in rows:
-        for cid, _, _, pred in CHUNKS:
+    # ── 색 팔레트 (코퍼스 전체 지배색 집계) ──
+    hist = {}
+    for _, _, _, doms in rows:
+        for (cr, cg, cb), frac in doms:
+            k = (cr // 24, cg // 24, cb // 24)
+            hist[k] = hist.get(k, 0.0) + frac
+    tot = sum(hist.values()) or 1
+    swatches = [((k[0] * 24 + 12, k[1] * 24 + 12, k[2] * 24 + 12), v / tot)
+                for k, v in sorted(hist.items(), key=lambda kv: -kv[1])]
+    primary = swatches[:12]
+    def sat_of(c):
+        mx, mn = max(c), min(c); return (mx - mn) / mx if mx else 0
+    accent = [s for s in swatches if sat_of(s[0]) > 0.32 and s[1] > 0.0015][:10]
+
+    # ── 비배타 기법 태그 (한 사진이 여러 기법 가질 수 있음) ──
+    assigned = {t[0]: [] for t in TECHNIQUES}
+    for p, sig, ru, _ in rows:
+        for cid, _, _, pred in TECHNIQUES:
             if pred(ru):
-                assigned[cid].append((p, sig, ru)); break
-        else:
-            core.append((p, sig, ru))
-    base_sig = avg([s for _, s, _ in core])    # 코어 = 변주에 안 걸린 다수 = 진짜 베이스
+                assigned[cid].append((p, sig, ru))
 
     def sample(items, per):
         if len(items) <= per:
@@ -159,28 +200,35 @@ def main():
         step = len(items) / per
         return [items[int(i * step)] for i in range(per)]
 
+    def sw(c, frac):
+        return (f'<div class="sw" title="{frac*100:.1f}%"><span style="background:rgb({c[0]},{c[1]},{c[2]})">'
+                f'</span><small>{frac*100:.1f}</small></div>')
+
     H = [_HEAD]
-    H.append('<div class="core"><h2>■ 코어 (전체의 다수 · 측정 베이스)</h2>'
-             f'<p class="n">{len(core)}장 — 변주 법칙에 안 걸린 나머지 = 브랜드 기본</p>'
-             '<p class="shoot">촬영: 단방향 광원 · 그림자 30~50% · 한 주인공 · 좁은 팔레트(흑/우드/청동/딥그린). '
-             '주 시간대 = 낮게 깔리는 황금빛~저녁 텅스텐.</p>'
-             f'<p class="route">후보정 베이스: {route(base_sig)}</p>'
-             '<div class="gal">' + "".join(f'<img src="{b64(p)}">' for p, _, _ in sample(core, a.per)) + '</div></div>')
-    H.append('<h2>■ 변주 (코어에서 갈리는 확실한 법칙만 · 크기순)</h2>')
-    for cid, ko, rule_txt, _ in sorted(CHUNKS, key=lambda c: -len(assigned[c[0]])):
+    H.append('<div class="core"><h2>■ 베이스 (전체에 깔리는 측정 기준)</h2>'
+             f'<p class="n">{len(rows)}장 전체</p>'
+             '<p class="shoot">촬영: 단방향 광원 · 한 주인공 · 황금빛~저녁 텅스텐. 좁은 코어팔레트(흑/우드/청동/딥그린) + 풍부한 보조색.</p>'
+             f'<p class="route">후보정 베이스: {route(base_sig)}</p></div>')
+    H.append('<div class="palbox"><h2>■ 사진 디렉션 컬러 팔레트 (코퍼스 측정)</h2>'
+             '<p class="rule">주색 — 빈도순 (숫자=전체 비중%)</p><div class="pal">'
+             + "".join(sw(c, f) for c, f in primary) + '</div>'
+             '<p class="rule" style="margin-top:.7em">액센트 — 채도 높은 비주류 색 (딥그린·레드·틸/네이비 등)</p><div class="pal">'
+             + "".join(sw(c, f) for c, f in accent) + '</div></div>')
+    H.append('<h2>■ 기법 (비배타 — 한 사진이 여러 기법 가질 수 있음 · 크기순)</h2>')
+    for cid, ko, rule_txt, _ in sorted(TECHNIQUES, key=lambda c: -len(assigned[c[0]])):
         grp = assigned[cid]
         if not grp:
             continue
         g_sig = avg([s for _, s, _ in grp])
         H.append(f'<div class="var"><h3>{ko} <span class="n">{len(grp)}장</span></h3>'
                  f'<p class="rule">법칙: {rule_txt}</p>'
-                 f'<p class="route">Δ코어: {delta(g_sig, base_sig)}</p>'
+                 f'<p class="route">Δ베이스: {delta(g_sig, base_sig)}</p>'
                  '<div class="gal">' + "".join(f'<img src="{b64(p)}">' for p, _, _ in sample(grp, a.per)) + '</div></div>')
     H.append("</div></body></html>")
     out = os.path.join(os.path.expanduser(a.work), "direction.html")
     open(out, "w", encoding="utf-8").write("\n".join(H))
     print(f"✓ → {out}")
-    print("배정:", {c[1]: len(assigned[c[0]]) for c in CHUNKS}, "core", len(core))
+    print("기법(비배타):", {t[1].split(' ')[0]: len(assigned[t[0]]) for t in TECHNIQUES})
 
 
 _HEAD = """<!doctype html><html lang="ko"><head><meta charset="utf-8">
@@ -198,7 +246,13 @@ h3{font-size:16px;margin:.2em 0;color:var(--amber)}
 .route{color:var(--amber);font-size:11.5px;font-family:ui-monospace,monospace}
 .var{border:1px solid var(--line);border-radius:8px;padding:.5em 1em;margin:.8em 0;background:#111}
 .gal{display:flex;flex-wrap:wrap;gap:3px;margin-top:.5em}
-.gal img{width:104px;height:104px;object-fit:cover;border-radius:3px}
+.gal img{width:160px;height:160px;object-fit:cover;border-radius:3px}
+.palbox{background:#15140f;border:1px solid var(--line);border-radius:8px;padding:.5em 1.2em;margin:1em 0}
+.palbox h2{border:none;margin-top:.3em}
+.pal{display:flex;flex-wrap:wrap;gap:4px;margin-top:.3em}
+.sw{display:flex;flex-direction:column;align-items:center}
+.sw span{width:62px;height:62px;border-radius:4px;display:block;border:1px solid #0006}
+.sw small{color:var(--dim);font-size:10px;margin-top:2px}
 </style></head><body><div class="wrap"><h1>AMAN NEW YORK</h1>"""
 
 
