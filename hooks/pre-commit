@@ -124,6 +124,12 @@ while IFS= read -r line; do
             case "$content" in
                 *'${DOPPLER_CONFIG'*) continue ;;
             esac
+            # 주석/도움말 텍스트는 실행 코드가 아니다 — Sentinel markNonCodeLines 과 동일 원칙.
+            # 한 줄 detector 가 console.log/주석 안 `--config prd` 를 코드 drift 로 오탐하던 blind spot.
+            trimmed="${content#"${content%%[![:space:]]*}"}"
+            case "$trimmed" in
+                '//'*|'#'*|'*'*|'/*'*) continue ;;
+            esac
             if echo "$content" | grep -qE -- '--config[= ]+(prd|stg|dev)([^a-zA-Z_]|$)'; then
                 doppler_violations+=("$content")
             fi

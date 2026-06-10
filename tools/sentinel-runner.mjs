@@ -133,6 +133,11 @@ const GLOBAL_SECRET_KEYS_RE = /\b(CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID|GDR
 // env 미주입 시 dev 디폴트. 의도된 fallback 으로 false positive 처리.
 const ENV_FALLBACK_RE = /process\.env\.[A-Z_]+\s*(\?\?|\|\|)\s*['"`]/
 
+// 안내 메시지 출력 statement — 이 줄로 *시작* 하는 문자열은 실행 명령이 아니라 사용자 가이드.
+// (`echo "doppler setup --config prd"`, `console.log(\`...\`)` 같은 help/usage 텍스트)
+// 멀티라인 backtick 템플릿(help 본문)의 *연속 줄* 판정에도 재사용 — scanFile 참조.
+const GUIDE_STMT_RE = /^\s*(echo|printf|warn|error|info|note|console\.(log|error|warn|info)|print|process\.stdout\.write)\b/
+
 // false-positive whitelist
 function isAllowedContext(file, line) {
     const fname = basename(file)
@@ -146,7 +151,7 @@ function isAllowedContext(file, line) {
     if (fname === "sentinel-runner.mjs") return true
     // 안내 메시지 echo/warn/error/console.log/print — 문자열 리터럴 안 패턴은 실행 명령 X
     // (`echo "doppler setup --config prd"` 같은 사용자 가이드)
-    if (/^\s*(echo|printf|warn|error|info|note|console\.(log|error|warn|info)|print|process\.stdout\.write)\b/.test(line)) return true
+    if (GUIDE_STMT_RE.test(line)) return true
     // doppler setup 자체 — 사용자 환경 첫 link 시 default config 명시. multi-worker drift 무관.
     if (/\bdoppler\s+setup\b/.test(line)) return true
     // 글로벌 secret 키 — `--config prd` 하드코딩이 의도된 패턴 (모든 워커 공유)
@@ -179,15 +184,48 @@ function* walkFiles(root) {
     }
 }
 
+// 멀티라인 문자열 콘텐츠 줄 표시 — help/usage 텍스트는 코드가 아니다.
+// 한 줄 휴리스틱(isAllowedContext)은 `//`·console.log 로 *시작하는* 줄만 면제하므로
+// `console.log(`…`)` 도움말 블록의 *연속 줄*(예: airtable-backup help 의 `--config prd`)을
+// 놓쳐 detector 가 문서를 코드 drift 로 오탐 → 같은 false-positive 가 매 감사 재발.
+// 백틱 홀짝과 /* */ 로 줄 *시작 시점* 의 string/comment 상태를 추적, 그 줄은 스캔에서 제외.
+function markNonCodeLines(lines, file) {
+    const inNonCode = new Array(lines.length).fill(false)
+    if (!/\.(mjs|js|ts|jsx|tsx)$/.test(file)) return inNonCode
+    let inTemplate = false
+    let inBlock = false
+    for (let i = 0; i < lines.length; i++) {
+        inNonCode[i] = inTemplate || inBlock  // 줄 시작 시점에 안이면 = 순수 문자열/주석 콘텐츠
+        const line = lines[i]
+        if (inTemplate) {
+            // escape 안 된 백틱이 닫는다 (열기 줄은 isAllowedContext 가 이미 처리)
+            if ((line.match(/(?<!\\)`/g) || []).length % 2 === 1) inTemplate = false
+            continue
+        }
+        if (inBlock) {
+            const end = line.indexOf("*/")
+            if (end >= 0) inBlock = false
+            continue
+        }
+        const ticks = (line.match(/(?<!\\)`/g) || []).length
+        if (ticks % 2 === 1) { inTemplate = true; continue }
+        const open = line.lastIndexOf("/*")
+        if (open >= 0 && line.indexOf("*/", open) < 0) inBlock = true
+    }
+    return inNonCode
+}
+
 function scanFile(file) {
     let content
     try { content = readFileSync(file, "utf8") } catch { return [] }
     const lines = content.split("\n")
     const findings = []
+    const nonCode = markNonCodeLines(lines, file)
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i]
         if (!line.trim()) continue
+        if (nonCode[i]) continue
         if (isAllowedContext(file, line)) continue
 
         for (const p of L2_HARDCODED_PATTERNS) {
