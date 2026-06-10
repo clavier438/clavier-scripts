@@ -9,8 +9,7 @@
 #     img deframe   가장자리 단색 패딩 띠(프레이밍) 감지 → 격리/삭제
 #     img dedup     화질 다른 중복 → 최대 해상도만 남김
 #     img tag       비전 분류 → Finder 태그 + _tags.json
-#     img convert   JPEG/PNG → 고품질 WebP (비파괴)
-#     img heic      JPG → HEIC (M2 HW 가속)
+#     img convert   이미지 형식 변환 any→any (webp 기본, --to heic/jpg/png/avif…)
 #     img cluster   사진 더미 → 시각 패턴 클러스터 → 층화 대표 추출
 #     img pattern   _tags.json → 브랜드 사진 체계(아키타입·조합문법) 분석
 #     img grade     브랜드 사진의 컬러그레이딩을 .cube LUT 로 역추출 (photo-lut)
@@ -47,8 +46,7 @@ VERBS = [
     ("deframe",   "image-filter-graphic-frame.py", "py",    "folder", "가장자리 단색 패딩 띠(레터박스·흰여백·텍스트카드 배경) 프레이밍 감지 → 격리/삭제"),
     ("dedup",     "image-dedup.py",                "py",    "folder", "화질 다른 중복(같은 사진 다른 해상도) → 최대 해상도(고해상)만 남김"),
     ("tag",       "image-tagger.py",               "py",    "folder", "비전 모델로 피사체·톤·후보정·구도 분류 → Finder 태그 + _tags.json (비파괴)"),
-    ("convert",   "image-convert-webp.py",         "py",    "folder", "JPEG/PNG → 고품질 WebP. 병렬·비파괴(원본 보존)"),
-    ("heic",      "image-convert-heic.swift",      "swift", "folder", "JPG → HEIC (M2 ImageIO HW 가속, 원본 휴지통)"),
+    ("convert",   "image-convert.py",              "py",    "folder", "이미지 형식 변환 any→any. --to webp(기본)/heic/jpg/png/avif… 병렬·비파괴"),
     ("cluster",   "photo-cluster.py",              "py",    "folder", "사진 더미(수천 장) → 시각 패턴 클러스터 → 층화 대표만 추출 (오프라인·무료)"),
     ("pattern",   "photo-pattern.py",              "py",    "folder", "_tags.json → 브랜드 사진 '체계'(아키타입·피사체별 고정축·조합 문법) 분석"),
     ("grade",     "photo-lut.py",                  "py",    "folder", "브랜드 사진의 컬러그레이딩을 .cube 3D LUT 로 역추출 (design-recon)"),
@@ -151,6 +149,11 @@ def interactive():
     if verb == "cluster":
         # cluster 는 --out 필수 → 폴더 안 _cluster 로 기본값
         rest += ["--out", os.path.join(folder, "_cluster")]
+    elif verb == "convert":
+        # any→any: 타겟 형식 선택 (비우면 webp)
+        fmt = _ask("타겟 형식 (webp[기본]·heic·jpg·png·avif·tiff): ").lower().lstrip(".")
+        if fmt:
+            rest += ["--to", fmt]
     print(f"\n▶ img {verb} 실행 …\n", flush=True)
     return dispatch(verb, rest)
 
