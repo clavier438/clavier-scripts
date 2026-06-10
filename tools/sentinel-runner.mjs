@@ -26,7 +26,7 @@
 
 import "./lib/freshness.mjs"
 
-import { readFileSync, writeFileSync, existsSync, statSync, readdirSync } from "fs"
+import { readFileSync, writeFileSync, existsSync, statSync, readdirSync, unlinkSync } from "fs"
 import { execSync, spawnSync } from "child_process"
 import { join, relative, extname, basename } from "path"
 import { fileURLToPath } from "url"
@@ -243,6 +243,97 @@ function dopplerKeys(config = "prd") {
     } catch { return new Set() }
 }
 
+// ── Code SSOT (git drift) 감사 ────────────────────────────────────────
+// environment-peer 모델(2026-05-03): 코드 진실 = GitHub origin. 로컬 클론은 휘발성 peer.
+// 원칙 "언제나 origin 에 올린 채 끝낸다" 위반(흘림: 미커밋/미푸시)을 *비파괴* 로
+// sentinel/spill/<date> 브랜치에 스냅샷 → origin push. working tree/HEAD/index 무손상.
+// 비파괴 plumbing (검증 완료): GIT_INDEX_FILE 별도 index → write-tree → commit-tree -p HEAD.
+// 03:45 = 작업 안 하는 시각 → ahead/dirty 존재 자체가 "안 올린 채 끝냄" 위반 (임계값 불필요).
+const SPILL_PREFIX = "sentinel/spill"
+
+function git(cwd, args, opts = {}) {
+    const r = spawnSync("git", args, {
+        cwd, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], ...opts,
+    })
+    return { ok: r.status === 0, out: (r.stdout || "").trim() }
+}
+
+function inspectRepoGit(repoPath) {
+    const branch = git(repoPath, ["branch", "--show-current"]).out || "(detached)"
+    const dirty = git(repoPath, ["status", "--porcelain"]).out
+    const dirtyFiles = dirty ? dirty.split("\n").filter(Boolean) : []
+    const hasUpstream = git(repoPath, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).ok
+    let ahead = 0, behind = 0
+    if (hasUpstream) {
+        const lr = git(repoPath, ["rev-list", "--left-right", "--count", "@{u}...HEAD"]).out.split(/\s+/)
+        behind = Number(lr[0]) || 0
+        ahead = Number(lr[1]) || 0
+    }
+    return { branch, dirtyFiles, hasUpstream, ahead, behind, onMain: branch === "main" }
+}
+
+// 흘림(미커밋/미푸시)을 비파괴로 origin 브랜치에 보존. 책상(working tree·HEAD·실제 index) 무손상.
+// parent=HEAD 라 ahead 커밋도 자동 포함 — dirty+ahead 가 한 브랜치로 통합 보존.
+function preserveSpill(repoPath, branch, dateStr, dryRun) {
+    const branchName = `${SPILL_PREFIX}/${dateStr}`
+    if (dryRun) return { branchName, dryRun: true }
+    const gitDir = git(repoPath, ["rev-parse", "--git-dir"]).out
+    const idxFile = join(repoPath, gitDir, "sentinel-spill-index")
+    const head = git(repoPath, ["rev-parse", "HEAD"]).out
+    const env = { ...process.env, GIT_INDEX_FILE: idxFile }
+    try {
+        // 별도 index 에 working tree 전체 스테이징 (.gitignore 존중, 실제 index 무손상)
+        const add = spawnSync("git", ["add", "-A"], { cwd: repoPath, env, stdio: ["ignore", "ignore", "pipe"], encoding: "utf8" })
+        if (add.status !== 0) return { branchName, error: `add: ${(add.stderr || "").trim()}` }
+        const tree = spawnSync("git", ["write-tree"], { cwd: repoPath, env, encoding: "utf8" }).stdout.trim()
+        const msg = `sentinel spill ${dateStr} (from ${branch})\n\norigin 에 안 올린 채 끝낸 변경 보존. 다음 작업 시 쓸래/버릴래 판단.`
+        const commit = spawnSync("git", ["commit-tree", tree, "-p", head], { cwd: repoPath, input: msg, encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] }).stdout.trim()
+        git(repoPath, ["branch", "-f", branchName, commit])
+        const push = git(repoPath, ["push", "-f", "origin", branchName])
+        return { branchName, commit, pushed: push.ok }
+    } finally {
+        try { if (existsSync(idxFile)) unlinkSync(idxFile) } catch { /* best effort */ }
+    }
+}
+
+function auditGitSSOT(repos, dateStr, dryRun) {
+    return repos.map(repo => {
+        const g = inspectRepoGit(repo.path)
+        const hasSpill = g.dirtyFiles.length > 0 || g.ahead > 0
+        const spill = hasSpill ? preserveSpill(repo.path, g.branch, dateStr, dryRun) : null
+        return { repo: repo.name, ...g, spill }
+    })
+}
+
+function buildGitSSOTSection(gitResults) {
+    if (!gitResults?.length) return ""
+    const lines = ["", "### Code SSOT (git 진실성 — origin 에 올린 채 끝냈는가)", ""]
+    let spillCount = 0
+    for (const r of gitResults) {
+        const flags = []
+        if (r.dirtyFiles.length) flags.push(`미커밋 ${r.dirtyFiles.length}`)
+        if (r.ahead) flags.push(`미푸시(ahead) ${r.ahead}`)
+        if (r.behind) flags.push(`behind ${r.behind}`)
+        if (!r.onMain) flags.push(`non-main(${r.branch})`)
+        if (!r.hasUpstream) flags.push("upstream 없음")
+        const status = flags.length ? flags.join(", ") : "✅ origin 동기화"
+        let spillNote = ""
+        if (r.spill) {
+            spillCount++
+            if (r.spill.dryRun) spillNote = ` → [dry] 흘림 보존 예정: \`${r.spill.branchName}\``
+            else if (r.spill.error) spillNote = ` → ⚠️ 흘림 보존 실패: ${r.spill.error}`
+            else if (r.spill.pushed) spillNote = ` → 🪣 흘림 보존: \`${r.spill.branchName}\` (origin push). 다음 작업 시 쓸래/버릴래`
+            else spillNote = ` → ⚠️ 흘림 커밋됐으나 push 실패: \`${r.spill.branchName}\` (로컬만)`
+        }
+        lines.push(`- **${r.repo}**: ${status}${spillNote}`)
+    }
+    lines.push("")
+    if (spillCount) lines.push(`> 🪣 흘림 ${spillCount}건 = origin 에 안 올린 채 끝난 변경. 비파괴 스냅샷(책상 무손상)으로 \`${SPILL_PREFIX}/*\` 에 보존. 다음 세션 시작 시 session-start 가 표시 — 유용하면 머지, 아니면 \`git push origin --delete <브랜치>\` 로 폐기.`)
+    else lines.push("> ✅ 모든 repo origin 에 올린 채 끝남 — 흘림 없음.")
+    lines.push("")
+    return lines.join("\n")
+}
+
 // ── 보고서 작성 ──────────────────────────────────────────────────────
 function buildReport(allFindings, dopplerKeysSet) {
     const now = new Date().toISOString().replace("T", " ").slice(0, 19)
@@ -351,7 +442,14 @@ async function main() {
     console.log()
 
     const dopplerKeysSet = dopplerKeys("prd")
-    const report = buildReport(allFindings, dopplerKeysSet)
+
+    // Code SSOT (git 진실성) — scan 은 read-only(dry, 흘림 액션 X), audit/baseline 은 실제 보존.
+    // SENTINEL_SPILL_DRY=1 로 강제 dry 가능 (검증용).
+    const dryRunSpill = cmd === "scan" || process.env.SENTINEL_SPILL_DRY === "1"
+    const today = new Date().toISOString().slice(0, 10)
+    const gitResults = auditGitSSOT(repos, today, dryRunSpill)
+
+    const report = buildReport(allFindings, dopplerKeysSet) + buildGitSSOTSection(gitResults)
 
     if (cmd === "scan") {
         console.log(report)
