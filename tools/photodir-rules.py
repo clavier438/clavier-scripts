@@ -29,6 +29,7 @@ def _mod(name, fn):
 
 pl = _mod("photolut", "photo-lut.py")
 mont = _mod("photomont", "photo-montage.py")
+rep = _mod("photoreport", "photodir-report.py")   # apply_cube/load_cube/b64 재사용 (before/after 렌더)
 ZONES = ("shadow", "mid", "high")
 
 
@@ -156,28 +157,45 @@ def grade_of(paths):
     return pl.average_signatures([s for s in sg if s])
 
 
-def lut_section(work, base_grade, chunk_grades):
-    """LUT 구조 역추적: 공통 BASE LUT + 변주별 잔차 레이어. .cube 베이크 + HTML."""
+def lut_section(work, base_grade, chunk_data):
+    """LUT 구조 역추적: BASE LUT + 변주별 잔차 + 3패널 before/after(추정무보정→+BASE→+변주). .cube 베이크."""
     lut_dir = os.path.join(os.path.expanduser(work), "luts"); os.makedirs(lut_dir, exist_ok=True)
     open(os.path.join(lut_dir, "base.cube"), "w").write(pl.bake_cube(base_grade, "AmanNY base", 0.9))
+    base_cube = rep.load_cube(os.path.join(lut_dir, "base.cube"))
     lum = base_grade.get("_lum")
     tone = (f"  |  톤커브 p5={lum[0]:.0f} p50={lum[1]:.0f} p92={lum[2]:.0f}"
             f"  (중립 8/50/90 대비 {'미드 끌어내림·' if lum[1] < 46 else ''}{'블랙크러시' if lum[0] < 6 else '섀도보존'})") if lum else ""
     H = ['<div class="lutbox"><h2>■ LUT 구조 역추적 (베이스 LUT + 변주별 잔차 레이어)</h2>',
          '<p class="rule">브랜드 그레이드 = 공통 BASE LUT 한 장 + 각 변주가 그 위에 얹는 잔차(delta) 레이어. '
-         '실측 톤구간 LAB·톤커브에서 .cube 베이크 (체이닝하면 그 변주의 룩 복원).</p>',
+         '3패널 = 추정 무보정(역LUT) → +BASE → +변주(≈원본). 실측 톤구간 LAB·톤커브에서 .cube 베이크.</p>',
          f'<div class="lutbase"><b>BASE LUT</b> <span class="cf">luts/base.cube</span>'
-         f'<pre>{pl.describe(base_grade)}{tone}</pre></div>',
-         '<div class="lutkids"><b>잔차 레이어 (base 위에 얹힘)</b>']
-    for cid, ko, g in chunk_grades:
+         f'<pre>{pl.describe(base_grade)}{tone}</pre></div>']
+    for cid, ko, g, reppath in chunk_data:
         if not g:
             continue
+        open(os.path.join(lut_dir, f"{cid}.cube"), "w").write(pl.bake_cube(g, cid, 0.9))
+        open(os.path.join(lut_dir, f"{cid}.inverse.cube"), "w").write(pl.bake_cube(g, f"{cid} inv", 0.9, invert=True))
         open(os.path.join(lut_dir, f"{cid}.residual.cube"), "w").write(
             pl.bake_cube(_resid_sig(g, base_grade), f"{cid} residual", 0.9))
-        H.append(f'<div class="lutrow"><span class="lk">{ko.split(" — ")[0]}</span>'
-                 f'<span class="route">{_resid_words(g, base_grade)}</span>'
+        name = ko.split(" — ")[0]
+        H.append(f'<div class="lutlayer"><div class="lutrow"><span class="lk">{name}</span>'
+                 f'<span class="route">잔차 Δbase: {_resid_words(g, base_grade)}</span>'
                  f'<span class="cf">luts/{cid}.residual.cube</span></div>')
-    H.append('</div></div>')
+        if reppath:
+            try:
+                im = Image.open(reppath).convert("RGB"); im.thumbnail((380, 380))
+                neutral = rep.apply_cube(im, rep.load_cube(os.path.join(lut_dir, f"{cid}.inverse.cube")))
+                p1 = rep.b64(neutral, 360)
+                p2 = rep.b64(rep.apply_cube(neutral, base_cube), 360)
+                p3 = rep.b64(rep.apply_cube(neutral, rep.load_cube(os.path.join(lut_dir, f"{cid}.cube"))), 360)
+                H.append('<div class="ba">'
+                         f'<figure><img src="{p1}"><figcaption>추정 무보정 (역LUT)</figcaption></figure>'
+                         f'<figure><img src="{p2}"><figcaption>+ BASE</figcaption></figure>'
+                         f'<figure><img src="{p3}"><figcaption>+ {name} (≈원본)</figcaption></figure></div>')
+            except Exception:
+                pass
+        H.append('</div>')
+    H.append('</div>')
     return "\n".join(H)
 
 
@@ -238,12 +256,17 @@ def main():
                  f'<p class="rule">법칙: {rule_txt}</p>'
                  f'<p class="route">Δ코어: {delta(g_sig, base_sig)}</p>'
                  '<div class="gal">' + "".join(f'<img src="{b64(p)}">' for p, _, _ in sample(grp, a.per)) + '</div></div>')
-    # LUT 구조 역추적 (베이스 LUT + 변주별 잔차 레이어) — grading_signature(톤커브 포함) 샘플 측정
-    print("LUT 구조 측정 중 (base + 변주별 grading_signature)…")
+    # LUT 구조 역추적 (베이스 LUT + 변주별 잔차 + 3패널 before/after) — grading_signature(톤커브) 샘플 측정
+    print("LUT 구조 측정 중 (base + 변주별 grading_signature + before/after 렌더)…")
     base_grade = grade_of([p for p, _, _ in sample(core, 80)])
-    chunk_grades = [(cid, ko, grade_of([p for p, _, _ in sample(assigned[cid], 50)]))
-                    for cid, ko, _, _ in CHUNKS if assigned[cid]]
-    H.append(lut_section(a.work, base_grade, chunk_grades))
+    chunk_data = []
+    for cid, ko, _, _ in CHUNKS:
+        if not assigned[cid]:
+            continue
+        g = grade_of([p for p, _, _ in sample(assigned[cid], 50)])
+        reppath = assigned[cid][len(assigned[cid]) // 2][0]   # 중앙 대표 1장
+        chunk_data.append((cid, ko, g, reppath))
+    H.append(lut_section(a.work, base_grade, chunk_data))
     H.append("</div></body></html>")
     out = os.path.join(os.path.expanduser(a.work), "direction.html")
     open(out, "w", encoding="utf-8").write("\n".join(H))
@@ -271,9 +294,12 @@ h3{font-size:16px;margin:.2em 0;color:var(--amber)}
 .lutbox h2{border:none;color:var(--amber);margin-top:.3em}
 .lutbase pre{background:#0d0d0f;padding:.6em .9em;border-radius:6px;color:var(--amber);font-size:12px;overflow:auto;white-space:pre-wrap}
 .lutbase b,.lutkids>b{color:var(--fg)}.lutkids{margin-top:.6em}
-.lutrow{display:flex;gap:10px;align-items:baseline;padding:.18em 0;border-bottom:1px solid #1c1a16;flex-wrap:wrap}
+.lutkids{margin-top:.6em}.lutlayer{margin:.5em 0;padding-top:.3em;border-top:1px solid #221f1a}
+.lutrow{display:flex;gap:10px;align-items:baseline;padding:.18em 0;flex-wrap:wrap}
 .lutrow .lk{color:var(--amber);min-width:150px;font-weight:600}
 .lutrow .cf{color:var(--dim);font-size:10px;font-family:ui-monospace,monospace;margin-left:auto}
+.ba{display:flex;gap:8px;margin:.5em 0}.ba figure{margin:0;flex:1}.ba img{width:100%;border-radius:4px;display:block}
+.ba figcaption{color:var(--dim);font-size:11px;text-align:center;margin-top:2px}
 </style></head><body><div class="wrap"><h1>AMAN NEW YORK</h1>"""
 
 
