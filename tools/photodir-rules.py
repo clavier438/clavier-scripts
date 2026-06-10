@@ -64,6 +64,7 @@ def feat(path):
             lacc += lap * lap; lc += 1
     rule = {"sat": satsum / n, "meanL": sum(Ls) / n,
             "shadow_frac": sum(1 for x in Ls if x < 33) / n,
+            "high_frac": sum(1 for x in Ls if x > 66) / n,   # 밝은 빛이 쏟아지는 영역
             "shadow_b": (sh[2] / sh[3]) if sh[3] else 0.0,
             "red_strong": strongred / n,
             "sharp": ((lacc / lc) ** 0.5 / 255.0) if lc else 0.0}
@@ -78,8 +79,9 @@ CHUNKS = [
      lambda f: f["sharp"] < 0.085),
     ("red",    "붉은 불빛의 밤 — 재즈·캔들·불", "강채도 레드/마젠타 + 어두움 (강레드>2% & 섀도>45%)",
      lambda f: f["red_strong"] > 0.02 and f["shadow_frac"] > 0.45),
-    ("bright", "주광 — 코어를 깸 (예외)", "밝고 그림자 적음 (평균L>54 & 섀도<28%)",
-     lambda f: f["meanL"] > 54 and f["shadow_frac"] < 0.28),
+    ("light", "성스러운 빛 — 확실한 광원이 부드럽게 쏟아짐 (공간·퍼실리티)",
+     "밝은 빛영역 큼 + 그림자 과하지 않음 (하이존>22% & 섀도<40%)",
+     lambda f: f["high_frac"] > 0.22 and f["shadow_frac"] < 0.40),
 ]
 
 
@@ -164,8 +166,8 @@ def main():
              '주 시간대 = 낮게 깔리는 황금빛~저녁 텅스텐.</p>'
              f'<p class="route">후보정 베이스: {route(base_sig)}</p>'
              '<div class="gal">' + "".join(f'<img src="{b64(p)}">' for p, _, _ in sample(core, a.per)) + '</div></div>')
-    H.append('<h2>■ 변주 (코어에서 갈리는 확실한 법칙만)</h2>')
-    for cid, ko, rule_txt, _ in CHUNKS:
+    H.append('<h2>■ 변주 (코어에서 갈리는 확실한 법칙만 · 크기순)</h2>')
+    for cid, ko, rule_txt, _ in sorted(CHUNKS, key=lambda c: -len(assigned[c[0]])):
         grp = assigned[cid]
         if not grp:
             continue

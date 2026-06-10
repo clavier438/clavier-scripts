@@ -29,8 +29,8 @@ IMAGE_EXTS = PHOTO_EXTS
 #   시트 폭 ≤ 1536 이라 Claude 다운샘플 0 = 타일 px == 화면에 보이는 px. 즉 MIN_ROW=실측 하한.
 # packing 밀도 상수 K: tiles_per_sheet ≈ K / row_h^2 (실측 — amannewyork 247타일@104px@1536폭 →
 #   247*104^2 ≈ 2.67e6). 종횡비 분포로 변동하나 row_h 1차 추정엔 충분.
-MIN_ROW = 100         # 분석 가능 하한(px). 1순위 불가침.
-MAX_ROW = 190         # 작은 폴더에서 타일이 과대해지는 것 방지 상한.
+MIN_ROW = 160         # 디테일 가시 하한(px) ★. Claude 1568 다운샘플 후에도 디테일이 보이는 최소.
+MAX_ROW = 260         # 작은 폴더에서 타일이 과대해지는 것 방지 상한.
 PACK_K = 2.3e6        # tiles_per_sheet ≈ K / row_h^2 (실측 근사: 1263장@129px→9시트≈140/시트)
 
 
