@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// door: cloudflare    # ← scripts 브리핑 자기등록 (SSOT=이 줄). 섹션 바꾸려면 여기만.
 /**
  * workerCtl — Cloudflare Worker 제어 CLI
  *

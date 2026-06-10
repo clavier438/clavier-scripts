@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// door: copy    # ← scripts 브리핑 자기등록 (SSOT=이 줄). 섹션 바꾸려면 여기만.
 /**
  * copy — 폴더 기반 카피 생성 (md / airtable 통합 진입점).
  *

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# door: system    # ← scripts 브리핑 자기등록 (SSOT=이 줄). 섹션 바꾸려면 여기만.
 # precheck.sh — 외부 도구 사전 헬스체크
 # 사용: precheck <tool>  또는  precheck all
 # 모드: airtable / github / cloudflare / doppler / framer-sync / all

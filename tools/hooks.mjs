@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// door: system    # ← scripts 브리핑 자기등록 (SSOT=이 줄). 섹션 바꾸려면 여기만.
 /**
  * hooks — 등록된 모든 훅을 한눈에 + 간단히 on/off.
  *

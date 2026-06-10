@@ -116,6 +116,7 @@ Layer 2 — Platform 확장 (opt-in per environment)
 | 소스/실행 분리 | `iCloud/0/scripts/` 수정 → `installScripts.sh` → `~/bin/` 배포 |
 | 하드코딩 금지 | 경로는 `$SELF_DIR`/`$HOME`, 키/토큰은 `~/.config/clavier/secrets` |
 | 폴더 구조 = 아키텍처 | `tools/` `daemons/` `clouds/` 폴더 위치가 역할을 결정 |
+| 진입점 자기등록 | front door = 헤더 한 줄 `# door: <섹션>` 이 SSOT. `scripts` 가 root+tools 를 스캔해 브리핑 — 별도 cli/ 트리·manifest 없음(저장=등록, SvelteKit 정신). 누락 감사 = `scripts --gaps` |
 | 네이밍 | 파일/스크립트: camelCase |
 
 ### 폴더 → 배포 매핑

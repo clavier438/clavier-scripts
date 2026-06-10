@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# door: design    # ← scripts 브리핑 자기등록 (SSOT=이 줄). 섹션 바꾸려면 여기만.
 # brandRe — 브랜드 아이덴티티 리버스 엔지니어링 단일 진입점 (design-recon front door).
 #
 # 정신: workerCtl / framer 와 같은 "단일 front door + verb" 패턴 (CLAUDE.md framer 절).

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# door: image    # ← scripts 브리핑 자기등록 (SSOT=이 줄). 섹션 바꾸려면 여기만.
 # img — 로컬 이미지 폴더 처리 단일 front door (workerCtl / brandRe / framer 패턴).
 #
 # 정신: 그룹 없이 ~/bin 에 우수수 떠돌던 image-*/photo-* 도구들을 동사 하나로 모은다.

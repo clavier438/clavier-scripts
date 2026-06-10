@@ -145,16 +145,15 @@ if [ ${#doppler_violations[@]} -gt 0 ]; then
     exit 1
 fi
 
-# ── (5) front door 통합 환기 (그루핑 원칙, CLAUDE.md "단일 front door + verb") ──
-#       새로 추가된 실행 스크립트가 어떤 front door verb 로도 안 묶이고 ~/bin 에
-#       독립 떠돌이로 노출되는 것을 방지 — image-*/photo-* 가 그룹 없이 우수수
-#       떠돌던 패턴의 재발 차단. 단, "front door 인가 / 내부 모듈인가" 판정은
-#       휴리스틱이라 false positive 가 가능 → *경고만* (차단 아님).
-#
-#       제외 = 라이브러리(lib/) · front door 자체(verb 라우터) · 내부 모듈
-#              (다른 tools 가 파일명으로 호출 = 위임받는 쪽).
-#       남는 것 = 아무도 안 부르고 verb 라우터도 아닌 실행 스크립트 = 떠돌이 후보.
-frontdoor_orphans=()
+# ── (5) 진입점 자기선언(# door:) + 그루핑 환기 ──────────────────────────────
+#       SvelteKit 정신: 진입점은 헤더 `# door: <섹션>` 한 줄로 자기등록 → `scripts`
+#       브리핑이 자동 발견. 새로 추가된 실행 스크립트를 두 갈래로 환기 (경고만):
+#         (a) verb 라우터(front door)인데 # door: 선언이 없음 → scripts 에서 누락
+#             (예전 cli/ 심링크 stale 의 재발). door 태그 한 줄 권유.
+#         (b) verb 라우터도 아니고 아무도 안 부르는 떠돌이 → 그루핑/흡수 권유.
+#       라이브러리(lib/)·내부 모듈(다른 tools 가 파일명으로 호출 = 위임받는 쪽)은 제외.
+door_missing=()
+group_orphans=()
 while IFS= read -r f; do
     [ -f "$f" ] || continue
     case "$f" in
@@ -164,25 +163,42 @@ while IFS= read -r f; do
     esac
     # 실행 진입점이 있는 스크립트만 (순수 라이브러리/모듈은 대상 아님)
     grep -qE '__main__|^main\b|function main\b|def main\b' "$f" || continue
-    # front door 인가? (verb 라우터 = table/choices/add_parser/verb/case 패턴) → 정당
-    grep -qE 'table[[:space:]]*=[[:space:]]*\{|choices=|add_parser|verb|case .* in' "$f" && continue
-    # 다른 tools 파일이 이 파일명을 호출(위임)하는가? → 내부 모듈, 정당
+    # 이미 # door: 자기선언이 있으면 정당 (scripts 브리핑에 뜸)
+    if sed -n '1,40p' "$f" | grep -qiE '^[[:space:]]*(#|//|\*)+[[:space:]]*door:[[:space:]]*[A-Za-z0-9_-]'; then
+        continue
+    fi
+    # door 없음 + verb 라우터(front door 형태) → 선언 누락 (브리핑에서 빠짐)
+    if grep -qE 'table[[:space:]]*=[[:space:]]*\{|choices=|add_parser|verb|case .* in' "$f"; then
+        door_missing+=("$f")
+        continue
+    fi
+    # 비-라우터: 다른 tools 가 파일명으로 호출(위임)하면 내부 모듈 → 정당
     base="$(basename "$f")"
     others=$(grep -rlF "$base" tools/ --include='*.py' --include='*.mjs' --include='*.sh' 2>/dev/null | grep -vxF "$f")
     [ -n "$others" ] && continue
-    frontdoor_orphans+=("$f")
+    group_orphans+=("$f")
 done < <(git diff --cached --name-only --diff-filter=A)
 
-if [ ${#frontdoor_orphans[@]} -gt 0 ]; then
+if [ ${#door_missing[@]} -gt 0 ]; then
+    echo "" >&2
+    echo "⚠️  진입점 같은데 # door: 자기선언 누락 — \`scripts\` 브리핑에서 빠집니다:" >&2
+    echo "" >&2
+    for o in "${door_missing[@]}"; do echo "    $o" >&2; done
+    echo "" >&2
+    echo "  → 헤더(shebang 다음)에 한 줄:  # door: <섹션>   (.mjs 는 // door: <섹션>)" >&2
+    echo "     섹션 예: image · framer · system · airtable · cloudflare · design · copy" >&2
+    echo "  (정말 진입점이 아니면 무시 — 경고일 뿐 차단 아님.  scripts --gaps 로 전체 감사)" >&2
+    echo "" >&2
+fi
+
+if [ ${#group_orphans[@]} -gt 0 ]; then
     echo "" >&2
     echo "⚠️  front door 미통합 스크립트 — 그루핑 원칙 (CLAUDE.md \"단일 front door + verb\"):" >&2
     echo "" >&2
-    for o in "${frontdoor_orphans[@]}"; do
-        echo "    $o" >&2
-    done
+    for o in "${group_orphans[@]}"; do echo "    $o" >&2; done
     echo "" >&2
     echo "  → 기존 front door(img / brandRe / workerCtl / framer / copy) 의 verb 로 넣거나," >&2
-    echo "     새 front door 를 만들어 그 verb 로만 노출하세요. ~/bin 독립 떠돌이 금지." >&2
+    echo "     새 front door 를 만들어 # door: <섹션> 으로 노출하세요. ~/bin 독립 떠돌이 금지." >&2
     echo "  (정말 독립 진입점이어야 하면 무시 — 경고일 뿐 차단 아님)" >&2
     echo "" >&2
 fi

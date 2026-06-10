@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// door: system    # ← scripts 브리핑 자기등록 (SSOT=이 줄). 섹션 바꾸려면 여기만.
 // systemMap.mjs — 현재 머신의 자동화 상태를 *실측*해 렌더한다.
 //
 // 왜 존재하는가 (DECISIONS 2026-05-18 "생성형 도면"):
