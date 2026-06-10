@@ -20,6 +20,11 @@
 #     `--config prd` (또는 stg/dev) 리터럴 = multi-worker drift 위험. 정답 = `--config "${DOPPLER_CONFIG:-prd}"`.
 #     diff 의 *신규 추가 라인* 만 검사 — 기존 코드는 점진 마이그레이션. `${DOPPLER_CONFIG` 사용 패턴은 escape hatch.
 #
+# (5) front door 통합 환기 (그루핑 원칙, CLAUDE.md "단일 front door + verb").
+#     새 실행 스크립트가 front door verb 로 안 묶이고 ~/bin 독립 떠돌이가 되는 것을
+#     방지 — image-*/photo-* 가 그룹 없이 우수수 떠돌던 패턴의 재발 차단.
+#     front door(verb 라우터)·내부 모듈·라이브러리는 제외. 판정 휴리스틱이라 *경고만*.
+#
 # (제거됨 2026-06-09, hook GC) "Mac 호스트별 단일 클론 강제" 검사.
 #     ~/bin alias 가 가리키는 클론만 canonical 로 지정하고 그 외(특히 git worktree)의
 #     commit 을 차단했음. 그러나 (a) environment-peer ADR(2026-05-03)이 "특정 경로를
@@ -138,4 +143,46 @@ if [ ${#doppler_violations[@]} -gt 0 ]; then
     echo "  → 예외 escape: \${DOPPLER_CONFIG 사용 시 통과" >&2
     echo "" >&2
     exit 1
+fi
+
+# ── (5) front door 통합 환기 (그루핑 원칙, CLAUDE.md "단일 front door + verb") ──
+#       새로 추가된 실행 스크립트가 어떤 front door verb 로도 안 묶이고 ~/bin 에
+#       독립 떠돌이로 노출되는 것을 방지 — image-*/photo-* 가 그룹 없이 우수수
+#       떠돌던 패턴의 재발 차단. 단, "front door 인가 / 내부 모듈인가" 판정은
+#       휴리스틱이라 false positive 가 가능 → *경고만* (차단 아님).
+#
+#       제외 = 라이브러리(lib/) · front door 자체(verb 라우터) · 내부 모듈
+#              (다른 tools 가 파일명으로 호출 = 위임받는 쪽).
+#       남는 것 = 아무도 안 부르고 verb 라우터도 아닌 실행 스크립트 = 떠돌이 후보.
+frontdoor_orphans=()
+while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    case "$f" in
+        tools/lib/*) continue ;;
+        tools/*.py|tools/*.mjs|tools/*.sh) ;;
+        *) continue ;;
+    esac
+    # 실행 진입점이 있는 스크립트만 (순수 라이브러리/모듈은 대상 아님)
+    grep -qE '__main__|^main\b|function main\b|def main\b' "$f" || continue
+    # front door 인가? (verb 라우터 = table/choices/add_parser/verb/case 패턴) → 정당
+    grep -qE 'table[[:space:]]*=[[:space:]]*\{|choices=|add_parser|verb|case .* in' "$f" && continue
+    # 다른 tools 파일이 이 파일명을 호출(위임)하는가? → 내부 모듈, 정당
+    base="$(basename "$f")"
+    others=$(grep -rlF "$base" tools/ --include='*.py' --include='*.mjs' --include='*.sh' 2>/dev/null | grep -vxF "$f")
+    [ -n "$others" ] && continue
+    frontdoor_orphans+=("$f")
+done < <(git diff --cached --name-only --diff-filter=A)
+
+if [ ${#frontdoor_orphans[@]} -gt 0 ]; then
+    echo "" >&2
+    echo "⚠️  front door 미통합 스크립트 — 그루핑 원칙 (CLAUDE.md \"단일 front door + verb\"):" >&2
+    echo "" >&2
+    for o in "${frontdoor_orphans[@]}"; do
+        echo "    $o" >&2
+    done
+    echo "" >&2
+    echo "  → 기존 front door(image / brandRe / workerCtl / framer / copy) 의 verb 로 넣거나," >&2
+    echo "     새 front door 를 만들어 그 verb 로만 노출하세요. ~/bin 독립 떠돌이 금지." >&2
+    echo "  (정말 독립 진입점이어야 하면 무시 — 경고일 뿐 차단 아님)" >&2
+    echo "" >&2
 fi
