@@ -2,14 +2,23 @@
 # img — 로컬 이미지 폴더 처리 단일 front door (workerCtl / brandRe / framer 패턴).
 #
 # 정신: 그룹 없이 ~/bin 에 우수수 떠돌던 image-*/photo-* 도구들을 동사 하나로 모은다.
-#   내부 모듈(image-filter-graphic-frame.py 등)은 그대로 두고, 사용자는 `img` 에서
+#   내부 모듈(image-tagger.py·photo-cluster.py 등)은 그대로 두고, 사용자는 `img` 에서
 #   verb 만 고른다 — 얇은 라우터, 모듈성 유지 (CLAUDE.md framer 절 / reuse-first 스킬).
 #
-#   img deframe <folder> [옵션]   그래픽 프레이밍(가장자리 단색 패딩 띠) 감지 → 격리/삭제
-#   img dedup   <folder> [--dry]  화질 다른 중복 → 가장 큰 픽셀(고해상)만 남기고 삭제
-#   img help
+#   정리 (design-recon / 브랜드 레퍼런스 파이프라인 + 폴더 위생):
+#     img deframe   가장자리 단색 패딩 띠(프레이밍) 감지 → 격리/삭제
+#     img dedup     화질 다른 중복 → 최대 해상도만 남김
+#     img tag       비전 분류 → Finder 태그 + _tags.json
+#     img convert   JPEG/PNG → 고품질 WebP (비파괴)
+#     img heic      JPG → HEIC (M2 HW 가속)
+#     img cluster   사진 더미 → 시각 패턴 클러스터 → 층화 대표 추출
+#     img pattern   _tags.json → 브랜드 사진 체계(아키타입·조합문법) 분석
+#     img grade     브랜드 사진의 컬러그레이딩을 .cube LUT 로 역추출 (photo-lut)
+#     img ref-fetch 브랜드 진입 페이지 이미지 레퍼런스 수집 → webp
+#     img help
 #
-# 향후 흡수 예정(현재 독립 ~/bin 도구): tag · convert · cluster · lut · pattern · ref-fetch.
+#   ※ lut(적용)·brandRe 는 이미 자체 front door 라 여기 흡수 안 함 (떠돌이가 아님).
+#     img grade 는 그 반대(추출)라 lut(적용) 명령과 헷갈리지 않게 grade 로 명명.
 import os, sys, subprocess
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 try:
@@ -27,36 +36,61 @@ def _py():
     return VENV_PY if os.path.exists(VENV_PY) else sys.executable
 
 
+# ── verb 정의 (단일 출처) ──────────────────────────────────────────────────
+# 한 곳에서 라우팅·help·대화형 메뉴를 전부 derive (DRY — workerCtl 의 함수 테이블 정신).
+#   key      : 사용자가 치는 동사
+#   module   : tools/ 안 위임 대상 (얇은 라우터라 모듈은 안 움직임)
+#   interp   : 'py'(venv 파이썬) | 'swift'
+#   needs    : 'folder'(폴더 경로 1개) | 'none'(브랜드 필터 등 자유 인자)
+#   summary  : 한 줄 설명 (help·대화형 공통)
+VERBS = [
+    ("deframe",   "image-filter-graphic-frame.py", "py",    "folder", "가장자리 단색 패딩 띠(레터박스·흰여백·텍스트카드 배경) 프레이밍 감지 → 격리/삭제"),
+    ("dedup",     "image-dedup.py",                "py",    "folder", "화질 다른 중복(같은 사진 다른 해상도) → 최대 해상도(고해상)만 남김"),
+    ("tag",       "image-tagger.py",               "py",    "folder", "비전 모델로 피사체·톤·후보정·구도 분류 → Finder 태그 + _tags.json (비파괴)"),
+    ("convert",   "image-convert-webp.py",         "py",    "folder", "JPEG/PNG → 고품질 WebP. 병렬·비파괴(원본 보존)"),
+    ("heic",      "image-convert-heic.swift",      "swift", "folder", "JPG → HEIC (M2 ImageIO HW 가속, 원본 휴지통)"),
+    ("cluster",   "photo-cluster.py",              "py",    "folder", "사진 더미(수천 장) → 시각 패턴 클러스터 → 층화 대표만 추출 (오프라인·무료)"),
+    ("pattern",   "photo-pattern.py",              "py",    "folder", "_tags.json → 브랜드 사진 '체계'(아키타입·피사체별 고정축·조합 문법) 분석"),
+    ("grade",     "photo-lut.py",                  "py",    "folder", "브랜드 사진의 컬러그레이딩을 .cube 3D LUT 로 역추출 (design-recon)"),
+    ("ref-fetch", "image-ref-fetch.py",            "py",    "none",   "브랜드 진입 페이지 이미지 레퍼런스 수집 → webp (image-ref-brands.csv)"),
+]
+SPEC = {v[0]: v for v in VERBS}
+
+
+def _run(module, rest, interp="py"):
+    """위임 실행 — interp 별 인터프리터로 tools/<module> 호출 후 returncode 전달."""
+    if interp == "swift":
+        return subprocess.run(["swift", os.path.join(TOOLS, module)] + rest).returncode
+    return subprocess.run([_py(), os.path.join(TOOLS, module)] + rest).returncode
+
+
+def dispatch(verb, rest):
+    _, module, interp, _needs, _summary = SPEC[verb]
+    return _run(module, rest, interp)
+
+
+# deframe/dedup 은 대화형에서 미리보기→확인 플로가 따로 있어 이름 있는 헬퍼로 둔다.
 def cmd_deframe(rest):
-    """가장자리 단색 패딩 띠(레터박스·흰 여백·텍스트 카드 배경)로 프레이밍된 이미지 감지."""
-    return subprocess.run([_py(), os.path.join(TOOLS, "image-filter-graphic-frame.py")] + rest).returncode
+    return _run("image-filter-graphic-frame.py", rest)
 
 
 def cmd_dedup(rest):
-    """화질 다른 중복(같은 사진의 다른 해상도)을 가장 큰 픽셀만 남기고 삭제 (dhash 클러스터)."""
-    return subprocess.run([_py(), os.path.join(TOOLS, "image-dedup.py")] + rest).returncode
+    return _run("image-dedup.py", rest)
 
 
-HELP = """img — 로컬 이미지 폴더 처리 (단일 front door)
+def _build_help():
+    rows = [f"  img {v[0]:<10}{v[4]}" for v in VERBS]
+    return (
+        "img — 로컬 이미지 폴더 처리 (단일 front door)\n\n"
+        + "\n".join(rows)
+        + "\n\n  img help\n\n"
+        "  • 대부분 argparse — 상세 옵션은  img <verb> --help  (예: img convert --help)\n"
+        "  • 비파괴: tag·convert·cluster·pattern·grade 는 원본을 안 건드림\n"
+        "  • lut(적용)·brandRe 는 별도 front door (img 흡수 대상 아님)"
+    )
 
-  img deframe <folder> [옵션]
-      가장자리 단색 패딩 띠(레터박스·흰 여백·텍스트 카드 배경)로 프레이밍된
-      이미지를 감지. 기본 dry-run (실제 변경 없음).
-        --delete         감지된 것 삭제
-        --move-to DIR    격리 폴더로 이동 (검수용)
-        --tol N          단색 판정 변동 허용 (기본 2)
-        --min-band N     그래픽으로 볼 최소 띠 두께 px (기본 31)
-        --report PATH    결과 JSON 저장
 
-  img dedup <folder> [--dry]
-      화질 다른 중복 사진(같은 사진의 다른 해상도)을 가장 큰 픽셀(고해상)만
-      남기고 삭제. dhash 클러스터 → 클러스터당 최대 해상도 1장 보존.
-        --dry            미리보기 (삭제 안 함)
-
-  img help
-
-(향후 흡수 예정 — 현재 독립 도구: tag · convert · cluster · lut · pattern · ref-fetch)
-"""
+HELP = _build_help()
 
 
 def _tty():
@@ -72,25 +106,53 @@ def _ask(q):
         sys.exit(0)
 
 
-def interactive():
-    """img (인자 없이) — 안내형 (workerCtl 패턴). verb 선택 → 폴더 → 미리보기 → 실행.
-    각 단계는 cmd_* 를 그대로 호출 (reuse-first — wizard 는 얇은 오케스트레이터)."""
-    print("═══ img ═══  로컬 이미지 폴더 처리  (Ctrl-C 종료)\n")
-    print("무엇을 할까요?")
-    print("  1) 그래픽 프레임 제거 (deframe — 레터박스·흰 여백·텍스트 카드 배경)")
-    print("  2) 중복 사진 정리 (dedup — 화질 다른 같은 사진은 최대 해상도만)")
-    what = _ask("선택 (1-2): ")
-    if what not in ("1", "2"):
-        print("취소")
-        return 0
-    raw = _ask("이미지 폴더 경로 (Finder 에서 끌어다 놓아도 됨): ")
+def _ask_folder(prompt="이미지 폴더 경로 (Finder 에서 끌어다 놓아도 됨): "):
+    raw = _ask(prompt)
     if not raw:
         print("취소")
-        return 0
+        return None
     folder = os.path.expanduser(raw.strip().strip("'\"").rstrip("/"))
     if not os.path.isdir(folder):
         sys.exit(f"폴더 없음: {folder}")
-    return _i_deframe(folder) if what == "1" else _i_dedup(folder)
+    return folder
+
+
+def interactive():
+    """img (인자 없이) — 안내형 (workerCtl 패턴): verb 메뉴 → 폴더 → 실행.
+    각 단계는 dispatch/cmd_* 를 그대로 호출 (reuse-first — wizard 는 얇은 오케스트레이터)."""
+    print("═══ img ═══  로컬 이미지 폴더 처리  (Ctrl-C 종료)\n")
+    print("무엇을 할까요?")
+    for i, v in enumerate(VERBS, 1):
+        print(f"  {i:>2}) {v[0]:<10}{v[4]}")
+    sel = _ask(f"\n선택 (1-{len(VERBS)}): ")
+    if not sel.isdigit() or not (1 <= int(sel) <= len(VERBS)):
+        print("취소")
+        return 0
+    verb = VERBS[int(sel) - 1][0]
+
+    # 파괴적 동작은 미리보기→확인 플로 (되돌리기 보호)
+    if verb == "deframe":
+        folder = _ask_folder()
+        return _i_deframe(folder) if folder else 0
+    if verb == "dedup":
+        folder = _ask_folder()
+        return _i_dedup(folder) if folder else 0
+
+    # ref-fetch 는 폴더가 아니라 브랜드 필터(선택) — 비우면 전체
+    if verb == "ref-fetch":
+        flt = _ask("브랜드 이름 필터 (공백구분, 비우면 전체): ")
+        return dispatch("ref-fetch", flt.split())
+
+    # 나머지(비파괴 분석/변환): 폴더만 받아 기본값으로 실행
+    folder = _ask_folder()
+    if not folder:
+        return 0
+    rest = [folder]
+    if verb == "cluster":
+        # cluster 는 --out 필수 → 폴더 안 _cluster 로 기본값
+        rest += ["--out", os.path.join(folder, "_cluster")]
+    print(f"\n▶ img {verb} 실행 …\n", flush=True)
+    return dispatch(verb, rest)
 
 
 def _i_deframe(folder):
@@ -135,18 +197,14 @@ def main():
         # workerCtl 처럼: TTY 면 대화형, 비-TTY(파이프·자동화)면 HELP (입력 안 막음)
         if _tty():
             sys.exit(interactive() or 0)
-        print(HELP.strip())
+        print(HELP)
         return
     if args[0] in ("help", "-h", "--help"):
-        print(HELP.strip())
+        print(HELP)
         return
     verb, rest = args[0], args[1:]
-    table = {
-        "deframe": cmd_deframe,
-        "dedup": cmd_dedup,
-    }
-    if verb in table:
-        sys.exit(table[verb](rest) or 0)
+    if verb in SPEC:
+        sys.exit(dispatch(verb, rest) or 0)
     sys.exit(f"알 수 없는 명령: {verb}\n  img help 로 사용법 확인")
 
 
