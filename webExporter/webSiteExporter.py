@@ -32,6 +32,8 @@ from urllib.parse import urlparse
 from PIL import Image
 from playwright.async_api import async_playwright
 
+import imageHarvester  # 비-썸네일 이미지 + nav 카테고리 태그 다운로드 (부가 모듈)
+
 Image.MAX_IMAGE_PIXELS = None  # 대형 이미지 경고 억제
 
 # ── 설정 ──────────────────────────────────────────────────
@@ -1732,7 +1734,8 @@ async def _extract_page_colors(page, output_dir: str, base_name: str) -> int:
 
 async def export_url(url: str, output_dir: str, scroll_time: int,
                      sem: asyncio.Semaphore, browser, download_images: bool = False,
-                     download_fonts: bool = False, extract_colors: bool = False) -> tuple[int, int]:
+                     download_fonts: bool = False, extract_colors: bool = False,
+                     harvest_images: bool = False, category: str = "uncategorized") -> tuple[int, int]:
     """
     뷰포트마다 새 컨텍스트 + 새 페이지 로드.
     - 각 뷰포트 치수로 처음부터 로드 → IO가 올바른 치수 기준으로 자연스럽게 발동
@@ -1889,6 +1892,15 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
                     await asyncio.wait_for(_download_page_images(page, output_dir, base_name), timeout=180)
                 except Exception as e:
                     log(f"  [images] 다운로드 실패/timeout: {type(e).__name__}")
+            # 비-썸네일 이미지 + nav 카테고리 태그 (부가) — desktop viewport 1회.
+            if harvest_images and vp_name == "desktop" and page is not None:
+                try:
+                    await asyncio.wait_for(
+                        imageHarvester.harvest_images(page, output_dir, base_name,
+                                                      category=category, url=url, log=log),
+                        timeout=180)
+                except Exception as e:
+                    log(f"  [harvest] 실패/timeout: {type(e).__name__}")
             if download_fonts and vp_name == "desktop" and page is not None:
                 try:
                     await asyncio.wait_for(_download_page_fonts(page, output_dir, base_name), timeout=120)
@@ -1909,7 +1921,7 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
         return ok, fail, captured
 
 # ── 메인 ──────────────────────────────────────────────────
-async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False, download_images: bool = False, download_fonts: bool = False, extract_colors: bool = False, urls: list = None):
+async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False, download_images: bool = False, download_fonts: bool = False, extract_colors: bool = False, urls: list = None, harvest_images: bool = False):
     os.makedirs(output_dir, exist_ok=True)
 
     # site_name + 로그 파일: 같은 netloc 의 sub-path base 도 충돌 없도록 base_url 전체로 슬러그
@@ -2021,7 +2033,8 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
             log(f"\n[{i}/{len(pages)}]")
             try:
                 ok, fail, captured = await asyncio.wait_for(
-                    export_url(url, output_dir, scroll_time, sem_dummy, browser, download_images, download_fonts, extract_colors),
+                    export_url(url, output_dir, scroll_time, sem_dummy, browser, download_images, download_fonts, extract_colors,
+                               harvest_images=harvest_images, category=categories.get(url, "uncategorized")),
                     timeout=url_hard_timeout,
                 )
             except asyncio.TimeoutError:
@@ -2117,7 +2130,8 @@ if __name__ == "__main__":
     parser.add_argument("--scroll-time", "-s", type=int, default=60,   help="스크롤 타임아웃(초, 내부 고정값과 별개)")
     parser.add_argument("--concurrency", "-c", type=int, default=2,    help="URL 동시 처리 수 (작은 사이트 ban 잦으면 1, 큰 사이트는 3)")
     parser.add_argument("--keep-frames",       action="store_true",     help="PDF 빌드 후 frames/ 보존 (디폴트: 삭제 — 출력 디렉터리에는 PDF+로그만)")
-    parser.add_argument("--download-images",   action="store_true",     help="(부가) 각 페이지의 모든 이미지(img/srcset 최대/background-image)를 images/<page>/ 에 다운로드")
+    parser.add_argument("--download-images",   action="store_true",     help="(부가) 각 페이지의 모든 이미지(img/srcset 최대/background-image)를 images/<page>/ 에 다운로드 (썸네일 포함, raw)")
+    parser.add_argument("--harvest-images",    action="store_true",     help="(부가) 썸네일 제외 이미지를 nav 카테고리별로 images/<category>/<page>/ 에 다운로드 + manifest.json 태그. 썸네일 임계 = WEBEXP_IMG_MIN_DIM(기본 200px)")
     parser.add_argument("--download-fonts",    action="store_true",     help="(부가) 각 페이지의 웹폰트(@font-face woff/woff2/ttf/otf)를 fonts/<page>/ 에 다운로드 + _loaded.txt")
     parser.add_argument("--extract-colors",    action="store_true",     help="(부가) 각 페이지의 렌더 컬러를 빈도순 브랜드 팔레트로 추출 → colors/<page>.json + .png 스와치")
     parser.add_argument("--urls",              default=None,            help="(레이아웃 종류별 캡처) discover 크롤 스킵, 콤마구분 URL 리스트만 캡처 — 종류별 대표 N개 직접 지정")
@@ -2128,4 +2142,4 @@ if __name__ == "__main__":
         sys.exit(1)
 
     url_list = [u.strip() for u in args.urls.split(",") if u.strip()] if args.urls else None
-    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, args.download_images, args.download_fonts, args.extract_colors, url_list))
+    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, args.download_images, args.download_fonts, args.extract_colors, url_list, args.harvest_images))
