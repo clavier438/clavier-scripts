@@ -24,7 +24,7 @@ try:
     import freshness  # noqa: F401  (repo freshness 체크 — 모든 .py tool 첫 import, 없는 환경도 동작)
 except ImportError:
     pass
-from image_formats import PHOTO_EXTS, register_heif, find_images  # 사진 확장자·재귀 탐색 단일 소스 + HEIF 디코딩
+from image_formats import PHOTO_EXTS, register_heif  # 사진 확장자 단일 소스 + HEIF 디코딩 등록
 register_heif()  # .heic/.heif 도 Image.open 가능하게 (pillow-heif 없으면 graceful)
 
 LUT_SIZE = 17          # 17^3 = 4913 점 (.cube 표준, 가벼움)
@@ -57,24 +57,39 @@ def lab_to_rgb(L, a, b):
 ZONES = ("shadow", "mid", "high")
 def _zone(L): return "shadow" if L < 33 else "high" if L > 66 else "mid"
 
+def _percentiles(hist, ps):
+    """100-bin 휘도 히스토그램 → 퍼센타일 L 값들 (톤커브 제어점용)."""
+    tot = sum(hist) or 1
+    out, cum, i = [], 0, 0
+    for p in ps:
+        target = tot * p / 100.0
+        while i < len(hist) - 1 and cum + hist[i] < target:
+            cum += hist[i]; i += 1
+        out.append(float(i))
+    return tuple(out)
+
 def grading_signature(path):
-    """사진 → {zone: (L,a,b) 평균}. 톤 구간별 색 = split-toning/톤 형성 서명."""
+    """사진 → {zone:(L,a,b) 평균, '_lum':(p5,p50,p92)}. 톤 구간별 색(split-tone) + 휘도 분포(톤커브).
+    _lum = 브랜드의 '얼마나 어둡게/블랙크러시/하이라이트압축' 톤 성격 — 색이 아닌 *톤* 서명."""
     try:
         im = Image.open(path).convert("RGB"); im.thumbnail((SAMPLE_EDGE, SAMPLE_EDGE))
     except Exception:
         return None
     acc = {z: [0.0, 0.0, 0.0, 0] for z in ZONES}
+    hist = [0] * 101
     for r, g, b in im.getdata():
         L, A, B = rgb_to_lab(r / 255, g / 255, b / 255)
         z = acc[_zone(L)]; z[0] += L; z[1] += A; z[2] += B; z[3] += 1
+        hist[max(0, min(100, int(L)))] += 1
     sig = {}
     for z in ZONES:
         L, A, B, n = acc[z]
         sig[z] = (L / n, A / n, B / n) if n else None
+    sig["_lum"] = _percentiles(hist, (5, 50, 92))
     return sig
 
 def average_signatures(sigs):
-    """여러 사진 서명 → 구간별 평균 (그룹 그레이딩)."""
+    """여러 사진 서명 → 구간별 평균 + _lum 평균 (그룹 그레이딩)."""
     out = {}
     for z in ZONES:
         vals = [s[z] for s in sigs if s and s[z]]
@@ -83,6 +98,9 @@ def average_signatures(sigs):
             out[z] = (sum(v[0] for v in vals) / n, sum(v[1] for v in vals) / n, sum(v[2] for v in vals) / n)
         else:
             out[z] = None
+    lums = [s["_lum"] for s in sigs if s and s.get("_lum")]
+    if lums:
+        out["_lum"] = tuple(sum(v) / len(lums) for v in zip(*lums))
     return out
 
 # ── identity 격자에 그레이딩 베이크 → .cube ──────────────────────────────────
@@ -99,27 +117,80 @@ def _interp_ab(L, anchors):
             return (a0 + (a1 - a0) * t, b0 + (b1 - b0) * t)
     return (0.0, 0.0)
 
-def bake_cube(sig, title, strength=0.85):
-    """그레이딩 서명 → .cube 텍스트. 중립(무채 a=b=0) 대비 톤 구간별 (a,b) 시프트 적용.
-    각 구간의 색조(a,b)를 휘도에 따라 보간해 입히므로 split-toning 이 LUT 에 반영된다."""
-    anchors = []
-    for z, Lref in (("shadow", 16), ("mid", 50), ("high", 83)):
-        s = sig.get(z)
-        anchors.append((Lref, s[1], s[2]) if s else None)
-    anchors = [a for a in anchors if a]
+# 중립 기준 휘도 퍼센타일(균형 잡힌 사진의 p5/p50/p92 위치). 톤커브 입력측 앵커.
+_NEUTRAL_LUM = (8.0, 50.0, 90.0)
+# 중립 서명: 무채(a=b=0) + 균형 휘도. transfer 의 '출발/도착' 자리표시 — bake_cube = 한쪽이 중립인 케이스.
+_NEUTRAL_SIG = {"shadow": (16.0, 0.0, 0.0), "mid": (50.0, 0.0, 0.0),
+                "high": (83.0, 0.0, 0.0), "_lum": _NEUTRAL_LUM}
+
+def _tone_between(src_lum, dst_lum):
+    """휘도 리매핑 함수 L(0~100)→L. src 의 (p5,p50,p92) 위치를 dst 의 위치로 옮긴다.
+    = 한 톤 분포(어둡게/블랙크러시/하이라이트압축)를 다른 분포로. 단조 보장 위해 정렬+클램프."""
+    if not src_lum or not dst_lum:
+        return None
+    pts = sorted([(0.0, 0.0), (src_lum[0], dst_lum[0]), (src_lum[1], dst_lum[1]),
+                  (src_lum[2], dst_lum[2]), (100.0, 100.0)])
+    for i in range(1, len(pts)):            # 단조 증가 강제 (역/교차 시 비단조 방지)
+        if pts[i][1] < pts[i - 1][1]:
+            pts[i] = (pts[i][0], pts[i - 1][1])
+
+    def f(L):
+        if L <= pts[0][0]:
+            return pts[0][1]
+        if L >= pts[-1][0]:
+            return pts[-1][1]
+        for i in range(len(pts) - 1):
+            x0, y0 = pts[i]; x1, y1 = pts[i + 1]
+            if x0 <= L <= x1:
+                t = (L - x0) / (x1 - x0) if x1 > x0 else 0.0
+                return y0 + (y1 - y0) * t
+        return L
+    return f
+
+def _tone_fn(lum, invert=False):
+    """중립 ↔ 브랜드 톤커브. invert=False 면 중립→브랜드, True 면 브랜드→중립(그레이드 제거).
+    _tone_between 의 한쪽 중립 특수 케이스."""
+    if not lum:
+        return None
+    return _tone_between(lum, _NEUTRAL_LUM) if invert else _tone_between(_NEUTRAL_LUM, lum)
+
+def _bake_grid(title, anchors, tone, strength):
+    """identity 격자에 (휘도 톤커브 tone + 톤구간별 a/b 시프트 anchors) 를 베이크 → .cube 텍스트.
+    bake_cube(중립↔브랜드)·bake_transfer(임의 from→to) 의 공통 코어 (DRY)."""
     lines = [f'TITLE "{title}"', f"LUT_3D_SIZE {LUT_SIZE}",
              "DOMAIN_MIN 0.0 0.0 0.0", "DOMAIN_MAX 1.0 1.0 1.0", ""]
     N = LUT_SIZE - 1
-    # .cube 는 red 가 가장 빨리 변하는 순서 (r 안쪽 루프)
     for bi in range(LUT_SIZE):
         for gi in range(LUT_SIZE):
             for ri in range(LUT_SIZE):
                 r, g, b = ri / N, gi / N, bi / N
                 L, A, B = rgb_to_lab(r, g, b)
+                Lo = tone(L) if tone else L
                 da, db = _interp_ab(L, anchors)
-                ro, go, bo = lab_to_rgb(L, A + strength * da, B + strength * db)
+                ro, go, bo = lab_to_rgb(Lo, A + strength * da, B + strength * db)
                 lines.append(f"{ro:.6f} {go:.6f} {bo:.6f}")
     return "\n".join(lines) + "\n"
+
+def bake_cube(sig, title, strength=0.85, invert=False):
+    """그레이딩 서명 → .cube. *톤커브(휘도 L 리매핑)* + 톤구간별 (a,b) 색시프트 둘 다 베이크.
+    중립 대비 브랜드 그레이드. invert=True 면 브랜드→중립 역변환(원본 추정). = bake_transfer 한쪽 중립 케이스."""
+    anchors = []
+    for z, Lref in (("shadow", 16), ("mid", 50), ("high", 83)):
+        s = sig.get(z)
+        if s:
+            anchors.append((Lref, -s[1], -s[2]) if invert else (Lref, s[1], s[2]))
+    return _bake_grid(title, anchors, _tone_fn(sig.get("_lum"), invert), strength)
+
+def bake_transfer(from_sig, to_sig, title, strength=0.85):
+    """두 그레이딩 서명 사이 .cube — from 의 룩을 to 의 룩으로. (출발 폴더 사진에 적용하면 모델 룩.)
+    색시프트 = to.ab − from.ab (톤구간별), 톤커브 = from._lum → to._lum. bake_cube 는 from/to 한쪽이 중립."""
+    anchors = []
+    for z, Lref in (("shadow", 16), ("mid", 50), ("high", 83)):
+        f, t = from_sig.get(z), to_sig.get(z)
+        if f and t:
+            anchors.append((Lref, t[1] - f[1], t[2] - f[2]))
+    tone = _tone_between(from_sig.get("_lum"), to_sig.get("_lum"))
+    return _bake_grid(title, anchors, tone, strength)
 
 def describe(sig):
     """구간별 색시프트를 사람이 읽게 (split-toning 요약)."""
@@ -160,6 +231,28 @@ def cluster_signatures(items, threshold=22.0):
             groups.append({"vecs": [v], "items": [(path, sig)], "centroid": v})
     return [g["items"] for g in groups]
 
+# ── 폴더 → 평균 서명 (transfer 의 from/to, reverse 의 base) ────────────────────
+# 생성 산출 폴더 — 재실행 시 직전 결과(몽타주 시트의 #101010 배경·역변환본)를 다시 먹어
+#   서명이 오염되는 것 차단. extract.mjs walkPhotos 의 SKIP_DIRS 와 같은 규칙 (Node↔Py 일치).
+_SKIP_PARTS = {"_montage", "_originals", "_preview", "_cluster", "output", "input"}
+
+def _collect(folder):
+    """폴더(재귀) 안 사진 경로 정렬 — 숨김 파일/폴더·생성 산출 폴더 제외."""
+    out = []
+    for f in glob.glob(os.path.join(folder, "**", "*"), recursive=True):
+        if not os.path.isfile(f) or os.path.splitext(f)[1].lower() not in IMAGE_EXTS:
+            continue
+        parts = os.path.relpath(f, folder).split(os.sep)
+        if any(p.startswith(".") for p in parts) or any(p in _SKIP_PARTS for p in parts[:-1]):
+            continue
+        out.append(f)
+    return sorted(out)
+
+def folder_avg_sig(folder):
+    """폴더 사진들 → (평균 그레이딩 서명, 장수). 빈 폴더면 (None, 0)."""
+    sigs = [s for s in (grading_signature(p) for p in _collect(folder)) if s]
+    return (average_signatures(sigs) if sigs else None), len(sigs)
+
 def main():
     ap = argparse.ArgumentParser(description="브랜드 사진 → 컬러그레이딩 .cube LUT (정책별 분리)")
     ap.add_argument("folder", help="이미지 폴더")
@@ -169,22 +262,42 @@ def main():
     ap.add_argument("--threshold", type=float, default=22.0, help="정책 분리 임계 색거리 (작을수록 잘게)")
     ap.add_argument("--outdir", default=None, help="LUT 출력 디렉토리 (기본: <folder>)")
     ap.add_argument("--title", default=None)
-    ap.add_argument("--no-recurse", action="store_true", help="하위 폴더 제외 (기본: 재귀 탐색)")
+    ap.add_argument("--inverse", action="store_true",
+                    help="역변환 .cube 도 함께 출력 (<label>__inverse.cube) — 원본 추정용")
+    ap.add_argument("--model", default=None,
+                    help="모델(도착) 폴더 — 지정 시 transfer 모드: folder(출발)→model(도착) 룩 .cube 1개")
     a = ap.parse_args()
     root = os.path.abspath(os.path.expanduser(a.folder))
-    imgs = find_images(root, recursive=not a.no_recurse)
-    if not imgs:
-        print(f"이미지 없음: {root}"); sys.exit(1)
-    items = [(p, grading_signature(p)) for p in imgs]
-    items = [(p, s) for p, s in items if s]
+    if not os.path.isdir(root):
+        print(f"폴더 아님: {root}"); sys.exit(1)
+    outdir = a.outdir or root
+    os.makedirs(outdir, exist_ok=True)
+
+    # ── transfer 모드: 출발 → 모델 룩 LUT 1개 ─────────────────────────────────
+    if a.model:
+        model_root = os.path.abspath(os.path.expanduser(a.model))
+        from_sig, nf = folder_avg_sig(root)
+        to_sig, nt = folder_avg_sig(model_root)
+        if not from_sig or not to_sig:
+            print(f"서명 추출 실패 (출발 {nf}장 / 모델 {nt}장)"); sys.exit(1)
+        title = a.title or f"{os.path.basename(root.rstrip('/'))}__to__{os.path.basename(model_root.rstrip('/'))}"
+        out = a.out or os.path.join(outdir, f"{title}.cube")
+        with open(out, "w") as f:
+            f.write(bake_transfer(from_sig, to_sig, title, a.strength))
+        print(f"[photo-lut] transfer  출발 {nf}장 → 모델 {nt}장  (strength {a.strength})")
+        print(f"\n  ▸ {os.path.basename(out)}")
+        print("  [출발]\n" + describe(from_sig))
+        print("  [모델]\n" + describe(to_sig))
+        return
+
+    # ── 일반 모드: 브랜드 베이스 LUT 역추출 (정책별 N개) ──────────────────────
+    items = [(p, s) for p, s in ((p, grading_signature(p)) for p in _collect(root)) if s]
     if not items:
-        print("서명 추출 실패"); sys.exit(1)
+        print(f"이미지/서명 없음: {root}"); sys.exit(1)
     title = a.title or os.path.basename(root.rstrip("/")) or "grading"
     groups = [items] if a.single else cluster_signatures(items, a.threshold)
     groups.sort(key=len, reverse=True)
     multi = len(groups) > 1
-    outdir = a.outdir or root
-    os.makedirs(outdir, exist_ok=True)
     print(f"[photo-lut] {len(items)}장 → {len(groups)}개 정책 그룹"
           f"{' (--single)' if a.single else ''}  (LUT_3D_SIZE {LUT_SIZE}, strength {a.strength})")
     for i, grp in enumerate(groups, 1):
@@ -195,6 +308,11 @@ def main():
             f.write(bake_cube(avg, label, a.strength))
         print(f"\n  ▸ {label}.cube  ({len(grp)}장)")
         print(describe(avg))
+        if a.inverse:
+            inv = os.path.join(outdir, f"{label}__inverse.cube")
+            with open(inv, "w") as f:
+                f.write(bake_cube(avg, f"{label}__inverse", a.strength, invert=True))
+            print(f"  ▸ {label}__inverse.cube  (원본 추정용 역변환)")
 
 if __name__ == "__main__":
     main()

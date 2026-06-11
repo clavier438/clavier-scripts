@@ -54,6 +54,7 @@ VERBS = [
     ("tag",       "image-tagger.py",               "py",    "folder", "비전 모델로 피사체·톤·후보정·구도 분류 → Finder 태그 + _tags.json (비파괴)", True),
     ("convert",   "image-convert.py",              "py",    "folder", "이미지 형식 변환 any→any. --to webp(기본)/heic/jpg/png/avif… 병렬·비파괴", True),
     ("cluster",   "photo-cluster.py",              "py",    "folder", "사진 더미(수천 장) → 시각 패턴 클러스터 → 층화 대표만 추출 (오프라인·무료)", True),
+    ("montage",   "photo-montage.py",              "py",    "folder", "사진 더미 → 비율보존 몽타주 시트 (전체를 한눈에 — 패턴 파악 1단계, claude 0)", False),
     ("pattern",   "photo-pattern.py",              "py",    "folder", "_tags.json → 브랜드 사진 '체계'(아키타입·피사체별 고정축·조합 문법) 분석", False),
     ("grade",     "photo-lut.py",                  "py",    "folder", "브랜드 사진의 컬러그레이딩을 .cube 3D LUT 로 역추출 (design-recon)", True),
     ("ref-fetch", "image-ref-fetch.py",            "py",    "none",   "브랜드 진입 페이지 이미지 레퍼런스 수집 → webp (image-ref-brands.csv)", False),
@@ -187,6 +188,9 @@ def interactive():
     if verb == "cluster":
         # cluster 는 --out 필수 → 폴더 안 _cluster 로 기본값
         rest += ["--out", os.path.join(folder, "_cluster")]
+    elif verb == "montage":
+        # montage 는 --out 필수 → 폴더 안 _montage 로 기본값
+        rest += ["--out", os.path.join(folder, "_montage")]
     elif verb == "convert":
         # any→any: 타겟 형식 선택 (비우면 webp)
         fmt = _ask("타겟 형식 (webp[기본]·heic·jpg·png·avif·tiff): ").lower().lstrip(".")
