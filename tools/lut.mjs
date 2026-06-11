@@ -19,6 +19,7 @@
  *   역추출 (적용의 거울 — 사진 → .cube, design-recon photo-lut/montage 재사용):
  *   lut reverse  <folder>            브랜드 사진 → 베이스 LUT + 원본 추정 + 몽타주 (폴더 안)
  *   lut transfer <출발> <모델>        출발→모델 룩 베이스 LUT (출발 폴더에) + 미리보기
+ *   lut match    <적용> [모델]        시작값 정규화 (per-photo) — 모델 없으면 자기 평균 [--ref 사진]
  *   lut help
  *
  * 데이터 루트 하드코딩 0 — 프로젝트 폴더는 전부 인자로 받는다.
@@ -37,6 +38,7 @@ import { watchProject } from "./lib/lut/watch.mjs";
 import { scanInput } from "./lib/lut/scan.mjs";
 import { pickProject, chooseAction } from "./lib/lut/menu.mjs";
 import { runReverse, runTransfer } from "./lib/lut/extract.mjs";
+import { runMatch } from "./lib/lut/match.mjs";
 import { closeAsk, ask } from "./lib/cli-prompt.mjs";
 import { basename } from "path";
 
@@ -114,6 +116,9 @@ const HELP = `lut — .cube LUT 일괄 적용 (folder = 설정 · 재귀 체인 
   역추출 (사진 → .cube · design-recon 재사용 · 몽타주 먼저):
   lut reverse  <폴더>          브랜드 사진 → 베이스 LUT + 원본 추정(_originals/) + 몽타주
   lut transfer <출발> <모델>    출발→모델 룩 베이스 LUT (출발 폴더에) + 미리보기(_preview/)
+  lut match    <적용> [모델]    시작값 정규화 (per-photo) — 일괄 LUT 의 전제
+                              모델 없으면 자기 폴더 평균 · [--ref 사진] 기준컷 · [--strength 0~1]
+                              [--method reinhard|mkl] (기본 reinhard=0-dep · mkl=공분산,numpy자동)
   lut help
 
   input/<폴더>/ 에 .cube + 사진. 폴더 계층 = LUT 체인 (바깥→안, 재귀).
@@ -157,6 +162,25 @@ async function main() {
       if (folders.length < 2) { console.error(red("✗ 사용법: lut transfer <출발폴더> <모델폴더> [--strength 0~1]")); process.exit(1); }
       await runTransfer(resolvePath(folders[0]), resolvePath(folders[1]), { strength });
     }
+    return;
+  }
+
+  // ── match: 시작값 정규화 (per-photo) — 적용 [모델] [--ref] [--strength] [--method] ──
+  if (verb === "match") {
+    const { val: sRaw, rest: r1 } = takeOpt(rest, "--strength");
+    const { val: refRaw, rest: r2 } = takeOpt(r1, "--ref");
+    const { val: method, rest: r3 } = takeOpt(r2, "--method");
+    const strength = sRaw != null ? Number(sRaw) : undefined;
+    const folders = r3.filter(a => !a.startsWith("-"));
+    if (!folders[0]) {
+      console.error(red("✗ 사용법: lut match <적용폴더> [모델폴더] [--ref 사진] [--strength 0~1] [--method reinhard|mkl]"));
+      process.exit(1);
+    }
+    await runMatch(resolvePath(folders[0]), {
+      model: folders[1] ? resolvePath(folders[1]) : undefined,
+      ref: refRaw ? resolvePath(refRaw) : undefined,
+      strength, method,
+    });
     return;
   }
 

@@ -272,6 +272,24 @@ clavier-hq `DECISIONS.md`에 새 ADR 추가 시 **즉시** `doc-coverage <개념
 
 ---
 
+## ⚠️ 의존성 자동 설치 원칙 (2026-06-11~)
+
+**실행에 필요한 의존성이 없으면 *자동 설치*한다. 사용자에게 "pip install X 하세요"로 떠넘기지 않는다.**
+
+- "직접 설치하세요" 안내는 B1 병목(거짓 떠넘김) — 도구가 스스로 갖춰야 한다.
+- 이미 있는 패턴: `lut.mjs` 의 `ensureDeps()` 가 ffmpeg/fswatch 를 brew 로 자동 설치.
+- Python pip 의존성: `tools/lib/pydeps.py` 의 `ensure(pkg[, import_name])` 사용 (단일 소스).
+  ```python
+  from pydeps import ensure
+  np = ensure("numpy")                  # 없으면 현재 인터프리터에 자동 설치 후 import
+  Image = ensure("pillow", "PIL.Image") # pip 명 ≠ import 명일 때
+  ```
+- 설치는 *조용히*(자동)이되, **실패는 보고**한다 — 자동이 침묵을 뜻하지 않음.
+- opt-in 무거운 의존성(예: `--method mkl` 의 numpy)도 *선택 시점에* 자동 설치 — 기본 경로의
+  0-dep 는 유지하되, 사용자가 그 길을 고르면 도구가 알아서 갖춘다.
+
+---
+
 ## ⚠️ 네이밍 컨벤션 — camelCase 필수
 
 **모든 파일명과 스크립트명은 camelCase를 사용한다. 예외 없음.**

@@ -26,7 +26,7 @@ const PHOTO_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp", ".tif", ".tiff", "
 const SKIP_DIRS = new Set(["_montage", "_originals", "_preview", "_cluster", "output", "input"]);
 
 /** 폴더(재귀) 안 원본 사진 경로 — 숨김·생성 산출 폴더 제외. */
-function walkPhotos(dir, out = []) {
+export function walkPhotos(dir, out = []) {
   for (const name of readdirSync(dir)) {
     if (name.startsWith(".")) continue;
     const p = join(dir, name);
@@ -38,13 +38,13 @@ function walkPhotos(dir, out = []) {
 }
 
 /** tools/<script> 위임 실행 — 진행 로그를 그대로 사용자에게(stdio inherit). 실패 시 throw. */
-function runPy(script, args, label) {
+export function runPy(script, args, label) {
   const r = spawnSync(py(), [join(TOOLS, script), ...args], { stdio: "inherit" });
   if (r.error) throw new Error(`${label}: ${r.error.message}`);
   if (r.status !== 0) throw new Error(`${label} 실패 (exit ${r.status})`);
 }
 
-const requireDir = (p, label) => {
+export const requireDir = (p, label) => {
   const d = resolve(p);
   if (!existsSync(d) || !statSync(d).isDirectory()) throw new Error(`${label} 폴더 없음: ${d}`);
   return d;
