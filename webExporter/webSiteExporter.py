@@ -314,8 +314,9 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
         return f"{p.scheme}://{p.netloc}{norm_path}"
 
     seen_norm = set()  # locale-normalized URL set — 다국어 변형 dedupe
+    categories: dict[str, str] = {}  # url → nav 카테고리 라벨 (imageHarvester 태그용)
 
-    def add(url: str) -> bool:
+    def add(url: str, category: str | None = None) -> bool:
         if not url or url in seen:
             return False
         norm = locale_normalized_key(url)
@@ -324,9 +325,11 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
         seen.add(url)
         seen_norm.add(norm)
         ordered.append(url)
+        if category:
+            categories[url] = category
         return True
 
-    add(base_url.rstrip("/"))
+    add(base_url.rstrip("/"), "Home")
 
     nav_pages = []
     try:
@@ -339,14 +342,23 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
 
         # nav + header + footer + 일반 navigation 패턴 — Next.js/SPA 처럼 nav 가 hidden 일 때
         # footer 에 카테고리 링크가 있는 패턴(e-commerce 등) 도 함께 잡음
-        nav_hrefs = await page.evaluate("""
-            () => [...new Set(
-                [...document.querySelectorAll(
+        # href + 앵커 텍스트 동반 수집 — 텍스트가 nav 카테고리 라벨(imageHarvester 태그) 이 됨
+        nav_links = await page.evaluate("""
+            () => {
+                const seen = new Set();
+                const out = [];
+                for (const a of document.querySelectorAll(
                     'nav a[href], header a[href], footer a[href], '
                     + '[role="navigation"] a[href], [role="contentinfo"] a[href], '
                     + '[aria-label*="navigation" i] a[href], [aria-label*="menu" i] a[href]'
-                )].map(a => a.href)
-            )]
+                )) {
+                    if (seen.has(a.href)) continue;
+                    seen.add(a.href);
+                    const text = (a.getAttribute('aria-label') || a.innerText || a.textContent || '').trim();
+                    out.push({ href: a.href, text: text.slice(0, 80) });
+                }
+                return out;
+            }
         """)
         # nav prefix cap + 절대 max cap (사용자 발견 2026-05-06): aman 같이 path 첫 segment 가
         # 매우 다양한 사이트는 prefix cap 만으론 줄어들지 않음 (30+ unique segment).
@@ -355,9 +367,11 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
         NAV_TOTAL_CAP  = int(os.environ.get("WEBEXP_NAV_TOTAL_CAP", "10"))
         from urllib.parse import urlparse as _up
         prefix_count = {}
-        for href in nav_hrefs:
+        nav_category: dict[str, str] = {}  # nav_url → 카테고리 라벨 (detail 페이지가 상속)
+        for link in nav_links:
             if len(nav_pages) >= NAV_TOTAL_CAP:
                 break
+            href = link["href"]
             u = clean_url(href)
             if not u:
                 continue
@@ -366,8 +380,11 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
             cnt = prefix_count.get(prefix, 0)
             if cnt >= NAV_PREFIX_CAP:
                 continue
-            if add(u):
+            # 카테고리 라벨 = 앵커 텍스트 우선, 없으면 path 첫 segment
+            label = (link.get("text") or "").strip() or prefix or "home"
+            if add(u, label):
                 nav_pages.append(u)
+                nav_category[u] = label
                 prefix_count[prefix] = cnt + 1
     except Exception as e:
         log(f"  [WARN] base URL 탐색 오류: {e}")
@@ -377,6 +394,7 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
 
     DISCOVER_THROTTLE_S = float(os.environ.get("WEBEXP_DISCOVER_THROTTLE_S", "4.0"))
     for nav_url in nav_pages:
+        cat_label = nav_category.get(nav_url, "")  # 이 nav 그룹 detail 페이지가 상속할 카테고리
         # 같은 nav 그룹에서 처리할 인덱스 페이지 목록.
         # 시작은 nav_url 자체. 첫 진입에서 페이지네이션 감지 시 동적 확장.
         index_pages = [nav_url]
@@ -418,7 +436,7 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
                     if count >= DETAIL_PER_INDEX:
                         break
                     u = clean_url(href)
-                    if u and add(u):
+                    if u and add(u, cat_label):
                         count += 1
                         detail_count += 1
 
@@ -454,7 +472,7 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
                         u = clean_url(href)
                         if u and u not in index_pages:
                             index_pages.append(u)
-                            if add(u):
+                            if add(u, cat_label):
                                 extra_index_count += 1
 
             except Exception as e:
@@ -462,9 +480,10 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
 
     if max_pages:
         ordered = ordered[:max_pages]
+        categories = {u: c for u, c in categories.items() if u in set(ordered)}
 
     log(f"  발견: base(1) + nav({len(nav_pages)}) + 추가인덱스({extra_index_count}) + detail({detail_count}) = {len(ordered)}페이지")
-    return ordered
+    return ordered, categories
 
 # ── SPA content settle waiter ────────────────────────────
 #
@@ -1937,7 +1956,15 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
         )
         await ctx.add_init_script(STEALTH_INIT_SCRIPT)
         pg        = await ctx.new_page()
-        pages     = urls if urls else await discover_pages(pg, base_url, max_pages)
+        if urls:
+            pages = urls
+            # 수동 URL 리스트 — discover 스킵 → 카테고리는 path 첫 segment 로 도출
+            categories = {}
+            for u in urls:
+                seg = urlparse(u).path.strip("/").split("/")
+                categories[u] = (seg[0] if seg and seg[0] else "home")
+        else:
+            pages, categories = await discover_pages(pg, base_url, max_pages)
         await ctx.close()
         await browser_d.close()
 
