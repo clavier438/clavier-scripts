@@ -15,6 +15,10 @@
  *   lut preview <projectDir> _preview/ 1회 처리 후 종료 (덮어쓰기)
  *   lut render <projectDir>  output/vNN/ 원본 해상도 최종 (버전 누적)
  *   lut status <projectDir>  input/ 스캔 — 각 폴더 적용 체인 출력
+ *
+ *   역추출 (적용의 거울 — 사진 → .cube, design-recon photo-lut/montage 재사용):
+ *   lut reverse  <folder>            브랜드 사진 → 베이스 LUT + 원본 추정 + 몽타주 (폴더 안)
+ *   lut transfer <출발> <모델>        출발→모델 룩 베이스 LUT (출발 폴더에) + 미리보기
  *   lut help
  *
  * 데이터 루트 하드코딩 0 — 프로젝트 폴더는 전부 인자로 받는다.
@@ -32,6 +36,7 @@ import { processProject } from "./lib/lut/run.mjs";
 import { watchProject } from "./lib/lut/watch.mjs";
 import { scanInput } from "./lib/lut/scan.mjs";
 import { pickProject, chooseAction } from "./lib/lut/menu.mjs";
+import { runReverse, runTransfer } from "./lib/lut/extract.mjs";
 import { closeAsk, ask } from "./lib/cli-prompt.mjs";
 import { basename } from "path";
 
@@ -76,6 +81,13 @@ function requireProject(p) {
   return dir;
 }
 
+// ── 옵션 1개를 값과 함께 떼어내고 나머지 인자 반환 (reverse/transfer 의 --strength) ──
+function takeOpt(rest, flag) {
+  const i = rest.indexOf(flag);
+  if (i < 0) return { val: undefined, rest };
+  return { val: rest[i + 1], rest: rest.filter((_, j) => j !== i && j !== i + 1) };
+}
+
 function printStatus(dir) {
   const scan = scanInput(join(dir, "input"));
   console.log(bold(cyan(`\n${dir}`)));
@@ -98,10 +110,15 @@ const HELP = `lut — .cube LUT 일괄 적용 (folder = 설정 · 재귀 체인 
   lut preview <dir>        _preview/ 1회 처리 (덮어쓰기)
   lut render <dir>         output/vNN/ 원본 해상도 최종 (버전 누적)
   lut status <dir>         각 폴더 적용 체인 출력
+
+  역추출 (사진 → .cube · design-recon 재사용 · 몽타주 먼저):
+  lut reverse  <폴더>          브랜드 사진 → 베이스 LUT + 원본 추정(_originals/) + 몽타주
+  lut transfer <출발> <모델>    출발→모델 룩 베이스 LUT (출발 폴더에) + 미리보기(_preview/)
   lut help
 
   input/<폴더>/ 에 .cube + 사진. 폴더 계층 = LUT 체인 (바깥→안, 재귀).
-  input/ 루트 cube = 베이스. 밑줄 _ = 비활성/무시. 폴더당 활성 cube 1개.`;
+  input/ 루트 cube = 베이스. 밑줄 _ = 비활성/무시. 폴더당 활성 cube 1개.
+  reverse/transfer 는 input/ 골격 불필요 — 사진 폴더를 직접 가리킨다 ([--strength 0~1]).`;
 
 async function main() {
   const [verb, ...rest] = process.argv.slice(2);
@@ -127,6 +144,21 @@ async function main() {
   if (verb === "watch")   { const d = requireProject(rest[0]); rememberProject(d); await watchProject(d); return; }
   if (verb === "preview") { const d = requireProject(rest[0]); rememberProject(d); await processProject(d, { mode: "preview" }); return; }
   if (verb === "render")  { const d = requireProject(rest[0]); rememberProject(d); await processProject(d, { mode: "final" }); return; }
+
+  // ── 역추출: input/ 골격 불필요 — 사진 폴더 직접 (apply 의 거울) ──
+  if (verb === "reverse" || verb === "transfer") {
+    const { val: sRaw, rest: pos } = takeOpt(rest, "--strength");
+    const strength = sRaw != null ? Number(sRaw) : undefined;
+    const folders = pos.filter(a => !a.startsWith("-"));
+    if (verb === "reverse") {
+      if (!folders[0]) { console.error(red("✗ 사용법: lut reverse <폴더> [--strength 0~1]")); process.exit(1); }
+      await runReverse(resolvePath(folders[0]), { strength });
+    } else {
+      if (folders.length < 2) { console.error(red("✗ 사용법: lut transfer <출발폴더> <모델폴더> [--strength 0~1]")); process.exit(1); }
+      await runTransfer(resolvePath(folders[0]), resolvePath(folders[1]), { strength });
+    }
+    return;
+  }
 
   if (verb !== undefined) { console.error(red(`✗ 알 수 없는 명령: ${verb}`)); console.log(HELP); process.exit(1); }
 

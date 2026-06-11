@@ -232,11 +232,21 @@ def cluster_signatures(items, threshold=22.0):
     return [g["items"] for g in groups]
 
 # ── 폴더 → 평균 서명 (transfer 의 from/to, reverse 의 base) ────────────────────
+# 생성 산출 폴더 — 재실행 시 직전 결과(몽타주 시트의 #101010 배경·역변환본)를 다시 먹어
+#   서명이 오염되는 것 차단. extract.mjs walkPhotos 의 SKIP_DIRS 와 같은 규칙 (Node↔Py 일치).
+_SKIP_PARTS = {"_montage", "_originals", "_preview", "_cluster", "output", "input"}
+
 def _collect(folder):
-    """폴더(재귀) 안 사진 경로 정렬 목록 — 숨김 제외. (main·transfer 공통 단일화)"""
-    return sorted(f for f in glob.glob(os.path.join(folder, "**", "*"), recursive=True)
-                  if os.path.isfile(f) and os.path.splitext(f)[1].lower() in IMAGE_EXTS
-                  and not os.path.basename(f).startswith("."))
+    """폴더(재귀) 안 사진 경로 정렬 — 숨김 파일/폴더·생성 산출 폴더 제외."""
+    out = []
+    for f in glob.glob(os.path.join(folder, "**", "*"), recursive=True):
+        if not os.path.isfile(f) or os.path.splitext(f)[1].lower() not in IMAGE_EXTS:
+            continue
+        parts = os.path.relpath(f, folder).split(os.sep)
+        if any(p.startswith(".") for p in parts) or any(p in _SKIP_PARTS for p in parts[:-1]):
+            continue
+        out.append(f)
+    return sorted(out)
 
 def folder_avg_sig(folder):
     """폴더 사진들 → (평균 그레이딩 서명, 장수). 빈 폴더면 (None, 0)."""
