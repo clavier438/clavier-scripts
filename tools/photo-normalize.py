@@ -25,13 +25,14 @@
 #   의존성 0 (PIL + stdlib). 색변환·클러스터 감지는 photo-lut 재사용 (중복 색수학 금지).
 
 import os, sys, json, argparse, importlib.util
-from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 try:
     import freshness  # noqa: F401  (repo freshness 체크 — 없는 환경도 동작)
 except ImportError:
     pass
+from pydeps import ensure  # 실행 의존성 자동 설치 (CONVENTIONS "의존성 자동 설치 원칙")
+Image = ensure("pillow", "PIL.Image")  # 없으면 자동 설치 — 사용자에 떠넘기지 않음
 from image_formats import find_images, register_heif  # 사진 탐색·HEIF 등록 단일 소스
 register_heif()
 
@@ -188,18 +189,14 @@ def main():
     ap.add_argument("--ref", default=None, help="기준 사진 1장 — 이 컷으로 통일 (--model 보다 우선)")
     ap.add_argument("--strength", type=float, default=1.0, help="정규화 강도 0~1 (기본 1.0=완전 매칭)")
     ap.add_argument("--method", choices=("reinhard", "mkl"), default="reinhard",
-                    help="reinhard=채널 mean+std (기본, 0-dep) · mkl=평균+공분산 (numpy 필요, opt-in)")
+                    help="reinhard=채널 mean+std (기본, 0-dep) · mkl=평균+공분산 (numpy 자동설치)")
     ap.add_argument("--cubedir", required=True, help="per-photo .cube 출력 디렉토리")
     ap.add_argument("--manifest", default=None, help="manifest.json 경로 (기본: <cubedir>/manifest.json)")
     ap.add_argument("--threshold", type=float, default=22.0, help="섞인 룩 경고 임계 색거리")
     a = ap.parse_args()
 
-    if a.method == "mkl":  # opt-in 경로 — 0-dep 깨므로 먼저 친절히 안내하고 fail-fast
-        try:
-            import numpy  # noqa: F401
-        except ImportError:
-            print("✗ --method mkl 는 numpy 필요. 설치: <venv>/bin/pip install numpy "
-                  "(기본 --method reinhard 는 0-dep)"); sys.exit(1)
+    if a.method == "mkl":  # opt-in 경로 — numpy 필요. 없으면 자동 설치 (수동 안내 금지 원칙)
+        ensure("numpy")
 
     root = os.path.abspath(os.path.expanduser(a.folder))
     if not os.path.isdir(root):

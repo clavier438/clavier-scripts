@@ -118,7 +118,7 @@ const HELP = `lut — .cube LUT 일괄 적용 (folder = 설정 · 재귀 체인 
   lut transfer <출발> <모델>    출발→모델 룩 베이스 LUT (출발 폴더에) + 미리보기(_preview/)
   lut match    <적용> [모델]    시작값 정규화 (per-photo) — 일괄 LUT 의 전제
                               모델 없으면 자기 폴더 평균 · [--ref 사진] 기준컷 · [--strength 0~1]
-                              [--method reinhard|mkl] (기본 reinhard=0-dep · mkl=공분산,numpy)
+                              [--method reinhard|mkl] (기본 reinhard=0-dep · mkl=공분산,numpy자동)
   lut help
 
   input/<폴더>/ 에 .cube + 사진. 폴더 계층 = LUT 체인 (바깥→안, 재귀).
