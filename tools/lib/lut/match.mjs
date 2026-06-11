@@ -19,7 +19,7 @@ import { bold, dim, cyan, green, yellow } from "../cli-color.mjs";
  *   목표: ref(사진) > model(폴더) > 자기 폴더 평균.
  *   산출(적용 폴더 안): _normalize/ (cube+manifest) · _preview/ · _montage/{before,after}/
  */
-export async function runMatch(srcFolder, { model, ref, strength } = {}) {
+export async function runMatch(srcFolder, { model, ref, strength, method } = {}) {
   const src = requireDir(srcFolder, "적용");
   const srcPhotos = walkPhotos(src);
   if (!srcPhotos.length) throw new Error(`적용 사진 없음: ${src}`);
@@ -35,6 +35,7 @@ export async function runMatch(srcFolder, { model, ref, strength } = {}) {
   const cubedir = join(src, "_normalize");
   const manifest = join(cubedir, "manifest.json");
   const args = [src, "--cubedir", cubedir, "--manifest", manifest, "--strength", String(strength ?? 1.0)];
+  if (method) args.push("--method", method);
   if (ref) args.push("--ref", resolve(ref));
   else if (modelDir) args.push("--model", modelDir);
   runPy("photo-normalize.py", args, "photo-normalize");
