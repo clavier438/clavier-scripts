@@ -43,10 +43,20 @@ def auto_row_h(n, target_sheets, min_row, width):
     return max(min_row, min(MAX_ROW, r))
 
 
+# 생성 산출 폴더 — 몽타주가 직전 결과(_montage 시트의 #101010 배경·_originals…)를 재섭취하면
+#   판단 기준 시트가 오염된다. photo-lut._collect / extract.mjs walkPhotos 와 같은 규칙 (Node↔Py 일치).
+_SKIP_PARTS = {"_montage", "_originals", "_preview", "_cluster", "output", "input"}
+
 def collect(src):
-    return sorted(f for f in glob.glob(os.path.join(src, "**", "*"), recursive=True)
-                  if os.path.isfile(f) and os.path.splitext(f)[1].lower() in IMAGE_EXTS
-                  and not os.path.basename(f).startswith("."))
+    out = []
+    for f in glob.glob(os.path.join(src, "**", "*"), recursive=True):
+        if not os.path.isfile(f) or os.path.splitext(f)[1].lower() not in IMAGE_EXTS:
+            continue
+        parts = os.path.relpath(f, src).split(os.sep)
+        if any(p.startswith(".") for p in parts) or any(p in _SKIP_PARTS for p in parts[:-1]):
+            continue
+        out.append(f)
+    return sorted(out)
 
 
 def is_framed(path):
