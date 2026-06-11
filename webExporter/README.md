@@ -42,7 +42,44 @@ WEBEXP_SKIP_VIEWPORTS=tablet,mobile python webSiteExporter.py https://example.co
 
 # Keep individual frame images
 python webSiteExporter.py https://example.com --keep-frames
+
+# Harvest every non-thumbnail image, tagged by the nav category it lived under
+python webSiteExporter.py https://example.com --harvest-images
 ```
+
+## Image harvesting (`--harvest-images`)
+
+Downloads every real image from each crawled page — **skipping thumbnails and
+icons** — and files them by the **nav category** the page belonged to.
+
+- **No thumbnails**: an image is kept only if its natural *or* rendered size has
+  both sides ≥ `WEBEXP_IMG_MIN_DIM` (default 200px). Icons, sprites, and tiny
+  previews are dropped. A wide banner (e.g. 1500×80) is kept — only images small
+  on *both* sides are treated as thumbnails.
+- **Nav-category tags**: during crawl each page inherits the nav menu label it
+  was reached through (`Home`, `Rooms`, `Dining`, …). Images land in
+  `images/<category>/<page>/`, and every file is recorded in
+  `images/manifest.json` with its source URL, category, and dimensions
+  (plus a macOS Finder tag on each file).
+- Sources covered: `<img>` (browser-selected `currentSrc` at full resolution),
+  `<source srcset>` (largest candidate), and CSS `background-image`.
+
+```
+exports/
+  images/
+    manifest.json                  ← every image → {category, src, size, page}
+    home/
+      example-com/
+        hero.jpg
+        _webfx.json                ← per-folder web-fx meta (image-tagger compatible)
+    rooms/
+      example-com_rooms_deluxe/
+        ...
+```
+
+> `--download-images` (the older flag) grabs *every* image flat under
+> `images/<page>/` with no thumbnail filter or category tags — use
+> `--harvest-images` when you want clean, categorized, thumbnail-free output.
 
 ## Options
 
@@ -53,6 +90,8 @@ python webSiteExporter.py https://example.com --keep-frames
 | `--concurrency, -c` | `2` | Parallel URL processing |
 | `--scroll-time, -s` | `60` | Scroll timeout in seconds |
 | `--keep-frames` | off | Keep individual frame JPEGs after PDF build |
+| `--harvest-images` | off | Download non-thumbnail images, tagged by nav category → `images/<category>/<page>/` + `manifest.json` |
+| `--download-images` | off | Download *all* images (incl. thumbnails) flat → `images/<page>/` |
 
 ## Environment variables
 
@@ -63,6 +102,7 @@ python webSiteExporter.py https://example.com --keep-frames
 | `WEBEXP_NAV_PREFIX_CAP` | Max detail pages per path prefix |
 | `WEBEXP_URL_HARD_TIMEOUT_S` | Per-URL hard timeout in seconds (0 = auto by viewport count). Skips a page if it hangs instead of stalling the whole run |
 | `WEBEXP_MEM_FLOOR_PCT` | Memory floor as % of total RAM (default 20). Restarts the browser when free memory drops below — works on both Linux and macOS |
+| `WEBEXP_IMG_MIN_DIM` | Thumbnail threshold in px for `--harvest-images` (default 200). Images smaller than this on both sides are skipped |
 
 ## Output
 

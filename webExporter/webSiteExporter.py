@@ -32,6 +32,8 @@ from urllib.parse import urlparse
 from PIL import Image
 from playwright.async_api import async_playwright
 
+import imageHarvester  # 비-썸네일 이미지 + nav 카테고리 태그 다운로드 (부가 모듈)
+
 Image.MAX_IMAGE_PIXELS = None  # 대형 이미지 경고 억제
 
 # ── 설정 ──────────────────────────────────────────────────
@@ -314,8 +316,9 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
         return f"{p.scheme}://{p.netloc}{norm_path}"
 
     seen_norm = set()  # locale-normalized URL set — 다국어 변형 dedupe
+    categories: dict[str, str] = {}  # url → nav 카테고리 라벨 (imageHarvester 태그용)
 
-    def add(url: str) -> bool:
+    def add(url: str, category: str | None = None) -> bool:
         if not url or url in seen:
             return False
         norm = locale_normalized_key(url)
@@ -324,9 +327,11 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
         seen.add(url)
         seen_norm.add(norm)
         ordered.append(url)
+        if category:
+            categories[url] = category
         return True
 
-    add(base_url.rstrip("/"))
+    add(base_url.rstrip("/"), "Home")
 
     nav_pages = []
     try:
@@ -339,14 +344,23 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
 
         # nav + header + footer + 일반 navigation 패턴 — Next.js/SPA 처럼 nav 가 hidden 일 때
         # footer 에 카테고리 링크가 있는 패턴(e-commerce 등) 도 함께 잡음
-        nav_hrefs = await page.evaluate("""
-            () => [...new Set(
-                [...document.querySelectorAll(
+        # href + 앵커 텍스트 동반 수집 — 텍스트가 nav 카테고리 라벨(imageHarvester 태그) 이 됨
+        nav_links = await page.evaluate("""
+            () => {
+                const seen = new Set();
+                const out = [];
+                for (const a of document.querySelectorAll(
                     'nav a[href], header a[href], footer a[href], '
                     + '[role="navigation"] a[href], [role="contentinfo"] a[href], '
                     + '[aria-label*="navigation" i] a[href], [aria-label*="menu" i] a[href]'
-                )].map(a => a.href)
-            )]
+                )) {
+                    if (seen.has(a.href)) continue;
+                    seen.add(a.href);
+                    const text = (a.getAttribute('aria-label') || a.innerText || a.textContent || '').trim();
+                    out.push({ href: a.href, text: text.slice(0, 80) });
+                }
+                return out;
+            }
         """)
         # nav prefix cap + 절대 max cap (사용자 발견 2026-05-06): aman 같이 path 첫 segment 가
         # 매우 다양한 사이트는 prefix cap 만으론 줄어들지 않음 (30+ unique segment).
@@ -355,9 +369,11 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
         NAV_TOTAL_CAP  = int(os.environ.get("WEBEXP_NAV_TOTAL_CAP", "10"))
         from urllib.parse import urlparse as _up
         prefix_count = {}
-        for href in nav_hrefs:
+        nav_category: dict[str, str] = {}  # nav_url → 카테고리 라벨 (detail 페이지가 상속)
+        for link in nav_links:
             if len(nav_pages) >= NAV_TOTAL_CAP:
                 break
+            href = link["href"]
             u = clean_url(href)
             if not u:
                 continue
@@ -366,8 +382,11 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
             cnt = prefix_count.get(prefix, 0)
             if cnt >= NAV_PREFIX_CAP:
                 continue
-            if add(u):
+            # 카테고리 라벨 = 앵커 텍스트 우선, 없으면 path 첫 segment
+            label = (link.get("text") or "").strip() or prefix or "home"
+            if add(u, label):
                 nav_pages.append(u)
+                nav_category[u] = label
                 prefix_count[prefix] = cnt + 1
     except Exception as e:
         log(f"  [WARN] base URL 탐색 오류: {e}")
@@ -377,6 +396,7 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
 
     DISCOVER_THROTTLE_S = float(os.environ.get("WEBEXP_DISCOVER_THROTTLE_S", "4.0"))
     for nav_url in nav_pages:
+        cat_label = nav_category.get(nav_url, "")  # 이 nav 그룹 detail 페이지가 상속할 카테고리
         # 같은 nav 그룹에서 처리할 인덱스 페이지 목록.
         # 시작은 nav_url 자체. 첫 진입에서 페이지네이션 감지 시 동적 확장.
         index_pages = [nav_url]
@@ -418,7 +438,7 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
                     if count >= DETAIL_PER_INDEX:
                         break
                     u = clean_url(href)
-                    if u and add(u):
+                    if u and add(u, cat_label):
                         count += 1
                         detail_count += 1
 
@@ -454,7 +474,7 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
                         u = clean_url(href)
                         if u and u not in index_pages:
                             index_pages.append(u)
-                            if add(u):
+                            if add(u, cat_label):
                                 extra_index_count += 1
 
             except Exception as e:
@@ -462,9 +482,10 @@ async def discover_pages(page, base_url: str, max_pages: int = 0) -> list:
 
     if max_pages:
         ordered = ordered[:max_pages]
+        categories = {u: c for u, c in categories.items() if u in set(ordered)}
 
     log(f"  발견: base(1) + nav({len(nav_pages)}) + 추가인덱스({extra_index_count}) + detail({detail_count}) = {len(ordered)}페이지")
-    return ordered
+    return ordered, categories
 
 # ── SPA content settle waiter ────────────────────────────
 #
@@ -1713,7 +1734,8 @@ async def _extract_page_colors(page, output_dir: str, base_name: str) -> int:
 
 async def export_url(url: str, output_dir: str, scroll_time: int,
                      sem: asyncio.Semaphore, browser, download_images: bool = False,
-                     download_fonts: bool = False, extract_colors: bool = False) -> tuple[int, int]:
+                     download_fonts: bool = False, extract_colors: bool = False,
+                     harvest_images: bool = False, category: str = "uncategorized") -> tuple[int, int]:
     """
     뷰포트마다 새 컨텍스트 + 새 페이지 로드.
     - 각 뷰포트 치수로 처음부터 로드 → IO가 올바른 치수 기준으로 자연스럽게 발동
@@ -1870,6 +1892,15 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
                     await asyncio.wait_for(_download_page_images(page, output_dir, base_name), timeout=180)
                 except Exception as e:
                     log(f"  [images] 다운로드 실패/timeout: {type(e).__name__}")
+            # 비-썸네일 이미지 + nav 카테고리 태그 (부가) — desktop viewport 1회.
+            if harvest_images and vp_name == "desktop" and page is not None:
+                try:
+                    await asyncio.wait_for(
+                        imageHarvester.harvest_images(page, output_dir, base_name,
+                                                      category=category, url=url, log=log),
+                        timeout=180)
+                except Exception as e:
+                    log(f"  [harvest] 실패/timeout: {type(e).__name__}")
             if download_fonts and vp_name == "desktop" and page is not None:
                 try:
                     await asyncio.wait_for(_download_page_fonts(page, output_dir, base_name), timeout=120)
@@ -1890,7 +1921,7 @@ async def export_url(url: str, output_dir: str, scroll_time: int,
         return ok, fail, captured
 
 # ── 메인 ──────────────────────────────────────────────────
-async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False, download_images: bool = False, download_fonts: bool = False, extract_colors: bool = False, urls: list = None):
+async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, concurrency: int, keep_frames: bool = False, download_images: bool = False, download_fonts: bool = False, extract_colors: bool = False, urls: list = None, harvest_images: bool = False):
     os.makedirs(output_dir, exist_ok=True)
 
     # site_name + 로그 파일: 같은 netloc 의 sub-path base 도 충돌 없도록 base_url 전체로 슬러그
@@ -1937,7 +1968,15 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
         )
         await ctx.add_init_script(STEALTH_INIT_SCRIPT)
         pg        = await ctx.new_page()
-        pages     = urls if urls else await discover_pages(pg, base_url, max_pages)
+        if urls:
+            pages = urls
+            # 수동 URL 리스트 — discover 스킵 → 카테고리는 path 첫 segment 로 도출
+            categories = {}
+            for u in urls:
+                seg = urlparse(u).path.strip("/").split("/")
+                categories[u] = (seg[0] if seg and seg[0] else "home")
+        else:
+            pages, categories = await discover_pages(pg, base_url, max_pages)
         await ctx.close()
         await browser_d.close()
 
@@ -1994,7 +2033,8 @@ async def run(base_url: str, output_dir: str, max_pages: int, scroll_time: int, 
             log(f"\n[{i}/{len(pages)}]")
             try:
                 ok, fail, captured = await asyncio.wait_for(
-                    export_url(url, output_dir, scroll_time, sem_dummy, browser, download_images, download_fonts, extract_colors),
+                    export_url(url, output_dir, scroll_time, sem_dummy, browser, download_images, download_fonts, extract_colors,
+                               harvest_images=harvest_images, category=categories.get(url, "uncategorized")),
                     timeout=url_hard_timeout,
                 )
             except asyncio.TimeoutError:
@@ -2090,7 +2130,8 @@ if __name__ == "__main__":
     parser.add_argument("--scroll-time", "-s", type=int, default=60,   help="스크롤 타임아웃(초, 내부 고정값과 별개)")
     parser.add_argument("--concurrency", "-c", type=int, default=2,    help="URL 동시 처리 수 (작은 사이트 ban 잦으면 1, 큰 사이트는 3)")
     parser.add_argument("--keep-frames",       action="store_true",     help="PDF 빌드 후 frames/ 보존 (디폴트: 삭제 — 출력 디렉터리에는 PDF+로그만)")
-    parser.add_argument("--download-images",   action="store_true",     help="(부가) 각 페이지의 모든 이미지(img/srcset 최대/background-image)를 images/<page>/ 에 다운로드")
+    parser.add_argument("--download-images",   action="store_true",     help="(부가) 각 페이지의 모든 이미지(img/srcset 최대/background-image)를 images/<page>/ 에 다운로드 (썸네일 포함, raw)")
+    parser.add_argument("--harvest-images",    action="store_true",     help="(부가) 썸네일 제외 이미지를 nav 카테고리별로 images/<category>/<page>/ 에 다운로드 + manifest.json 태그. 썸네일 임계 = WEBEXP_IMG_MIN_DIM(기본 200px)")
     parser.add_argument("--download-fonts",    action="store_true",     help="(부가) 각 페이지의 웹폰트(@font-face woff/woff2/ttf/otf)를 fonts/<page>/ 에 다운로드 + _loaded.txt")
     parser.add_argument("--extract-colors",    action="store_true",     help="(부가) 각 페이지의 렌더 컬러를 빈도순 브랜드 팔레트로 추출 → colors/<page>.json + .png 스와치")
     parser.add_argument("--urls",              default=None,            help="(레이아웃 종류별 캡처) discover 크롤 스킵, 콤마구분 URL 리스트만 캡처 — 종류별 대표 N개 직접 지정")
@@ -2101,4 +2142,4 @@ if __name__ == "__main__":
         sys.exit(1)
 
     url_list = [u.strip() for u in args.urls.split(",") if u.strip()] if args.urls else None
-    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, args.download_images, args.download_fonts, args.extract_colors, url_list))
+    asyncio.run(run(args.url, args.output, args.max_pages, args.scroll_time, args.concurrency, args.keep_frames, args.download_images, args.download_fonts, args.extract_colors, url_list, args.harvest_images))

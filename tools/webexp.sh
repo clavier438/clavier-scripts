@@ -12,6 +12,8 @@
 #   --nav-cap N      NAV_TOTAL_CAP override (default 10, --full 일 때만)
 #   --prefix-cap N   prefix 별 max (default 3, --full 일 때만)
 #   --skip-mobile    mobile viewport skip (메모리 절약)
+#   --harvest-images 썸네일 제외 이미지를 nav 카테고리별로 다운로드 → Mac 으로 images/ pull
+#   --img-min-dim N  썸네일 임계 px (default 200, --harvest-images 와 함께)
 #   --no-pull        Mac 으로 PDF auto-pull skip
 #   -h | --help      이 메시지
 #
@@ -32,21 +34,25 @@ NAV_CAP=10
 PREFIX_CAP=3
 SKIP_MOBILE=""
 NO_PULL=""
+HARVEST=""
+IMG_MIN_DIM=""
 URLS=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
     -h|--help)
-      sed -n '2,22p' "$0" | sed 's/^# //; s/^#//'; exit 0 ;;
-    --full)        MODE="full"; shift ;;
-    --pagination)  MODE="pagination"; shift ;;
-    --single)      MODE="single"; shift ;;
-    --nav-cap)     NAV_CAP="$2"; shift 2 ;;
-    --prefix-cap)  PREFIX_CAP="$2"; shift 2 ;;
-    --skip-mobile) SKIP_MOBILE="mobile"; shift ;;
-    --no-pull)     NO_PULL="1"; shift ;;
-    http*)         URLS+=("$1"); shift ;;
-    *)             echo "unknown: $1"; exit 1 ;;
+      sed -n '2,24p' "$0" | sed 's/^# //; s/^#//'; exit 0 ;;
+    --full)           MODE="full"; shift ;;
+    --pagination)     MODE="pagination"; shift ;;
+    --single)         MODE="single"; shift ;;
+    --nav-cap)        NAV_CAP="$2"; shift 2 ;;
+    --prefix-cap)     PREFIX_CAP="$2"; shift 2 ;;
+    --skip-mobile)    SKIP_MOBILE="mobile"; shift ;;
+    --harvest-images) HARVEST="1"; shift ;;
+    --img-min-dim)    IMG_MIN_DIM="$2"; shift 2 ;;
+    --no-pull)        NO_PULL="1"; shift ;;
+    http*)            URLS+=("$1"); shift ;;
+    *)                echo "unknown: $1"; exit 1 ;;
   esac
 done
 
@@ -65,7 +71,12 @@ esac
 
 # 환경변수 조립
 ENV_VARS="WEBEXP_NAV_TOTAL_CAP=$NAV_CAP WEBEXP_NAV_PREFIX_CAP=$PREFIX_CAP"
-[ -n "$SKIP_MOBILE" ] && ENV_VARS="$ENV_VARS WEBEXP_SKIP_VIEWPORTS=$SKIP_MOBILE"
+[ -n "$SKIP_MOBILE" ]  && ENV_VARS="$ENV_VARS WEBEXP_SKIP_VIEWPORTS=$SKIP_MOBILE"
+[ -n "$IMG_MIN_DIM" ]  && ENV_VARS="$ENV_VARS WEBEXP_IMG_MIN_DIM=$IMG_MIN_DIM"
+
+# python 추가 플래그
+PY_FLAGS=""
+[ -n "$HARVEST" ] && PY_FLAGS="$PY_FLAGS --harvest-images"
 
 TOTAL=${#URLS[@]}
 echo "▶ webexp ($TOTAL URL, mode=$MODE)"
@@ -94,7 +105,7 @@ for URL in "${URLS[@]}"; do
     $ENV_VARS ~/webexporter-venv/bin/python webSiteExporter.py '$URL' \
       --output $OUT_DIR \
       --max-pages $MAX_PAGES \
-      --concurrency 1 2>&1 | tee ~/webexporter-logs/$LOG" || echo "[WARN] $URL fail"
+      --concurrency 1$PY_FLAGS 2>&1 | tee ~/webexporter-logs/$LOG" || echo "[WARN] $URL fail"
 
   # PDF pull
   if [ -z "$NO_PULL" ]; then
@@ -105,6 +116,20 @@ for URL in "${URLS[@]}"; do
       echo "✓ saved: $(basename "$LOCAL_PDF")"
     else
       echo "✗ PDF 못 찾음 — log 확인: ~/webexporter-logs/$LOG"
+    fi
+
+    # 이미지 harvest 결과(images/ = 카테고리별 폴더 + manifest.json) pull
+    if [ -n "$HARVEST" ]; then
+      REMOTE_IMG="/home/ubuntu/webexporter-output/${SLUG}-${TS}/images"
+      if ssh "$OCI" "[ -d $REMOTE_IMG ]"; then
+        LOCAL_IMG="$ICLOUD_RESULTS/${SLUG}-${MODE}-${TS}-images"
+        mkdir -p "$LOCAL_IMG"
+        scp -r "$OCI:$REMOTE_IMG/." "$LOCAL_IMG/" >/dev/null 2>&1 \
+          && echo "✓ images: $(basename "$LOCAL_IMG")/ (nav 카테고리별 + manifest.json)" \
+          || echo "✗ images pull 실패"
+      else
+        echo "✗ images/ 없음 — 비-썸네일 이미지 0 이었을 수 있음"
+      fi
     fi
   fi
 
