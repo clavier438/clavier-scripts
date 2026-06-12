@@ -128,11 +128,15 @@ print_gaps() {
         [ "$top" = "tools" ] && continue                       # tools 는 SKIP 목록에 있어도 ~/bin 평면 배포됨
         case "$skip" in *" $top "*) ;; *) continue;; esac      # 배포되는 폴더면 ~/bin 명령 있음 → gap 아님
         base="${f##*/}"
-        callers="$(grep -rlF "$base" "$SRC" --include='*.sh' --include='*.py' --include='*.mjs' --include='*.js' 2>/dev/null | grep -vxF "$f" | head -1)"
+        # 참조처 = 스크립트 호출만이 아니라 config 등록(settings.json/plist/manifest)·
+        # 플러그인 UI(html/js)·문서(README)도 정당한 도달 경로다. 좁게 .sh/.py 만 보면
+        # hook·플러그인 도구가 "고립" 으로 오탐된다(2026-06-12). 경로를 그대로 찍어 사용자가
+        # 등록(json)인지 단순 문서(md)인지 직접 판단하게 둔다.
+        callers="$(grep -rlF "$base" "$SRC" --include='*.sh' --include='*.py' --include='*.mjs' --include='*.js' --include='*.json' --include='*.md' --include='*.html' 2>/dev/null | grep -vxF "$f" | head -1)"
         if [ -n "$callers" ]; then
-            printf "  ${NAME}%s${R} ${D}— ~/bin 명령 아님, 래퍼 경유: %s${R}\n" "$base" "${callers#"$SRC"/}"
+            printf "  ${NAME}%s${R} ${D}— ~/bin 명령 아님, 참조처 경유: %s${R}\n" "$base" "${callers#"$SRC"/}"
         else
-            printf "  ${WARN}%s${R} ${D}— ~/bin 명령도 아니고 아무도 안 부름 = 고립(도달 경로 0)${R}\n" "$base"
+            printf "  ${WARN}%s${R} ${D}— ~/bin 명령도 아니고 아무 참조도 없음 = 고립(도달 경로 0)${R}\n" "$base"
         fi
         hit=1
     done < <(ep_scan "$SRC")
