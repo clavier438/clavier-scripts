@@ -100,16 +100,27 @@ EXTRACT_JS = r"""
       const link = el.closest('a');
       const btnEl = el.closest('a, button, [role="button"]');
       if (btnEl) {
-        const b = getComputedStyle(btnEl);
-        const hasBg = b.backgroundColor && b.backgroundColor !== 'rgba(0, 0, 0, 0)' && b.backgroundColor !== 'transparent';
-        const hasBorder = parseFloat(b.borderTopWidth || '0') > 0 && parseFloat(b.borderBottomWidth || '0') > 0;
-        if (hasBg || hasBorder) {
+        // 버튼 박스 스타일은 btnEl *또는 그 자손* 에 있다 (Framer 는 <a> 안 wrapper div 에 테두리).
+        // 4면 모두 테두리(또는 배경) 가진 박스만 = 진짜 버튼. (위/아래만 = 구분선/아코디언 → 제외)
+        let box = null;
+        for (const cand of [btnEl, ...btnEl.querySelectorAll('*')]) {
+          const cc = getComputedStyle(cand);
+          const cr = cand.getBoundingClientRect();
+          if (cr.width < 40 || cr.height < 20) continue;
+          const hasBg = cc.backgroundColor && cc.backgroundColor !== 'rgba(0, 0, 0, 0)' && cc.backgroundColor !== 'transparent';
+          const hasBorder = parseFloat(cc.borderTopWidth || '0') > 0 && parseFloat(cc.borderBottomWidth || '0') > 0
+                            && parseFloat(cc.borderLeftWidth || '0') > 0 && parseFloat(cc.borderRightWidth || '0') > 0;
+          if (hasBg || hasBorder) { box = { cc, cr, hasBg, hasBorder }; break; }
+        }
+        if (box) {
           out.push({ kind: 'button', text: direct, href: btnEl.getAttribute('href') || '',
-                     bg: hasBg ? b.backgroundColor : '', color: cs.color,
-                     borderRadius: b.borderTopLeftRadius,
-                     border: hasBorder ? (b.borderTopWidth + ' solid ' + b.borderTopColor) : '',
+                     bg: box.hasBg ? box.cc.backgroundColor : '', color: cs.color,
+                     borderRadius: box.cc.borderTopLeftRadius,
+                     border: box.hasBorder ? (box.cc.borderTopWidth + ' solid ' + box.cc.borderTopColor) : '',
                      fontSize: cs.fontSize, fontWeight: cs.fontWeight, fontFamily: cs.fontFamily,
-                     letterSpacing: cs.letterSpacing, textTransform: cs.textTransform, ...geo(btnEl.getBoundingClientRect()) });
+                     letterSpacing: cs.letterSpacing, textTransform: cs.textTransform,
+                     top: box.cr.top + window.scrollY, left: box.cr.left + window.scrollX,
+                     width: Math.round(box.cr.width), height: Math.round(box.cr.height) });
           continue;
         }
       }
