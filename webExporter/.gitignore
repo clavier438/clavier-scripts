@@ -12,5 +12,6 @@ exports-loop/
 exports-loop-test/
 mac-results/
 oci-results/
+results/
 .runs/
 *.pdf
