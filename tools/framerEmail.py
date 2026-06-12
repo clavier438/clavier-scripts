@@ -102,18 +102,23 @@ EXTRACT_JS = r"""
       if (btnEl) {
         // 버튼 박스 스타일은 btnEl *또는 그 자손* 에 있다 (Framer 는 <a> 안 wrapper div 에 테두리).
         // 4면 모두 테두리(또는 배경) 가진 박스만 = 진짜 버튼. (위/아래만 = 구분선/아코디언 → 제외)
+        // Framer 는 버튼 테두리를 종종 *pseudo-element(::after)* 에 둔다 → 본체+pseudo 둘 다 검사.
         let box = null;
         for (const cand of [btnEl, ...btnEl.querySelectorAll('*')]) {
-          const cc = getComputedStyle(cand);
           const cr = cand.getBoundingClientRect();
           if (cr.width < 40 || cr.height < 20) continue;
-          const hasBg = cc.backgroundColor && cc.backgroundColor !== 'rgba(0, 0, 0, 0)' && cc.backgroundColor !== 'transparent';
-          const hasBorder = parseFloat(cc.borderTopWidth || '0') > 0 && parseFloat(cc.borderBottomWidth || '0') > 0
-                            && parseFloat(cc.borderLeftWidth || '0') > 0 && parseFloat(cc.borderRightWidth || '0') > 0;
-          if (hasBg || hasBorder) { box = { cc, cr, hasBg, hasBorder }; break; }
+          for (const pseudo of [null, '::after', '::before']) {
+            const cc = getComputedStyle(cand, pseudo);
+            const hasBg = !pseudo && cc.backgroundColor && cc.backgroundColor !== 'rgba(0, 0, 0, 0)' && cc.backgroundColor !== 'transparent';
+            const hasBorder = parseFloat(cc.borderTopWidth || '0') > 0 && parseFloat(cc.borderBottomWidth || '0') > 0
+                              && parseFloat(cc.borderLeftWidth || '0') > 0 && parseFloat(cc.borderRightWidth || '0') > 0;
+            if (hasBg || hasBorder) { box = { cc, cr, hasBg, hasBorder }; break; }
+          }
+          if (box) break;
         }
         if (box) {
-          out.push({ kind: 'button', text: direct, href: btnEl.getAttribute('href') || '',
+          const hasArrow = !!btnEl.querySelector('svg');
+          out.push({ kind: 'button', text: direct, href: btnEl.getAttribute('href') || '', hasArrow,
                      bg: box.hasBg ? box.cc.backgroundColor : '', color: cs.color,
                      borderRadius: box.cc.borderTopLeftRadius,
                      border: box.hasBorder ? (box.cc.borderTopWidth + ' solid ' + box.cc.borderTopColor) : '',
@@ -266,12 +271,18 @@ def _button_row(b, frame, scale):
     weight = b.get("fontWeight") or "600"
     tt = b.get("textTransform")
     tt_css = f"text-transform:{tt};" if tt and tt != "none" else ""
-    text = _html.escape(b["text"])
+    ls = _px(b.get("letterSpacing"))
+    ls_css = f"letter-spacing:{round(ls*scale*100)/100}px;" if ls else ""
+    w = round(b.get("width", 0) * scale)
+    # SVG 화살표는 메일에서 안 뜸 → unicode → 로 근사, 폭 있으면 우측 끝으로(float).
+    arrow = '<span style="float:right">&rarr;</span>' if b.get("hasArrow") else ""
+    text = _html.escape(b["text"]) + arrow
     href = _html.escape(b.get("href") or "#", quote=True)
-    pad_v, pad_h = round(13 * scale), round(30 * scale)
+    width_css = f"width:{w}px;max-width:100%;box-sizing:border-box;text-align:left;" if w >= 60 else ""
+    pad_v = round(13 * scale)
     a_style = (f"display:inline-block;{bg_css}{border_css}border-radius:{radius};"
-               f"padding:{pad_v}px {pad_h}px;color:{color};text-decoration:none;"
-               f"font-family:{_font_stack(b.get('fontFamily'))};font-size:{size}px;font-weight:{weight};{tt_css}")
+               f"padding:{pad_v}px 20px;color:{color};text-decoration:none;{width_css}"
+               f"font-family:{_font_stack(b.get('fontFamily'))};font-size:{size}px;font-weight:{weight};{ls_css}{tt_css}")
     return f'<a href="{href}" style="{a_style}">{text}</a>'
 
 
