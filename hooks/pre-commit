@@ -154,6 +154,7 @@ fi
 #       라이브러리(lib/)·내부 모듈(다른 tools 가 파일명으로 호출 = 위임받는 쪽)은 제외.
 door_missing=()
 group_orphans=()
+entry_added=()
 while IFS= read -r f; do
     [ -f "$f" ] || continue
     case "$f" in
@@ -163,6 +164,8 @@ while IFS= read -r f; do
     esac
     # 실행 진입점이 있는 스크립트만 (순수 라이브러리/모듈은 대상 아님)
     grep -qE '__main__|^main\b|function main\b|def main\b' "$f" || continue
+    # 새 진입점은 ~/bin wrapper 가 있어야 명령으로 쓸 수 있음 (door/orphan 여부와 무관)
+    entry_added+=("$f")
     # 이미 # door: 자기선언이 있으면 정당 (scripts 브리핑에 뜸)
     if sed -n '1,40p' "$f" | grep -qiE '^[[:space:]]*(#|//|\*)+[[:space:]]*door:[[:space:]]*[A-Za-z0-9_-]'; then
         continue
@@ -200,5 +203,18 @@ if [ ${#group_orphans[@]} -gt 0 ]; then
     echo "  → 기존 front door(img / brandRe / workerCtl / framer / copy) 의 verb 로 넣거나," >&2
     echo "     새 front door 를 만들어 # door: <섹션> 으로 노출하세요. ~/bin 독립 떠돌이 금지." >&2
     echo "  (정말 독립 진입점이어야 하면 무시 — 경고일 뿐 차단 아님)" >&2
+    echo "" >&2
+fi
+
+if [ ${#entry_added[@]} -gt 0 ]; then
+    echo "" >&2
+    echo "🔧  새 진입점 추가됨 — \`~/bin/<name>\` 명령으로 쓰려면 wrapper 생성 필요:" >&2
+    echo "" >&2
+    for o in "${entry_added[@]}"; do echo "    $o" >&2; done
+    echo "" >&2
+    echo "  → 절차: ① 브랜치 push → ② main 머지(파일이 메인 클론에 들어가야) →" >&2
+    echo "          ③ 메인 클론에서  bash installScripts.sh  실행 → ~/bin/<name> 자동생성." >&2
+    echo "     (installScripts.sh 가 entryPoints 스캔 + freshness 래퍼를 박음. ~/bin 손으로 만들지 말 것 —" >&2
+    echo "      wrapper 는 *메인 클론* 절대경로를 가리키므로 worktree/브랜치에서 만들면 drift.)" >&2
     echo "" >&2
 fi

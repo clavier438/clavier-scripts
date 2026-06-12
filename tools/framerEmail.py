@@ -56,9 +56,13 @@ def _ensure_playwright():
         from playwright.sync_api import sync_playwright  # noqa: F401
         return
     except ImportError:
-        venv = os.path.join(REPO, "webExporter", ".venv", "bin", "python")
-        if os.path.realpath(sys.executable) != os.path.realpath(venv) and os.path.exists(venv):
-            os.execv(venv, [venv] + sys.argv)
+        venv_dir = os.path.join(REPO, "webExporter", ".venv")
+        venv_py = os.path.join(venv_dir, "bin", "python")
+        # *이미 venv 안인지* 판별은 sys.prefix 로 — sys.executable realpath 는 venv 가
+        # 시스템 python 바이너리를 심링크할 때 같은 경로로 collapse 돼 재실행을 건너뛴다(버그).
+        already_in_venv = os.path.realpath(sys.prefix) == os.path.realpath(venv_dir)
+        if not already_in_venv and os.path.exists(venv_py):
+            os.execv(venv_py, [venv_py] + sys.argv)
         sys.exit("playwright 없음 — webExporter/.venv 확인")
 
 

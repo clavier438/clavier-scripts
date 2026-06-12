@@ -76,3 +76,14 @@ Framer 게시 URL → `framerEmail <url>` → 이메일-세이프 HTML. **AI 0, 
 - 관련: `platform-workers` 브랜치 `feat/stibee-newsletter` = journal→스티비 캠페인 발송 워커 모듈
   (스티비 캠페인 API: `POST /emails` → `POST /emails/{id}/content`(text/html) → `POST /emails/{id}/send`,
   프로/엔터프라이즈 전용, AccessToken 헤더). 스티비는 인라인 스타일만 지원.
+
+---
+
+## 🔖 다음 할 일 (임시 큐 — **완료되면 이 섹션 삭제**)
+
+- [ ] **넓은 폭 대응 트릭을 도구에 적용** (사용자 원래 질문 "넓이 넓혔을 때 배경·선 대응" 완성).
+  TRICKS.md ★ 참조 — 세 가지:
+  1. **배경색 3곳** — body + `<center>` + mso 조건부 (Gmail 이 body bg 떼므로).
+  2. **max-width 중앙 + Outlook ghost table** — `<!--[if mso]><table width=600>` (Outlook 은 max-width 무시).
+  3. **full-bleed 배경 밴드** — 풀폭 `<table bgcolor>` + 안쪽 `max-width:600 margin:auto` (섹션 배경/선 끝까지).
+  → 현재 도구는 body+table bg·max-width 중앙·% 인셋 fill 까지만. 위 3개 미적용.
