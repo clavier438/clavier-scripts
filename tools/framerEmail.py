@@ -218,11 +218,15 @@ def _text_row(b, frame, scale):
 
 
 def _image_row(b, frame, scale):
+    # aspect 충실: Framer 는 자연비(3:2)를 *렌더박스 비율*(예 16:9)로 object-fit:cover crop.
+    # → 렌더박스 W×H 로 aspect-ratio + cover 재현(자연비 그대로 풀로 늘어나지 않게).
     src = _html.escape(b["src"], quote=True)
     alt = _html.escape(b.get("alt", ""), quote=True)
-    wpct = min(frame.pct(b["width"]), 100)  # 풀블리드면 ~100%, 인셋 이미지면 그 비율
-    return (f'<img src="{src}" alt="{alt}" '
-            f'style="display:block;width:100%;max-width:{round(b["width"]*scale)}px;height:auto;border:0" />')
+    w = round(b["width"] * scale)
+    h = round(b.get("height", 0) * scale)
+    ar = f"aspect-ratio:{w}/{h};object-fit:cover;" if h else ""
+    return (f'<img src="{src}" alt="{alt}" width="{w}" '
+            f'style="display:block;width:100%;max-width:{w}px;{ar}height:auto;border:0" />')
 
 
 def _button_row(b, frame, scale):
