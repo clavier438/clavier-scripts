@@ -23,11 +23,23 @@
 #   framerEmail <url> [--out file.html] [--width 600] [--viewport N] [--no-open]
 
 import argparse
+import hashlib
 import html as _html
+import io
 import os
 import re
+import subprocess
 import sys
+import tempfile
 from urllib.parse import urlparse
+
+# ── SVG 호스팅 (reuse-first: framer-sync 의 R2 버킷 + 워커 서빙 재사용) ──────────
+# 이메일은 인라인 SVG/ data URI(Gmail) 를 못 띄움 → SVG 를 webp 로 래스터화해 호스팅하고
+# <img> 로 참조한다(레퍼런스 클래스: caniemail). 호스팅 = 이미 있는 framer-sync R2 +
+# /webp-cache/<key> 서빙 엔드포인트 재사용. 업로드는 doppler 가 CF 토큰 주입(wrangler).
+R2_BUCKET = "framer-sync-webp-cache"
+ICON_URL_BASE = "https://framer-sync-mukayu.hyuk439.workers.dev/webp-cache"
+WRANGLER_REPO = os.path.expanduser("~/dev/clavier/platform-workers/framer-sync")
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
 try:
@@ -141,7 +153,50 @@ EXTRACT_JS = r"""
 """
 
 
-def extract(url, viewport_width):
+# 독립 아이콘 SVG 태깅 — 버튼/배지 안은 제외(버튼 화살표는 unicode 처리됨).
+ICON_TAG_JS = r"""
+() => {
+  let i = 0; const out = [];
+  for (const s of document.querySelectorAll('svg')) {
+    if (s.closest('a, button, [role="button"]')) continue;
+    if (s.closest('#__framer-badge-container, [data-framer-badge]')) continue;
+    const cs = getComputedStyle(s);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity || '1') === 0) continue;
+    const r = s.getBoundingClientRect();
+    if (r.width < 8 || r.width > 90 || r.height < 8) continue;
+    s.setAttribute('data-fe-icon', String(i));
+    out.push({ idx: i, top: r.top + window.scrollY, left: r.left + window.scrollX,
+               width: Math.round(r.width), height: Math.round(r.height) });
+    i++;
+  }
+  return out;
+}
+"""
+
+
+def _rasterize_icons(page):
+    # 독립 SVG 아이콘을 webp 로 래스터화(content-hash 중복제거). 이메일은 인라인 SVG 못 띄움.
+    from PIL import Image
+    icon_dir = tempfile.mkdtemp(prefix="fe-icons-")
+    blocks = []
+    for m in page.evaluate(ICON_TAG_JS):
+        try:
+            png = page.locator(f'[data-fe-icon="{m["idx"]}"]').screenshot()
+        except Exception:
+            continue
+        im = Image.open(io.BytesIO(png)).convert("RGBA")
+        buf = io.BytesIO(); im.save(buf, "WEBP"); wb = buf.getvalue()
+        h = hashlib.sha1(wb).hexdigest()[:16]
+        path = os.path.join(icon_dir, f"{h}.webp")
+        if not os.path.exists(path):
+            with open(path, "wb") as f:
+                f.write(wb)
+        blocks.append({"kind": "icon", "top": m["top"], "left": m["left"],
+                       "width": m["width"], "height": m["height"], "hash": h, "path": path})
+    return blocks
+
+
+def extract(url, viewport_width, icons=True):
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         browser = p.chromium.launch()
@@ -150,8 +205,34 @@ def extract(url, viewport_width):
         page.evaluate("async () => { for (let y=0; y<document.body.scrollHeight; y+=600){ window.scrollTo(0,y); await new Promise(r=>setTimeout(r,80)); } window.scrollTo(0,0); }")
         page.wait_for_timeout(600)
         data = page.evaluate(EXTRACT_JS)
+        if icons:
+            data["blocks"].extend(_rasterize_icons(page))
         browser.close()
     return data
+
+
+# ── 아이콘 업로드 — webp → R2(doppler CF토큰) → 워커 URL. content-hash 중복제거. ──
+def upload_icons(blocks):
+    """{hash: url|None}. 업로드 실패(인증/오프라인)면 None → 호출부가 graceful skip."""
+    urls = {}
+    uniq = {}
+    for b in blocks:
+        if b["kind"] == "icon":
+            uniq[b["hash"]] = b["path"]
+    if not uniq:
+        return urls
+    for h, path in uniq.items():
+        key = f"fe-icons/{h}.webp"
+        try:
+            r = subprocess.run(
+                ["doppler", "run", "--project", "clavier", "--config", "prd_mukayu", "--",
+                 "npx", "wrangler", "r2", "object", "put", f"{R2_BUCKET}/{key}",
+                 "--file", path, "--content-type", "image/webp", "--remote"],
+                cwd=WRANGLER_REPO, capture_output=True, text=True, timeout=120)
+            urls[h] = f"{ICON_URL_BASE}/{key}" if r.returncode == 0 else None
+        except Exception:
+            urls[h] = None
+    return urls
 
 
 # ── 2. 정규화 — 정렬·중복 이미지 제거·인접 동일스타일 텍스트 병합 ──────────────
@@ -180,6 +261,12 @@ def normalize(blocks):
             # 같은 top 의 중복 라인 제거 (Framer 가 겹쳐 깔기도)
             if out and out[-1]["kind"] == "divider" and abs(b["top"] - out[-1]["top"]) < 3:
                 continue
+            out.append(b)
+        elif b["kind"] == "text" and out and out[-1]["kind"] == "icon" \
+                and out[-1]["left"] < b["left"] \
+                and abs(out[-1]["top"] - b["top"]) < max(b.get("height", 20), out[-1].get("height", 20)) * 1.6:
+            # 같은 행 왼쪽 아이콘 + 텍스트 → 인라인 결합 ("+ 아동 및 단체 정책")
+            b["icon"] = out.pop()
             out.append(b)
         elif out and out[-1]["kind"] == "text" and b["kind"] == "text" \
                 and _style_sig(out[-1]) == _style_sig(b) \
@@ -224,7 +311,24 @@ def _gap_pad(gap_px, scale):
     return max(round(gap_px * scale), 0)
 
 
-def _text_row(b, frame, scale):
+def _inline_icon(b, scale, icon_urls):
+    ic = b.get("icon")
+    if not ic or not icon_urls.get(ic["hash"]):
+        return ""
+    iw = round(ic["width"] * scale)
+    return (f'<img src="{icon_urls[ic["hash"]]}" width="{iw}" '
+            f'style="display:inline-block;width:{iw}px;height:auto;vertical-align:middle;margin-right:8px;border:0" />')
+
+
+def _icon_row(b, frame, scale, icon_urls):
+    url = icon_urls.get(b["hash"])
+    if not url:
+        return ""  # 업로드 실패 → graceful skip (이메일은 그래도 생성됨)
+    w = round(b["width"] * scale)
+    return f'<img src="{url}" width="{w}" style="display:block;width:{w}px;max-width:100%;height:auto;border:0" />'
+
+
+def _text_row(b, frame, scale, icon_urls):
     size = round((_px(b["fontSize"]) or 16) * scale)
     weight = b.get("fontWeight") or "400"
     color = b.get("color") or "#1a1a1a"
@@ -241,7 +345,7 @@ def _text_row(b, frame, scale):
     text = _html.escape(b["text"])
     if b.get("href"):
         text = f'<a href="{_html.escape(b["href"], quote=True)}" style="color:{color};text-decoration:none">{text}</a>'
-    return f'<p style="{style}">{text}</p>'
+    return f'<p style="{style}">{_inline_icon(b, scale, icon_urls)}{text}</p>'
 
 
 def _image_row(b, frame, scale):
@@ -286,7 +390,8 @@ def _button_row(b, frame, scale):
     return f'<a href="{href}" style="{a_style}">{text}</a>'
 
 
-def build_email(data, content_width=600):
+def build_email(data, content_width=600, icon_urls=None):
+    icon_urls = icon_urls or {}
     blocks = normalize(data["blocks"])
     if not blocks:
         return None
@@ -313,8 +418,12 @@ def build_email(data, content_width=600):
             inner = _button_row(b, frame, scale)
         elif b["kind"] == "divider":
             inner = _divider_row(b, frame, scale)
+        elif b["kind"] == "icon":
+            inner = _icon_row(b, frame, scale, icon_urls)
         else:
-            inner = _text_row(b, frame, scale)
+            inner = _text_row(b, frame, scale, icon_urls)
+        if not inner:
+            continue  # graceful skip (예: 업로드 실패한 아이콘)
         td_style = f"padding:{gap}px {rpad}% 0 {lpad}%;"
         rows.append(f'<tr><td style="{td_style}">{inner}</td></tr>')
 
@@ -349,6 +458,7 @@ def main():
     ap.add_argument("--out", help="출력 .html 경로 (기본: ./<host>-email.html)")
     ap.add_argument("--width", type=int, default=600, help="이메일 본문 폭 px (기본 600)")
     ap.add_argument("--viewport", type=int, help="렌더 뷰포트 폭 (기본=--width). 디자인이 특정 폭 기준이면 지정")
+    ap.add_argument("--no-icons", action="store_true", help="SVG 아이콘 래스터화·업로드 skip (오프라인/빠르게)")
     ap.add_argument("--no-open", action="store_true", help="끝나고 브라우저로 열지 않음")
     args = ap.parse_args()
 
@@ -357,13 +467,21 @@ def main():
     viewport = args.viewport or args.width
 
     print(f"{cyan('▶')} 추출: {args.url} (viewport {viewport}px)")
-    data = extract(args.url, viewport)
+    data = extract(args.url, viewport, icons=not args.no_icons)
     n_text = sum(1 for b in data["blocks"] if b["kind"] == "text")
     n_img = sum(1 for b in data["blocks"] if b["kind"] == "image")
     n_btn = sum(1 for b in data["blocks"] if b["kind"] == "button")
-    print(f"  블록 {len(data['blocks'])}개 (텍스트 {n_text} · 이미지 {n_img} · 버튼 {n_btn})")
+    n_icon = sum(1 for b in data["blocks"] if b["kind"] == "icon")
+    print(f"  블록 {len(data['blocks'])}개 (텍스트 {n_text} · 이미지 {n_img} · 버튼 {n_btn} · 아이콘 {n_icon})")
 
-    html = build_email(data, content_width=args.width)
+    icon_urls = {}
+    if n_icon:
+        print(f"{cyan('▶')} 아이콘 {n_icon}개 래스터화 → R2 업로드 중…")
+        icon_urls = upload_icons(data["blocks"])
+        ok = sum(1 for v in icon_urls.values() if v)
+        print(f"  업로드 {ok}/{len(icon_urls)} (실패분은 graceful skip)")
+
+    html = build_email(data, content_width=args.width, icon_urls=icon_urls)
     if not html:
         sys.exit(red("✗ 추출된 블록 0 — URL/렌더 확인"))
     with open(out_path, "w", encoding="utf-8") as f:
