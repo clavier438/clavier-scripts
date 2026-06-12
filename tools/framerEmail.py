@@ -75,8 +75,14 @@ EXTRACT_JS = r"""
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity || '1') === 0) continue;
     const r = el.getBoundingClientRect();
-    if (r.width < 2 || r.height < 2) continue;
     if (isBadge(el)) continue;
+    // 구분선 — 얇은 가로 라인(높이<=3, 폭>=60, 배경색 있음). 단아한 룰선.
+    const bgc = cs.backgroundColor;
+    if (r.height <= 3 && r.width >= 60 && bgc && bgc !== 'rgba(0, 0, 0, 0)' && bgc !== 'transparent') {
+      out.push({ kind: 'divider', color: bgc, ...geo(r) });
+      continue;
+    }
+    if (r.width < 2 || r.height < 2) continue;
     const g = geo(r);
 
     if (el.tagName === 'IMG' && (el.currentSrc || el.src)) {
@@ -154,6 +160,11 @@ def normalize(blocks):
                 continue
             seen_img.add(b["src"])
             out.append(b)
+        elif b["kind"] == "divider":
+            # 같은 top 의 중복 라인 제거 (Framer 가 겹쳐 깔기도)
+            if out and out[-1]["kind"] == "divider" and abs(b["top"] - out[-1]["top"]) < 3:
+                continue
+            out.append(b)
         elif out and out[-1]["kind"] == "text" and b["kind"] == "text" \
                 and _style_sig(out[-1]) == _style_sig(b) \
                 and abs(b["top"] - out[-1]["bottom"]) < (_px(b["fontSize"]) or 20) * 1.4:
@@ -229,6 +240,12 @@ def _image_row(b, frame, scale):
             f'style="display:block;width:100%;max-width:{w}px;{ar}height:auto;border:0" />')
 
 
+def _divider_row(b, frame, scale):
+    color = b.get("color") or "rgb(221,221,221)"
+    h = max(round(b.get("height", 1) * scale), 1)
+    return f'<div style="font-size:0;line-height:0;height:{h}px;background:{color}"></div>'
+
+
 def _button_row(b, frame, scale):
     color = b.get("color") or "#1a1a1a"
     bg_css = f"background:{b['bg']};" if b.get("bg") else ""
@@ -272,6 +289,8 @@ def build_email(data, content_width=600):
             inner = _image_row(b, frame, scale)
         elif b["kind"] == "button":
             inner = _button_row(b, frame, scale)
+        elif b["kind"] == "divider":
+            inner = _divider_row(b, frame, scale)
         else:
             inner = _text_row(b, frame, scale)
         td_style = f"padding:{gap}px {rpad}% 0 {lpad}%;"
