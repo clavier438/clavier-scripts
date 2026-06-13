@@ -26,13 +26,29 @@
 ```
 
 - 레이어 공통: `Name`, `Opacity`(0~100), `Enabled`(1).
-- 구버전(Engine 900)은 `<SL>` 안에 보정값을 평면으로 — `StyleSource`/`FilmCurve`/`ICCProfile` 키 등장. **신규 작성은 1300 레이어형으로.**
+- 구버전(Engine 900)은 `<SL>` 안에 보정값을 평면으로 — `StyleSource`/`FilmCurve`/`ICCProfile` 키 등장.
+
+## ★ 레이어 호환 vs 배경 전용 — 라이브 검증으로 확정 (2026-06-13)
+
+> **CO를 실제 조작해 mukayu 스타일을 적용·검사한 결과.** Indoor_Base(Engine 1300 레이어형)를 적용하니
+> 이름 붙은 조정 레이어로 살아나고 HDR이 **-90/85/-100/-95 정확히** 박힘(클램프 없음). 그러나
+> 같은 레이어 `<LA>`에 넣은 **WhiteBalanceTemperature는 드롭** — WB 도구는 5000 Shot 기본값 그대로.
+
+**Capture One 보정은 두 종류:**
+- **레이어 호환** (조정 레이어 `<LA>`에서 작동): ColorBalance 3-way·`ColorCorrections`(Color Editor)·`GradationCurve*`·`Levels`·HDR(`*Recovery*`)·`Clarity`/`ClarityStructure`·Saturation·Contrast 등. → 레이어형 스타일에 넣으면 정확히 박힘.
+- **배경 전용** (레이어에서 무시·드롭): **`WhiteBalanceTemperature`/`WhiteBalanceTint`**, `Base Characteristics`/`ICCProfile`/`Curve(Base)`. → 레이어형 `<LA>`에 넣으면 **조용히 사라짐**.
+
+**그래서 작성 규칙 (한 방향 결정):**
+1. **브랜드 톤 스타일에는 절대 WhiteBalance를 넣지 않는다.** WB는 *사진마다 다른 촬영 조명값* — 고정하면 다른 빛의 사진을 틀리게 물들인다. CO 벤더 Creative Edits도 절대 WB 대신 *상대* ColorBalance만 쓴다 ([[authoritative-samples]]). 브랜드 톤 = ColorBalance·Color Editor(상대 컬러)로 표현 → 레이어 호환이라 완벽히 작동.
+2. **배경 전용 보정(WB 등)을 꼭 스타일에 담아야 하면 → 평면(flat) 스타일** (`<LDS>` 없이 `<SL>` 안에 직접). 평면 스타일은 배경에 적용돼 WB가 먹는다. 벤더가 WB 포함 스타일을 평면으로 배포하는 이유.
+3. 레이어 스택 아키텍쳐(BASE 컬러 / mood HDR / Util trim)는 **레이어 호환 보정만 담으므로 레이어형(1300)이 정답.**
 
 ## 검증된 보정 키 (값 포맷)
 
-### White Balance
+### White Balance ⚠️ 배경 전용 — 레이어형 스타일에선 드롭됨 (위 ★ 섹션)
 - `WhiteBalanceTemperature` — 켈빈 float (예 3708.4)
 - `WhiteBalanceTint` — float (예 -5.1)
+- 브랜드 톤 스타일엔 넣지 말 것(촬영별 값). 꼭 담으려면 평면 스타일로.
 
 ### Color Balance (3-way split-toning) — 핵심 컬러 DNA
 - `ColorBalanceShadow` / `ColorBalanceMidtone` / `ColorBalanceHighlight`

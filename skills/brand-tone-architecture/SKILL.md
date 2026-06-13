@@ -59,7 +59,13 @@ description: >-
 
 패턴 검증 단계. 수동으로 costyle 세트를 만들어 CO 에서 검증 중. **패턴이 굳으면** front door 도구
 (`costyle <verb>`: reverse / split / make / keys)로 정식화한다 — 섣불리 자동화하지 않는다
-(`memory/feedback_automation_order`). 검증된 산출:
+(`memory/feedback_automation_order`).
+
+**2026-06-13 CO 라이브 검증 통과**: Engine 1300 레이어형 스타일이 이름 붙은 조정 레이어로 정확히 적용됨
+(HDR -90/85/-100/-95 클램프 없이). WhiteBalance는 레이어에서 드롭 확인 → 배경 전용. 상세·작성규칙 =
+`references/costyle-format.md` ★ 섹션. 결론: 레이어 호환 보정만 담으면 아키텍쳐 완벽 작동.
+
+검증된 산출:
 - mukayu 4-스타일 세트 (사용자 실제값 BASE + 극단 변주) → `~/Library/Application Support/Capture One/Styles/`
 - mukayu 사진 115장 톤 리버스 = `references/examples/mukayu_reverse_demo.py` (photo-lut 재사용 데모 —
   사진셋 → 시그니처 → costyle 매핑의 worked example. 경로는 머신별이라 그대로 재실행보단 패턴 참고용).
