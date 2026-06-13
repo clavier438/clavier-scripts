@@ -213,6 +213,8 @@ def main():
     ap.add_argument("--iters", type=int, default=25, help="k-means 반복 (기본 25)")
     ap.add_argument("--seed", type=int, default=0, help="결정론 seed (기본 0)")
     ap.add_argument("--no-recurse", action="store_true", help="하위 폴더 제외 (기본: 재귀 탐색)")
+    ap.add_argument("--clip", action="store_true",
+                    help="색상 그리드 대신 CLIP(open_clip) 임베딩으로 클러스터 — 의미 기반 그루핑(로컬·무료)")
     a = ap.parse_args()
 
     src = os.path.abspath(os.path.expanduser(a.src))
@@ -223,24 +225,35 @@ def main():
     if not imgs:
         print(f"이미지 없음: {src}"); sys.exit(1)
 
-    # 1) 특징 추출 (로컬, claude 0)
-    print(f"[photo-cluster] {len(imgs)}장 특징 추출 (4×4 RGB 그리드 + 채도·명도 = {FEAT_DIM}차원)")
-    feats, paths = [], []
-    for i, p in enumerate(imgs):
-        v = features(p)
-        if v is not None:
-            feats.append(v); paths.append(p)
-        if (i + 1) % 200 == 0:
-            print(f"  …{i + 1}/{len(imgs)}  (읽음 {len(feats)})")
-    n = len(feats)
-    if n == 0:
-        print("읽을 수 있는 이미지 없음"); sys.exit(1)
-    print(f"  → {n}장 읽음 ({len(imgs) - n} skip)")
-
-    # 2) k-means++
-    k = max(1, min(a.clusters, n))
-    print(f"[k-means++] K={k}, iters={a.iters}, seed={a.seed}")
-    centers, assign = kmeans(feats, k, a.iters, a.seed)
+    # 1) 특징 추출 + 2) 클러스터 — --clip 이면 CLIP 임베딩, 아니면 색상 그리드 (둘 다 로컬·무료)
+    if a.clip:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
+        import clip_embed
+        print(f"[photo-cluster] {len(imgs)}장 CLIP 임베딩 (open_clip ViT-B-32, 의미 기반·로컬·무료)")
+        paths, E = clip_embed.embed_images(imgs, progress=lambda d, t: print(f"  …{d}/{t}"))
+        n = len(paths)
+        if n == 0:
+            print("읽을 수 있는 이미지 없음"); sys.exit(1)
+        print(f"  → {n}장 읽음 ({len(imgs) - n} skip)")
+        k = max(1, min(a.clusters, n))
+        print(f"[k-means] K={k}, iters={a.iters}, seed={a.seed} (CLIP 임베딩)")
+        assign = clip_embed.kmeans(E, k, a.iters, a.seed)
+    else:
+        print(f"[photo-cluster] {len(imgs)}장 특징 추출 (4×4 RGB 그리드 + 채도·명도 = {FEAT_DIM}차원)")
+        feats, paths = [], []
+        for i, p in enumerate(imgs):
+            v = features(p)
+            if v is not None:
+                feats.append(v); paths.append(p)
+            if (i + 1) % 200 == 0:
+                print(f"  …{i + 1}/{len(imgs)}  (읽음 {len(feats)})")
+        n = len(feats)
+        if n == 0:
+            print("읽을 수 있는 이미지 없음"); sys.exit(1)
+        print(f"  → {n}장 읽음 ({len(imgs) - n} skip)")
+        k = max(1, min(a.clusters, n))
+        print(f"[k-means++] K={k}, iters={a.iters}, seed={a.seed}")
+        centers, assign = kmeans(feats, k, a.iters, a.seed)
     members = [[] for _ in range(k)]
     for idx, ci in enumerate(assign):
         members[ci].append(idx)

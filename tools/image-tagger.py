@@ -112,6 +112,50 @@ AXES = {
 }
 
 
+# ── CLIP zero-shot 프롬프트 (AXES enum → 자연어). 비전 API 없이 로컬·무료 분류용. ──
+#   ref: open_clip ViT-B-32. finish 축은 비색상 후처리라 CLIP 신뢰 낮음 → tone 에서 도출.
+CLIP_PROMPTS = {
+    "subject": {
+        "person": "a photo of a person", "interior": "a photo of an interior room",
+        "exterior": "a photo of an outdoor exterior", "landscape": "a scenic landscape photo",
+        "architecture": "a photo of architecture", "product": "a product photo",
+        "food": "a photo of food or a dish", "detail": "a close-up detail photo",
+        "still_life": "a still life arrangement photo",
+    },
+    "tone": {
+        "warm": "a warm-toned photo", "cool": "a cool-toned photo",
+        "neutral": "a neutral color photo", "muted": "a muted desaturated photo",
+        "vivid": "a vivid saturated photo", "monochrome": "a black and white photo",
+        "earthy": "an earthy brown-toned photo", "pastel": "a soft pastel-toned photo",
+    },
+    "composition": {
+        "minimal": "a minimalist photo with lots of negative space",
+        "centered": "a centered subject composition",
+        "full_frame": "a full-frame filled composition",
+        "layered": "a layered depth composition", "symmetrical": "a symmetrical composition",
+    },
+}
+
+
+def clip_classify(paths):
+    """open_clip(CLIP) 로 paths 를 4축 분류 → {basename: record}. API·크레딧 0, 로컬·MPS.
+    finish 는 CLIP 신뢰 낮아 tone=monochrome→bw, 그 외 natural 로 도출."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "lib"))
+    import clip_embed
+    valid, feats = clip_embed.embed_images(
+        paths, progress=lambda d, t: print(f"  CLIP 임베딩 {d}/{t}", flush=True))
+    subj = clip_embed.zeroshot(feats, CLIP_PROMPTS["subject"], thr=0.22)
+    tone = clip_embed.zeroshot(feats, CLIP_PROMPTS["tone"])
+    comp = clip_embed.zeroshot(feats, CLIP_PROMPTS["composition"])
+    out = {}
+    for i, p in enumerate(valid):
+        b = os.path.basename(p)
+        out[b] = {"file": b, "subject": subj[i], "tone": tone[i],
+                  "finish": ["bw"] if tone[i] == "monochrome" else ["natural"],
+                  "composition": comp[i]}
+    return out
+
+
 def build_tool():
     """강제 호출할 tool 정의 — input_schema enum 으로 출력 vocab 고정.
     claude CLI 에는 이 안의 input_schema 를 --json-schema 로 넘겨 structured_output 을 강제한다."""
@@ -338,6 +382,9 @@ def main():
                          "(이 세션의 Claude 가 직접 분류한 결과 등). "
                          "형식: [{\"file\":\"<파일명>\",\"subject\":[..],\"tone\":\"..\","
                          "\"finish\":[..],\"composition\":\"..\"}, ...]")
+    ap.add_argument("--clip", action="store_true",
+                    help="비전 API 대신 로컬 CLIP(open_clip) zero-shot 으로 분류 — 크레딧 0·오프라인. "
+                         "피사체·톤·구도 자동 태깅 (finish 는 tone 에서 도출).")
     ap.add_argument("--no-xmp", action="store_true",
                     help="XMP 키워드 임베드 끄기 (기본: 태그를 XMP-dc:Subject 로도 박아 "
                          "Apple Photos·Photomator 등에서 키워드 인식. exiftool 필요)")
@@ -351,9 +398,9 @@ def main():
     if args.from_json:
         with open(os.path.expanduser(args.from_json), encoding="utf-8") as f:
             precomputed = {os.path.basename(r["file"]): r for r in json.load(f)}
-    if not args.from_json and not have_claude():
+    if not args.from_json and not args.clip and not have_claude():
         print("❌ claude CLI 없음 — 구독 빌링 비전 분류에 필요. 설치: https://code.claude.com")
-        print("   (또는 --from-json 으로 사전 분류한 JSON 주입)")
+        print("   (또는 --from-json 으로 사전 분류, 또는 --clip 로 로컬 CLIP 무료 분류)")
         sys.exit(1)
 
     root = os.path.abspath(os.path.expanduser(args.dir))
@@ -366,8 +413,11 @@ def main():
     if not images:
         print(f"이미지 없음: {root}"); sys.exit(0)
 
+    if args.clip:                            # 로컬 CLIP zero-shot → precomputed (claude CLI 불필요)
+        precomputed = clip_classify(images)
+
     schema = build_tool()["input_schema"]   # claude CLI --json-schema 로 구조화 출력 강제
-    engine = "from-json" if precomputed is not None else args.model
+    engine = "clip" if args.clip else ("from-json" if precomputed is not None else args.model)
     print(f"[{engine}] {len(images)}장 처리 시작 (max-edge {max_edge}px"
           f"{', dry-run' if args.dry_run else ''})\n")
 
