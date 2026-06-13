@@ -48,24 +48,29 @@ description: >-
 6. **자동 역산의 한계를 정직하게.** 이미 그레이딩된 내용-다양 출력에서 절대 색/톤은 underdetermined
    (피사체색 오염). *상대 split-tone* 만 안정 추출, 나머지는 콜로리스트 눈 또는 충실한 .cube 복제로.
 
-## reuse-first — 기존 바퀴
+## 도구 (front door + 기존 바퀴)
 
-- `tools/photo-lut.py` — 사진 → `.cube` 3D LUT 역추출 (톤구간 LAB 색전이). `grading_signature`/
-  `average_signatures`/`describe`/`cluster_signatures` 함수 재사용 가능 (importlib 로 로드, 파일명 하이픈).
-- `tools/lut.mjs` — `.cube` 결정론 적용 (ffmpeg). 폴더=설정 패턴.
-- `tools/img.py` (`img grade`) — 사진 그레이딩 front door.
+- **`costyle <verb>`** (`tools/costyle.py`, door:image) — 이 스킬의 실행 진입부:
+  - `costyle make [preset] [--out DIR]` — 레이어 호환 스타일 세트 생성 (기본 preset=mukayu → CO Styles).
+    writer 가 **배경 전용 키(WB 등)를 구조적으로 거부** → WB 드롭 실수 재발 불가.
+  - `costyle reverse <photodir> [-o c]` — 사진셋 → `.cube` (photo-lut 위임).
+  - `costyle split <src.costyle>` — 레이어 스타일 1개 → 컬러/HDR/trim 책임별 분리 파일.
+  - `costyle keys [<key>]` — 검증된 키 사전 / 배경전용 경고 (추측 금지).
+- `tools/lib/clip_embed.py` — open_clip 임베딩·zero-shot·kmeans 공유 바퀴 (로컬·무료·MPS).
+- `img tag <dir> --clip` / `img cluster <dir> --clip` — CLIP 백엔드 = 비전 API 없이 무료 태깅·그루핑.
+- `tools/photo-lut.py` — 사진 → `.cube` 역추출 (톤구간 LAB). `tools/lut.mjs` — `.cube` 적용(ffmpeg).
 
-## 현재 상태 (WIP — automation-last)
+## 진행 상태 / 로드맵 (메모리 — 다음 세션이 여기서 이어받음)
 
-패턴 검증 단계. 수동으로 costyle 세트를 만들어 CO 에서 검증 중. **패턴이 굳으면** front door 도구
-(`costyle <verb>`: reverse / split / make / keys)로 정식화한다 — 섣불리 자동화하지 않는다
-(`memory/feedback_automation_order`).
+**✅ 검증·완료 (2026-06-13)**:
+- CO 라이브 검증: Engine 1300 레이어형 → 조정 레이어로 정확 적용 (HDR -90/85/-100/-95 클램프 없이).
+  WhiteBalance 는 레이어 드롭 = 배경 전용 → `costyle.py` writer 가 구조적 차단. 상세 = `costyle-format.md` ★.
+- `costyle` 도구 정식화 (make/reverse/split/keys). mukayu 세트 = `costyle make mukayu` 로 생성 (CO Styles, WB 없는 레이어 호환만).
+- CLIP 백엔드 (`clip_embed.py` + `img tag/cluster --clip`) — mukayu 115장 zero-shot 태깅(Finder+XMP) + 의미 8군집 검증.
+- 전부 GitHub main 머지 (PR #141·142·143 + costyle PR).
 
-**2026-06-13 CO 라이브 검증 통과**: Engine 1300 레이어형 스타일이 이름 붙은 조정 레이어로 정확히 적용됨
-(HDR -90/85/-100/-95 클램프 없이). WhiteBalance는 레이어에서 드롭 확인 → 배경 전용. 상세·작성규칙 =
-`references/costyle-format.md` ★ 섹션. 결론: 레이어 호환 보정만 담으면 아키텍쳐 완벽 작동.
-
-검증된 산출:
-- mukayu 4-스타일 세트 (사용자 실제값 BASE + 극단 변주) → `~/Library/Application Support/Capture One/Styles/`
-- mukayu 사진 115장 톤 리버스 = `references/examples/mukayu_reverse_demo.py` (photo-lut 재사용 데모 —
-  사진셋 → 시그니처 → costyle 매핑의 worked example. 경로는 머신별이라 그대로 재실행보단 패턴 참고용).
+**다음 후보 (아직)**:
+- `costyle make` 에 preset 추가 (mukayu 외 다른 브랜드) — `reverse`(.cube) ↔ `split`(분리) ↔ `make`(세트) 사슬 연결.
+- `costyle reverse` → 사진셋에서 *상대 split-tone* 만 뽑아 BASE preset 자동 제안 (절대값 underdetermined 한계 명시).
+- 평면(flat) 스타일 writer (WB 포함 배포용) 가 필요해지면 그때. 지금은 레이어형만.
+- `references/examples/mukayu_reverse_demo.py` = 사진→시그니처→costyle 매핑 worked example (photo-lut 재사용).
