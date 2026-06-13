@@ -69,6 +69,14 @@ description: >-
 - CLIP 백엔드 (`clip_embed.py` + `img tag/cluster --clip`) — mukayu 115장 zero-shot 태깅(Finder+XMP) + 의미 8군집 검증.
 - 전부 GitHub main 머지 (PR #141·142·143 + costyle PR).
 
+**▶ 다음 할 일 — mukayu 세트 진짜 다듬기 (2026-06-13 미룸, ~내일)**:
+> 지금까지 한 건 *구조 정리*뿐 (WB 제거 + `costyle make` 도구화). 값·변주축은 손으로 넣던 그대로 = 진짜 다듬기 안 됨.
+- (1) **변주축 데이터대로 재편**: `Indoor_Base`/`Outdoor_Variant` → `Dark_Mood`/`Bright_Product`. 사진 분석상 mukayu 는 실내/실외가 아니라 무드-다크(객실·요리·체험) vs 밝음-제품(스파·어메니티) 축. → `costyle.py` PRESETS["mukayu"] 수정.
+- (2) **CLIP 8군집 반영**: 茶室/和菓子/정원/객실/인물/어메니티 — 변주 설계·대표 검증에 활용 (`img cluster --clip`).
+- (3) **Outdoor/Bright 그린 보강** (Color Editor) — 계속 미룬 것, 아직 없음.
+- (4) **CO 눈검증** (computer-use): 대표 3장(객실=mood / 어메니티=bright / 요리)에 세트 얹고 before/after 스크린샷 → 과/부족 값 조정. 톤 극단값은 underdetermined 라 *눈으로* 정해야 함. BASE 단독이 원본 컬러와 맞는지부터.
+> 방법: 값 눈감고 추측 금지. costyle preset 수정 + CO 눈검증 루프. 사용자 최종 "이게 mukayu다" 판단만 올림.
+
 **다음 후보 (아직)**:
 - `costyle make` 에 preset 추가 (mukayu 외 다른 브랜드) — `reverse`(.cube) ↔ `split`(분리) ↔ `make`(세트) 사슬 연결.
 - `costyle reverse` → 사진셋에서 *상대 split-tone* 만 뽑아 BASE preset 자동 제안 (절대값 underdetermined 한계 명시).
