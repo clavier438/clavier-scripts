@@ -76,6 +76,20 @@ exhaustive download 가 아니라 **패턴 커버리지**가 목표:
 
 비용: 분류=비전. **image-tagger 가 claude CLI 구독 빌링(`tools/lib/claude_cli.py`, copy.mjs 방식)으로 전환(2026-06-07) — 별도 API 크레딧 0.** `--json-schema` 로 6축 구조화 출력, `ANTHROPIC_API_KEY` 불필요. claude CLI 미인증 환경(OCI cron 등)에선 `--from-json` 우회(세션/subagent 분류 → 주입) 유지. `memory/project_anthropic_key_no_credits` 참조.
 
+### 사진 정리 외부 CLI 도구 — 검토 결과 (2026-06-13)
+
+Capture One 앞단/옆단 "정리·중복·해상도" 보완용으로 검토(외부 추천 + 라이선스 확인). **결론: "화질 다른 동일 사진 → 최고화질만 남기기" 는 신규 설치 없이 이미 `image-dedup.py` 가 정확히 해결한다** (perceptual dhash 클러스터 → 클러스터당 태그>고해상(픽셀수) 1장 보존, HEIC 포함, 오프라인·토큰 0). 동일 사진의 화질 선택은 *픽셀수* 가 결정론적 정답이라 별도 도구가 불필요.
+
+| 도구 | 상태 | 판단 |
+|---|---|---|
+| **exiftool** (free, Perl) | ✅ 설치됨 `/opt/homebrew/bin/exiftool` | 메타데이터/해상도 읽기·rename·이동 표준칼. 규칙 기반 재정렬 시 조합. |
+| **ImageMagick** (free, Apache-2.0) | ✅ 설치됨 (`magick`·`identify`·`convert`) | 해상도/포맷 추출, 변환. `image-convert.py` 가 이미 래핑. |
+| **Czkawka** (free, MIT) `czkawka_cli` | ⬜ 미설치 — 보류 | 사진 중복은 `image-dedup.py` 가 동일 기능 커버. *영상·빈폴더·broken file* 정리까지 필요해지면 그때 도입 후보 (image-dedup 범위 밖). |
+| **BRISQUE/NIQE** (지각 화질점수) | ❌ 미채택 | "동일 사진 다른 화질" 엔 **틀린 경로** — 다운스케일본이 노이즈가 가려져 점수가 더 높게 나올 수 있음. 픽셀수가 정답. 지각점수는 *서로 다른 컷* 중 선별할 때만 의미 → 그건 image-tagger 6축이 담당. |
+| **digiKam** (free, GPL) | ❌ 미채택 | GUI DAM(얼굴인식·라이브러리). "터미널에서 순식간에" 목표와 어긋나는 오버킬. |
+
+> 즉 추가 설치 없이 **exiftool + ImageMagick + `image-dedup.py`** 로 캡처원 앞단 정리 레이어 완비. 모듈 확장은 image-dedup 가 못 미치는 *범위*(영상/빈폴더/깨진파일)가 실제로 나타날 때 czkawka 를 front door 뒤에 얹는 식으로 — 바퀴 재발명 없이.
+
 ## 다음 (미정립 — 이 문서가 정립 과정)
 
 - [ ] **배치 분석** — 캡처 시 각 이미지의 페이지유형/섹션 기록 → 패턴↔배치 맵.
