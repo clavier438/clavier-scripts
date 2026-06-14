@@ -7,8 +7,9 @@
 #   레퍼런스·원칙 = skills/brand-tone-architecture/ (grading-architecture / costyle-format /
 #   authoritative-samples). 핵심 = ★ 레이어 호환 키만 굽는다 (WB 등 배경 전용은 구조적 차단).
 #
-#   costyle make [preset] [--out DIR]   레이어 호환 스타일 세트 생성 (기본 preset=mukayu,
-#                                       기본 DIR=Capture One Styles). BASE/Indoor/Outdoor/Util.
+#   costyle make [preset] [-v N] [--out DIR]  레이어 호환 스타일 세트 생성 (기본 preset=mukayu,
+#                                       기본 DIR=Capture One Styles). 버전을 이름(예: mukayu_v03_*)
+#                                       + Finder 태그에 박아 재실행 충돌·분간불가 제거. -v 생략 시 자동증분.
 #   costyle reverse <photodir> [-o c]   사진셋 → .cube 3D LUT 역추출 (photo-lut 재사용)
 #   costyle split <src.costyle>         레이어형 스타일 1개 → 책임별(컬러/HDR/trim) 분리 파일
 #   costyle keys [<key>]                검증된 .costyle 키 사전 출력 (추측 금지 backbone)
@@ -152,6 +153,35 @@ def _parse_layer_adj(path):
     return adj
 
 
+def _resolve_version(out, preset, args):
+    """세트 버전 결정. -v/--version N 명시 우선, 없으면 out 에서 {preset}_v## 스캔해 +1.
+    버전을 이름·파일명에 박아 재실행 충돌(CO 가 ' 1',' 1 1' 붙이던 근본 원인)을 제거한다."""
+    for flag in ("-v", "--version"):
+        if flag in args:
+            try:
+                return max(1, int(args[args.index(flag) + 1]))
+            except (ValueError, IndexError):
+                print(f"잘못된 버전 인자 ({flag}). 정수 필요."); sys.exit(1)
+    import re
+    pat = re.compile(rf"^{re.escape(preset)}_v(\d+)_")
+    seen = [int(m.group(1)) for f in glob.glob(os.path.join(out, f"{preset}_v*_*.costyle"))
+            if (m := pat.match(os.path.basename(f)))]
+    return (max(seen) + 1) if seen else 1
+
+
+def _finder_tag(path, tags):
+    """macOS Finder 태그 부여 (clavier 기존 바퀴 = `tag` CLI, image-tagger.py 와 동일)."""
+    tag_bin = "/opt/homebrew/bin/tag"
+    if not os.path.exists(tag_bin):
+        return False
+    try:
+        subprocess.run([tag_bin, "-a", ",".join(tags), path],
+                       check=True, capture_output=True)
+        return True
+    except (subprocess.CalledProcessError, OSError):
+        return False
+
+
 def cmd_make(args):
     preset = args[0] if args and not args[0].startswith("-") else "mukayu"
     out = CO_STYLES
@@ -160,11 +190,18 @@ def cmd_make(args):
     if preset not in PRESETS:
         print(f"모르는 preset: {preset}. 가능: {', '.join(PRESETS)}"); sys.exit(1)
     os.makedirs(out, exist_ok=True)
-    print(bold(f"costyle make {preset} → {out}"))
-    for name, opa, adj in PRESETS[preset]:
+    ver = _resolve_version(out, preset, args)
+    vtag = f"{preset}_v{ver:02d}"          # 태그·이름 공통 버전 식별자
+    print(bold(f"costyle make {preset} (버전 {vtag}) → {out}"))
+    tagged = True
+    for layer, opa, adj in PRESETS[preset]:
+        name = f"{vtag}_{layer}"           # 버전을 이름에 박음 → CO 에서 분간 + 파일명 충돌 0
         p = write_costyle(out, name, adj, opa)
+        tagged = _finder_tag(p, [preset, vtag]) and tagged  # 버전을 Finder 태그로도 표시
         print(ok(f"  ✓ {os.path.basename(p)}  ({len(adj)} 보정, opacity {opa})"))
-    print("\nCapture One 재시작/새로고침 → User Styles 에 표시. 레이어로 스택 + opacity 조절.")
+    tagnote = f"Finder 태그: {preset}, {vtag}" if tagged else warn("Finder 태그 실패(`tag` CLI 확인)")
+    print(f"\n{tagnote}")
+    print("Capture One 재시작/새로고침 → User Styles 에 표시. 레이어로 스택 + opacity 조절.")
 
 
 def cmd_reverse(args):
@@ -220,7 +257,7 @@ def main():
     if len(sys.argv) < 2 or sys.argv[1] in ("help", "-h", "--help"):
         print(__doc__ if False else
               "costyle — Capture One 스타일 세트 도구\n\n"
-              "  costyle make [preset] [--out DIR]   레이어 호환 세트 생성 (기본 mukayu → CO Styles)\n"
+              "  costyle make [preset] [-v N] [--out DIR]  레이어 호환 세트 생성 (버전을 이름+Finder태그에)\n"
               "  costyle reverse <photodir> [-o c]   사진셋 → .cube LUT (photo-lut)\n"
               "  costyle split <src.costyle>         레이어 스타일 → 컬러/HDR/trim 분리\n"
               "  costyle keys [<key>]                검증된 키 사전 (추측 금지)\n"
