@@ -5,7 +5,6 @@
 set -euo pipefail
 
 SCRIPTS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-LAUNCHAGENTS_SRC="$SCRIPTS_DIR/daemons"
 BIN_DIR="$HOME/bin"
 
 echo "======================================"
@@ -113,24 +112,16 @@ else
     echo "  [연결] $CLAUDE_MEM_LINK → $CLAUDE_MEM_SRC"
 fi
 
-# ── 5. LaunchAgent 등록 ───────────────────────────────────────
+# ── 5. LaunchAgent 등록 → bootstrap.sh 단일 소유 (2026-06-14) ──
 echo ""
 echo "[ 5/6 ] LaunchAgent 등록..."
 mkdir -p "$HOME/Library/LaunchAgents"
-
-if [ ! -d "$LAUNCHAGENTS_SRC" ]; then
-    echo "  daemons 폴더 없음: $LAUNCHAGENTS_SRC"
-else
-    for plist in "$LAUNCHAGENTS_SRC"/*.plist; do
-        [ -f "$plist" ] || continue
-        filename="$(basename "$plist")"
-        target="$HOME/Library/LaunchAgents/$filename"
-        cp "$plist" "$target"
-        launchctl unload "$target" 2>/dev/null || true
-        launchctl load "$target"
-        printf "  [등록] %s\n" "$filename"
-    done
-fi
+# LaunchAgent ensure 는 clavier-hq/bootstrap.sh 가 소유한다 (launchagents/ 단일 진본
+# → ~/Library/LaunchAgents 무중단 심링크 + dep 파일 심링크). 여기서 cp + unload/load
+# 하던 옛 루프는 (a) daemons/ 를 봐서 plist 0개라 아무것도 설치 못 했고 (b) 이미 로드된
+# 데몬(sshd 포함)을 unload/reload 해 무중단을 깼다 — 둘 다 제거. 콜로니 셋업 진입점은
+# `bash clavier-hq/bootstrap.sh ensure` (이 setup.sh 를 호출한 뒤 LaunchAgent 를 ensure).
+echo "  · LaunchAgent ensure 는 bootstrap.sh 가 처리 (launchagents/ 단일 진본)"
 
 # ── 5. FDA 권한 안내 ──────────────────────────────────────────
 echo ""

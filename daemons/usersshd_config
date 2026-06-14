@@ -1,0 +1,11 @@
+Port 2222
+ListenAddress 0.0.0.0
+HostKey /Users/clavier/.ssh/userhost_ed25519
+PidFile /Users/clavier/.ssh/usersshd.pid
+AuthorizedKeysFile /Users/clavier/.ssh/authorized_keys
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+UsePAM no
+PubkeyAuthentication yes
+StrictModes no
+Subsystem sftp internal-sftp
