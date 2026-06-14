@@ -74,6 +74,13 @@ description: >-
 - (1) **변주축 데이터대로 재편 완료**: `~/Desktop/mukayu` 115장 측정(밝기/그림자%/따뜻함)으로 검증 → `Indoor_Base`/`Outdoor_Variant` → **`Dark_Mood`**(101장: 료리·객실·관내·체험, L~80 그림자45% 따뜻) / **`Bright_Product`**(14장: 스파=웜·어메니티=쿨저채도, L~137 그림자18%). `BASE_Mukayu_Core`→`BASE_Core`. costyle.py PRESETS 반영.
 - **에셋 SSOT + 배포 (build-artifact 모델)**: 정본 = `iCloud .../asset/img/lut/<brand>/` (`tools/lib/assetPaths.py` resolver, env `CLAVIER_ASSET_LUT`, 하드코딩 0). `make` 가 SSOT 기록 → CO Styles/<brand>/ **복제** 배포(symlink 아님 = 원본 오염 회피, 사용자 결정). CO 하위폴더=그룹 표시. `costyle deploy [brand]` 재배포. → 세 표면(이름·Finder태그·CO폴더그룹) 다 충족.
 
+**📦 버전 보관 원칙 (2026-06-14) ★ 안 버림**:
+- 모든 세트 버전은 SSOT(`lut/<brand>/`)에 누적. `make` 는 새 vNN 만 추가, 덮어쓰기·삭제 안 함 (비교용 보관, 사용자 지시). Trash 이동 금지.
+- mukayu 버전 사실(어느 게 옳다는 판단 아님 — 연습 단계):
+  - **v01** = CO 에서 export 한 파일. flat, WhiteBalance·전체 ColorBalance·커브 키 포함. 레이어이름 BASE_Mukayu_Core/Indoor_Base/Outdoor_Variant.
+  - **v02** = costyle 레이어호환본 (WB 등 배경전용 키 제외). 같은 Indoor/Outdoor 레이어.
+  - **v03** = costyle PRESETS 현행 (BASE_Core/Dark_Mood/Bright_Product/Util).
+
 **▶ 다음 할 일 — mukayu 톤값 CO 눈검증 (구조 끝, 값 튜닝만 남음)**:
 > 구조(버전·변주축·SSOT·배포)는 완료. 남은 건 *underdetermined 한 톤 극단값*을 눈으로 확정하는 것뿐.
 - (2) **CLIP 8군집 반영**: 茶室/和菓子/정원/객실/인물/어메니티 — 대표샷 선정에 활용 (`img cluster --clip`).
