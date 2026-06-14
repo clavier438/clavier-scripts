@@ -101,8 +101,14 @@ _MUKAYU_CC = ("1,1,1,0,0,0,255,0,168.909881591797,-7.11462593078613,7.1146259307
 
 PRESETS = {
     # (레이어이름, opacity, {보정})  — 각각 별도 .costyle 파일, 적용 시 레이어로 스택
+    # 변주축 = 브랜드 데이터가 결정 (2026-06-14 ~/Desktop/mukayu 115장 분석).
+    #   실내/실외 아님 → 무드-다크 vs 밝음-제품. 측정(밝기L/그림자%/따뜻함):
+    #   Dark_Mood   = 료리·객실·관내·체험 101장 (L~80, 그림자 45%, 따뜻 +14~+23) — 지배 브랜드룩.
+    #   Bright_Product = 스파·어메니티 14장 (L~137, 그림자 18%; 스파=웜·어메니티=쿨 저채도 제품컷).
+    # 톤 극단 *크기*는 underdetermined → CO 눈검증 루프(아래 시작값에서 튠). 그린 보강은
+    #   ColorCorrections 손작성 비권장 → CO export 캡처로 BASE/Bright 에 주입(눈검증 단계).
     "mukayu": [
-        ("BASE_Mukayu_Core", 100, {
+        ("BASE_Core", 100, {
             "ColorBalanceHighlight": "0.989852011203766;0.975214958190918;0.955368220806122",
             "ColorBalanceMidtone": "1;0.999489903450012;0.995329797267914",
             "ColorBalanceShadow": "0.990159809589386;1.00495970249176;1.01882183551788",
@@ -112,12 +118,14 @@ PRESETS = {
             "GradationCurveGreen": "0,0;0.250402539968491,0.243293225765228;0.5040083527565,0.497048169374466;0.754379749298096,0.750803649425507;1,1",
             "GradationCurveY": "0,0.0511840805411339;0.247548192739487,0.237064242362976;0.503437340259552,0.492444425821304;0.749242842197418,0.74403303861618;1,1",
         }),
-        ("Indoor_Base", 100, {
-            "HighlightRecoveryEx": "-90", "ShadowRecovery": "85",
-            "BlackRecovery": "-95", "WhiteRecovery": "-100"}),
-        ("Outdoor_Variant", 100, {
-            "HighlightRecoveryEx": "-20", "ShadowRecovery": "40",
-            "BlackRecovery": "-40", "WhiteRecovery": "-10"}),
+        # Dark_Mood: 무드 보존(그림자 과리프트 금지) + 하이라이트 롤오프 + 깊은 블랙. 따뜻함은 BASE.
+        ("Dark_Mood", 100, {
+            "HighlightRecoveryEx": "-50", "ShadowRecovery": "30",
+            "BlackRecovery": "-40", "WhiteRecovery": "-30"}),
+        # Bright_Product: 하이키·에어리 — 하이라이트 클린 유지, 그림자 충분히 열기, 블랙 가볍게.
+        ("Bright_Product", 100, {
+            "HighlightRecoveryEx": "-15", "ShadowRecovery": "50",
+            "BlackRecovery": "-10", "WhiteRecovery": "-20"}),
         ("Util", 100, {
             "Clarity": "30", "ClarityStructure": "25", "ClarityMethod": "2",
             "UsmAmount": "180", "UsmRadius": "1", "Vignetting": "-45",
