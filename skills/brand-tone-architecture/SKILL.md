@@ -72,7 +72,7 @@ description: >-
 **✅ 추가 완료 (2026-06-14)**:
 - **버전 시스템**: `costyle make` 가 버전을 *이름(`mukayu_v01_*`) + Finder 태그(`mukayu`/`mukayu_v01`)* 양쪽에 박음 (`-v N` 명시 / 생략 시 자동증분). 파일명 충돌(CO 가 ' 1',' 1 1' 붙이던 근본 원인) 제거.
 - (1) **변주축 데이터대로 재편 완료**: `~/Desktop/mukayu` 115장 측정(밝기/그림자%/따뜻함)으로 검증 → `Indoor_Base`/`Outdoor_Variant` → **`Dark_Mood`**(101장: 료리·객실·관내·체험, L~80 그림자45% 따뜻) / **`Bright_Product`**(14장: 스파=웜·어메니티=쿨저채도, L~137 그림자18%). `BASE_Mukayu_Core`→`BASE_Core`. costyle.py PRESETS 반영.
-- **에셋 SSOT + 배포 (build-artifact 모델)**: 정본 = `iCloud .../asset/img/lut/<brand>/` (`tools/lib/assetPaths.py` resolver, env `CLAVIER_ASSET_LUT`, 하드코딩 0). `make` 가 SSOT 기록 → CO Styles/<brand>/ **복제** 배포(symlink 아님 = 원본 오염 회피, 사용자 결정). CO 하위폴더=그룹 표시. `costyle deploy [brand]` 재배포. → 세 표면(이름·Finder태그·CO폴더그룹) 다 충족.
+- **에셋 SSOT**: 정본 = `iCloud .../asset/img/lut/<brand>/` (`tools/lib/assetPaths.py` resolver, env `CLAVIER_ASSET_LUT`, 하드코딩 0). `make` 는 **SSOT 에만 보관** (자동배포 안 함 — 불필요한 사슬, 사용자 결정 2026-06-14). CO 에서 쓸 땐 사용자가 직접 import, 또는 Claude 가 끝-끝 테스트할 때만 `costyle deploy [brand]` 로 CO Styles/<brand>/ 복제(복사, symlink 아님 = 원본 오염 회피).
 
 **📦 버전 보관 원칙 (2026-06-14) ★ 안 버림**:
 - 모든 세트 버전은 SSOT(`lut/<brand>/`)에 누적. `make` 는 새 vNN 만 추가, 덮어쓰기·삭제 안 함 (비교용 보관, 사용자 지시). Trash 이동 금지.

@@ -7,9 +7,10 @@
 #   레퍼런스·원칙 = skills/brand-tone-architecture/ (grading-architecture / costyle-format /
 #   authoritative-samples). 핵심 = ★ 레이어 호환 키만 굽는다 (WB 등 배경 전용은 구조적 차단).
 #
-#   costyle make [preset] [-v N] [--out DIR]  레이어 호환 스타일 세트 생성 (기본 preset=mukayu,
-#                                       기본 DIR=Capture One Styles). 버전을 이름(예: mukayu_v03_*)
-#                                       + Finder 태그에 박아 재실행 충돌·분간불가 제거. -v 생략 시 자동증분.
+#   costyle make [preset] [-v N] [--out DIR]  레이어 호환 스타일 세트 생성 → SSOT(원본)에 보관.
+#                                       기본 preset=mukayu, 기본 DIR=SSOT(iCloud lut/<brand>/).
+#                                       버전을 이름(mukayu_v03_*)+Finder태그에 박음. -v 생략 시 자동증분.
+#                                       자동배포 안 함(사용자 결정) — CO 는 import 또는 `costyle deploy`.
 #   costyle reverse <photodir> [-o c]   사진셋 → .cube 3D LUT 역추출 (photo-lut 재사용)
 #   costyle split <src.costyle>         레이어형 스타일 1개 → 책임별(컬러/HDR/trim) 분리 파일
 #   costyle keys [<key>]                검증된 .costyle 키 사전 출력 (추측 금지 backbone)
@@ -227,11 +228,9 @@ def cmd_make(args):
         print(ok(f"  ✓ {os.path.basename(p)}  ({len(adj)} 보정, opacity {opa})"))
     tagnote = f"Finder 태그: {preset}, {vtag}" if tagged else warn("Finder 태그 실패(`tag` CLI 확인)")
     print(f"\n{tagnote}")
-    # SSOT → CO 복제 배포 (--out override 시엔 SSOT 가 아니므로 스킵)
-    if "--out" not in args:
-        dst, n = _deploy_to_co(preset)
-        print(ok(f"CO 배포: {n}개 → {dst} (폴더 그룹 '{preset}')"))
-    print("Capture One 재시작/새로고침 → User Styles 의 '" + preset + "' 그룹. 레이어 스택 + opacity 조절.")
+    # make 는 SSOT(원본)에만 둔다. CO 자동배포 안 함 (불필요한 사슬 — 사용자 결정 2026-06-14).
+    # CO 에서 쓰려면 사용자가 직접 import, 또는 끝-끝 테스트 시에만 `costyle deploy {preset}`.
+    print(f"SSOT 에 보관됨. CO 에서 쓰려면 import (또는 E2E 테스트 시 `costyle deploy {preset}`).")
 
 
 def cmd_deploy(args):
@@ -298,14 +297,15 @@ def main():
     if len(sys.argv) < 2 or sys.argv[1] in ("help", "-h", "--help"):
         print(__doc__ if False else
               "costyle — Capture One 스타일 세트 도구\n\n"
-              "  costyle make [preset] [-v N] [--out DIR]  세트 생성 → SSOT(iCloud) + CO 복제 배포\n"
-              "  costyle deploy [brand]              SSOT 브랜드폴더 → CO Styles 재배포 (재생성 없이)\n"
+              "  costyle make [preset] [-v N] [--out DIR]  세트 생성 → SSOT(iCloud) 보관 (자동배포 안 함)\n"
+              "  costyle deploy [brand]              SSOT → CO Styles 복제 (CO 에서 쓸 때/E2E 테스트 시만)\n"
               "  costyle reverse <photodir> [-o c]   사진셋 → .cube LUT (photo-lut)\n"
               "  costyle split <src.costyle>         레이어 스타일 → 컬러/HDR/trim 분리\n"
               "  costyle keys [<key>]                검증된 키 사전 (추측 금지)\n"
               "  costyle help\n\n"
               "에셋 SSOT = iCloud .../asset/img/lut/<brand>/ (env CLAVIER_ASSET_LUT override). "
-              "CO 는 복제 배포된 build artifact. 레이어 호환 키만 굽는다(WB 등 배경전용 차단). "
+              "make 는 SSOT 에만 보관(자동배포 X). CO 는 import 하거나 deploy 로 복제. "
+              "레이어 호환 키만 굽는다(WB 등 배경전용 차단). "
               "skills/brand-tone-architecture/.")
         return
     verb, rest = sys.argv[1], sys.argv[2:]
