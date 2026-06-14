@@ -24,12 +24,14 @@ try:
     import freshness  # noqa: F401  (repo freshness 체크 — 모든 .py tool 첫 import, 없는 환경도 동작)
 except ImportError:
     pass
+from assetPaths import brand_dir  # 에셋 SSOT 경로 단일 정의 (하드코딩 0)
 
 TOOLS = os.path.dirname(os.path.realpath(__file__))
 REPO = os.path.dirname(TOOLS)
 PHOTO_LUT = os.path.join(TOOLS, "photo-lut.py")
 VENV_PY = os.path.join(REPO, "webExporter", ".venv", "bin", "python")
-CO_STYLES = os.path.expanduser("~/Library/Application Support/Capture One/Styles")
+CO_STYLES = os.path.expanduser(
+    os.environ.get("CLAVIER_CO_STYLES", "~/Library/Application Support/Capture One/Styles"))
 
 
 def _c(code, s): return f"\033[{code}m{s}\033[0m" if sys.stdout.isatty() else s
@@ -190,17 +192,33 @@ def _finder_tag(path, tags):
         return False
 
 
+def _deploy_to_co(brand):
+    """SSOT 브랜드 폴더 → CO Styles/<brand>/ 복제 배포 (build artifact, 단방향).
+    CO 는 하위폴더를 그룹으로 표시 (검증된 동작). 손편집 안 함 → drift 경로 없음."""
+    import shutil
+    src = brand_dir(brand)
+    dst = os.path.join(CO_STYLES, brand)
+    os.makedirs(dst, exist_ok=True)
+    n = 0
+    for f in glob.glob(os.path.join(src, "*.costyle")):
+        d = os.path.join(dst, os.path.basename(f))
+        shutil.copy2(f, d)
+        _finder_tag(d, [brand])          # CO 사본에도 브랜드 태그 (버전은 파일명에)
+        n += 1
+    return dst, n
+
+
 def cmd_make(args):
     preset = args[0] if args and not args[0].startswith("-") else "mukayu"
-    out = CO_STYLES
-    if "--out" in args:
-        out = os.path.expanduser(args[args.index("--out") + 1])
     if preset not in PRESETS:
         print(f"모르는 preset: {preset}. 가능: {', '.join(PRESETS)}"); sys.exit(1)
+    # 기본 출력 = SSOT (iCloud lut/<brand>/). --out 으로 override 가능.
+    out = os.path.expanduser(args[args.index("--out") + 1]) if "--out" in args \
+        else brand_dir(preset, create=True)
     os.makedirs(out, exist_ok=True)
     ver = _resolve_version(out, preset, args)
     vtag = f"{preset}_v{ver:02d}"          # 태그·이름 공통 버전 식별자
-    print(bold(f"costyle make {preset} (버전 {vtag}) → {out}"))
+    print(bold(f"costyle make {preset} (버전 {vtag}) → SSOT {out}"))
     tagged = True
     for layer, opa, adj in PRESETS[preset]:
         name = f"{vtag}_{layer}"           # 버전을 이름에 박음 → CO 에서 분간 + 파일명 충돌 0
@@ -209,7 +227,22 @@ def cmd_make(args):
         print(ok(f"  ✓ {os.path.basename(p)}  ({len(adj)} 보정, opacity {opa})"))
     tagnote = f"Finder 태그: {preset}, {vtag}" if tagged else warn("Finder 태그 실패(`tag` CLI 확인)")
     print(f"\n{tagnote}")
-    print("Capture One 재시작/새로고침 → User Styles 에 표시. 레이어로 스택 + opacity 조절.")
+    # SSOT → CO 복제 배포 (--out override 시엔 SSOT 가 아니므로 스킵)
+    if "--out" not in args:
+        dst, n = _deploy_to_co(preset)
+        print(ok(f"CO 배포: {n}개 → {dst} (폴더 그룹 '{preset}')"))
+    print("Capture One 재시작/새로고침 → User Styles 의 '" + preset + "' 그룹. 레이어 스택 + opacity 조절.")
+
+
+def cmd_deploy(args):
+    brand = args[0] if args and not args[0].startswith("-") else "mukayu"
+    src = brand_dir(brand)
+    if not os.path.isdir(src) or not glob.glob(os.path.join(src, "*.costyle")):
+        print(f"SSOT 에 {brand} 스타일 없음: {src} (먼저 costyle make {brand})"); sys.exit(1)
+    print(bold(f"costyle deploy {brand} — SSOT → CO 복제"))
+    dst, n = _deploy_to_co(brand)
+    print(ok(f"  ✓ {n}개 → {dst} (폴더 그룹 '{brand}')"))
+    print("Capture One 재시작/새로고침 → User Styles 의 '" + brand + "' 그룹.")
 
 
 def cmd_reverse(args):
@@ -265,16 +298,19 @@ def main():
     if len(sys.argv) < 2 or sys.argv[1] in ("help", "-h", "--help"):
         print(__doc__ if False else
               "costyle — Capture One 스타일 세트 도구\n\n"
-              "  costyle make [preset] [-v N] [--out DIR]  레이어 호환 세트 생성 (버전을 이름+Finder태그에)\n"
+              "  costyle make [preset] [-v N] [--out DIR]  세트 생성 → SSOT(iCloud) + CO 복제 배포\n"
+              "  costyle deploy [brand]              SSOT 브랜드폴더 → CO Styles 재배포 (재생성 없이)\n"
               "  costyle reverse <photodir> [-o c]   사진셋 → .cube LUT (photo-lut)\n"
               "  costyle split <src.costyle>         레이어 스타일 → 컬러/HDR/trim 분리\n"
               "  costyle keys [<key>]                검증된 키 사전 (추측 금지)\n"
               "  costyle help\n\n"
-              "원칙: 레이어 호환 키만 굽는다 (WB 등 배경 전용은 구조적 차단). "
+              "에셋 SSOT = iCloud .../asset/img/lut/<brand>/ (env CLAVIER_ASSET_LUT override). "
+              "CO 는 복제 배포된 build artifact. 레이어 호환 키만 굽는다(WB 등 배경전용 차단). "
               "skills/brand-tone-architecture/.")
         return
     verb, rest = sys.argv[1], sys.argv[2:]
-    {"make": cmd_make, "reverse": cmd_reverse, "split": cmd_split, "keys": cmd_keys}.get(
+    {"make": cmd_make, "deploy": cmd_deploy, "reverse": cmd_reverse,
+     "split": cmd_split, "keys": cmd_keys}.get(
         verb, lambda a: print(f"모르는 verb: {verb} (costyle help)"))(rest)
 
 
