@@ -69,12 +69,16 @@ description: >-
 - CLIP 백엔드 (`clip_embed.py` + `img tag/cluster --clip`) — mukayu 115장 zero-shot 태깅(Finder+XMP) + 의미 8군집 검증.
 - 전부 GitHub main 머지 (PR #141·142·143 + costyle PR).
 
-**▶ 다음 할 일 — mukayu 세트 진짜 다듬기 (2026-06-13 미룸, ~내일)**:
-> 지금까지 한 건 *구조 정리*뿐 (WB 제거 + `costyle make` 도구화). 값·변주축은 손으로 넣던 그대로 = 진짜 다듬기 안 됨.
-- (1) **변주축 데이터대로 재편**: `Indoor_Base`/`Outdoor_Variant` → `Dark_Mood`/`Bright_Product`. 사진 분석상 mukayu 는 실내/실외가 아니라 무드-다크(객실·요리·체험) vs 밝음-제품(스파·어메니티) 축. → `costyle.py` PRESETS["mukayu"] 수정.
-- (2) **CLIP 8군집 반영**: 茶室/和菓子/정원/객실/인물/어메니티 — 변주 설계·대표 검증에 활용 (`img cluster --clip`).
-- (3) **Outdoor/Bright 그린 보강** (Color Editor) — 계속 미룬 것, 아직 없음.
-- (4) **CO 눈검증** (computer-use): 대표 3장(객실=mood / 어메니티=bright / 요리)에 세트 얹고 before/after 스크린샷 → 과/부족 값 조정. 톤 극단값은 underdetermined 라 *눈으로* 정해야 함. BASE 단독이 원본 컬러와 맞는지부터.
+**✅ 추가 완료 (2026-06-14)**:
+- **버전 시스템**: `costyle make` 가 버전을 *이름(`mukayu_v01_*`) + Finder 태그(`mukayu`/`mukayu_v01`)* 양쪽에 박음 (`-v N` 명시 / 생략 시 자동증분). 파일명 충돌(CO 가 ' 1',' 1 1' 붙이던 근본 원인) 제거.
+- (1) **변주축 데이터대로 재편 완료**: `~/Desktop/mukayu` 115장 측정(밝기/그림자%/따뜻함)으로 검증 → `Indoor_Base`/`Outdoor_Variant` → **`Dark_Mood`**(101장: 료리·객실·관내·체험, L~80 그림자45% 따뜻) / **`Bright_Product`**(14장: 스파=웜·어메니티=쿨저채도, L~137 그림자18%). `BASE_Mukayu_Core`→`BASE_Core`. costyle.py PRESETS 반영.
+- **에셋 SSOT + 배포 (build-artifact 모델)**: 정본 = `iCloud .../asset/img/lut/<brand>/` (`tools/lib/assetPaths.py` resolver, env `CLAVIER_ASSET_LUT`, 하드코딩 0). `make` 가 SSOT 기록 → CO Styles/<brand>/ **복제** 배포(symlink 아님 = 원본 오염 회피, 사용자 결정). CO 하위폴더=그룹 표시. `costyle deploy [brand]` 재배포. → 세 표면(이름·Finder태그·CO폴더그룹) 다 충족.
+
+**▶ 다음 할 일 — mukayu 톤값 CO 눈검증 (구조 끝, 값 튜닝만 남음)**:
+> 구조(버전·변주축·SSOT·배포)는 완료. 남은 건 *underdetermined 한 톤 극단값*을 눈으로 확정하는 것뿐.
+- (2) **CLIP 8군집 반영**: 茶室/和菓子/정원/객실/인물/어메니티 — 대표샷 선정에 활용 (`img cluster --clip`).
+- (3) **Bright_Product 그린 보강** (ColorCorrections=Color Editor) — *손작성 비권장* → CO 에서 그린 조정 후 export 한 ColorCorrections 세그먼트를 캡처해 preset 에 주입 (추측 금지).
+- (4) **CO 눈검증** (computer-use): 대표 3장(객실=Dark_Mood / 어메니티=Bright_Product / 요리)에 v01 세트 얹고 before/after → Dark_Mood(-50/30/-40/-30)·Bright_Product(-15/50/-10/-20) 시작값 과/부족 조정. BASE 단독이 원본 컬러와 맞는지부터. 조정 후 `costyle make`(자동 v02) → 재배포.
 > 방법: 값 눈감고 추측 금지. costyle preset 수정 + CO 눈검증 루프. 사용자 최종 "이게 mukayu다" 판단만 올림.
 
 **다음 후보 (아직)**:
